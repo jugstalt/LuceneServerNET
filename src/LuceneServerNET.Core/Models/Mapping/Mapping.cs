@@ -7,6 +7,8 @@ namespace LuceneServerNET.Core.Models.Mapping
 {
     public class Mapping
     {
-        ICollection<FieldMapping> Fields { get; set; }
+        public ICollection<FieldMapping> Fields { get; set; }
+
+        public string DefaultField { get; set; }
     }
 }

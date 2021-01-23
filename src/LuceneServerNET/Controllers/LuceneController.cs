@@ -23,7 +23,7 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
-        [Route("search")]
+        [Route("search/{id}")]
         async public Task<IApiResult> Search(string id, string q)
         {
             return await SecureMethodHandler(id, (id) =>
@@ -39,7 +39,7 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
-        [Route("create")]
+        [Route("create/{id}")]
         async public Task<IApiResult> Create(string id)
         {
             return await SecureMethodHandler(id, (id) =>
@@ -49,7 +49,7 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpPost]
-        [Route("map")]
+        [Route("map/{id}")]
         async public Task<IApiResult> Map(string id, Mapping mapping)
         {
             return await SecureMethodHandler(id, (id) =>
@@ -61,7 +61,7 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpPost]
-        [Route("index")]
+        [Route("index/{id}")]
         async public Task<IApiResult> Index(string id, string title, string content)
         {
             return await SecureMethodHandler(id, (id) =>

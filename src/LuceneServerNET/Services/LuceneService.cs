@@ -130,6 +130,8 @@ namespace LuceneServerNET.Services
                     {
                         docs.Add(new
                         {
+                            _id = hit.Doc,
+                            _score = hit.Score,
                             title = foundDoc.Get("title"),
                             content = foundDoc.Get("content")
                         });
