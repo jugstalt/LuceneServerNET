@@ -1,4 +1,5 @@
 ﻿using LuceneServerNET.Client.Exceptions;
+using LuceneServerNET.Core.Extensions;
 using LuceneServerNET.Core.Models.Result;
 using System.Net.Http;
 using System.Text.Json;
@@ -19,14 +20,11 @@ namespace LuceneServerNET.Client.Extensions
 
             var resultJson = await httpResponse.Content.ReadAsStringAsync();
 
-            var options = new JsonSerializerOptions();
-            options.PropertyNameCaseInsensitive = true;
-            options.Converters.Add(new JsonStringEnumConverter());
+            var apiResult = resultJson.DeserializeJson<T>(); 
 
-            var apiResult = JsonSerializer.Deserialize<T>(resultJson, options);
             if (apiResult.Success == false)
             {
-                var errorResult = JsonSerializer.Deserialize<ApiErrorResult>(resultJson, options);
+                var errorResult = resultJson.DeserializeJson<ApiErrorResult>();
                 throw new LuceneServerClientException(errorResult.Message ?? "Unknown error");
             }
 

@@ -18,5 +18,7 @@ namespace LuceneServerNET.Core.Models.Result
         }
 
         public bool Success { get; set; }
+
+        public double MilliSeconds { get; set; }
     }
 }

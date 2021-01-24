@@ -15,12 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\Mapping\" />
-    <Folder Include="Models\Result\" />
+    <ProjectReference Include="..\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
+    <Folder Include="Models\" />
   </ItemGroup>
 
 </Project>

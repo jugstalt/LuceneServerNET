@@ -8,5 +8,7 @@ namespace LuceneServerNET.Core.Models.Result
     public interface IApiResult
     {
         bool Success { get; set; }
+
+        double MilliSeconds { get; set; }
     }
 }

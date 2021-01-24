@@ -2,12 +2,14 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
-using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using LuceneServerNET.Core.Models.Mapping;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 
 namespace LuceneServerNET.Services
 {
@@ -16,10 +18,12 @@ namespace LuceneServerNET.Services
         const LuceneVersion AppLuceneVersion = LuceneVersion.LUCENE_48;
 
         private readonly string _rootPath;
+        private readonly LuceneSharedResourcesService _resources; 
 
-        public LuceneService()
+        public LuceneService(LuceneSharedResourcesService resources)
         {
             _rootPath = @"c:\temp\lucene.net\indices";
+            _resources = resources;
         }
 
         public bool IndexExists(string indexName)
@@ -29,6 +33,8 @@ namespace LuceneServerNET.Services
             return new DirectoryInfo(indexPath).Exists;
         }
 
+        #region Index Operations
+
         public bool CreateIndex(string indexName)
         {
             if (IndexExists(indexName))
@@ -37,8 +43,10 @@ namespace LuceneServerNET.Services
             }
 
             var indexPath = Path.Combine(_rootPath, indexName);
+            var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
 
             new DirectoryInfo(indexPath).Create();
+            new DirectoryInfo(indexMetaPath).Create();
 
             return true;
 
@@ -48,100 +56,210 @@ namespace LuceneServerNET.Services
             //}
         }
 
-        //public bool Map(string indexName)
-        //{
-        //    var doc = new Document();
-        //    doc.Add(new ("name")
+        public bool RemoveIndex(string indexName)
+        {
+            if(!IndexExists(indexName))
+            {
+                return true;
+            }
 
-        //    {
-        //        // StringField indexes but doesn't tokenize
-        //        new StringField("name",
-        //            source.Name,
-        //            Field.Store.Yes),
-        //        new TextField("favoritePhrase",
-        //            source.FavoritePhrase,
-        //            Field.Store.YES)
-        //    };
+            var indexPath = Path.Combine(_rootPath, indexName);
+            var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
 
-        //    return true;
-        //}
+            new DirectoryInfo(indexPath).Delete(true);
+            new DirectoryInfo(indexMetaPath).Delete(true);
 
-        public bool Index(string indexName, string title, string content)
+            return true;
+        }
+
+        #endregion
+
+        #region Mapping
+
+        public bool Map(string indexName, IndexMapping mapping)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new Exception("Index not exists");
+            }
+
+            if(mapping==null)
+            {
+                throw new ArgumentException("Parameter mapping == null");
+            }
+
+            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), "mapping.json");
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Exists)
+            {
+                fileInfo.Delete();
+            }
+
+            File.WriteAllText(
+                filePath,
+                JsonSerializer.Serialize(mapping)); ;
+
+            _resources.RefreshMapping(indexName);
+
+            return true;
+        }
+
+        public IndexMapping Mapping(string indexName)
+        {
+            return _resources.GetMapping(indexName);
+        }
+
+        #endregion
+
+        #region Indexing
+
+        public bool Index(string indexName, IEnumerable<IDictionary<string,object>> items)
         {
             if(!IndexExists(indexName))
             {
                 throw new Exception("Index not exists");
             }
 
-            var doc = new Document()
+            if (items == null || items.Count() == 0)
             {
-                // StringField indexes but doesn't tokenize
-                new StringField("title",
-                    title,
-                    Field.Store.YES),
-                new TextField("content",
-                            content,
-                            Field.Store.YES)
-            };
+                return true;
+            }
+
+            var mapping = _resources.GetMapping(indexName);
+
+            List<Document> docs = new List<Document>();
+            foreach (var item in items)
+            {
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var itemType = item.GetType();
+                var doc = new Document();
+
+                foreach (var field in mapping.Fields)
+                {
+                    if (!item.ContainsKey(field.Name))
+                    {
+                        continue;
+                    }
+
+                    var value = item[field.Name];
+                    if (value == null)
+                    {
+                        continue;
+                    }
+
+                    switch (field.FieldType)
+                    {
+                        case FieldTypes.StringType:
+                            doc.Add(new StringField(
+                                field.Name,
+                                value.ToString(),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            break;
+                        case FieldTypes.TextType:
+                            doc.Add(new TextField(
+                                field.Name,
+                                value.ToString(),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            break;
+                        case FieldTypes.Int32Type:
+                            doc.Add(new Int32Field(
+                                field.Name,
+                                Convert.ToInt32(value),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            break;
+                        case FieldTypes.DoubleType:
+                            doc.Add(new DoubleField(
+                                field.Name,
+                                Convert.ToDouble(value),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            break;
+                        case FieldTypes.SingleType:
+                            doc.Add(new SingleField(
+                                field.Name,
+                                Convert.ToSingle(value),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            break;
+                        case FieldTypes.NotIndexedString:
+                            doc.Add(
+                                new Field(field.Name,
+                                value.ToString(),
+                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO,
+                                Field.Index.NO));
+                            break;
+                    }
+                }
+                docs.Add(doc);
+            }
 
             using (var dir = GetIndexFSDirectory(indexName))
-            using(var analyzer = new StandardAnalyzer(AppLuceneVersion)) // Create an analyzer to process the text
+            using (var analyzer = new StandardAnalyzer(AppLuceneVersion)) // Create an analyzer to process the text
             {
-                
-
-                // Create an index writer
                 var indexConfig = new IndexWriterConfig(AppLuceneVersion, analyzer);
                 using (var writer = new IndexWriter(dir, indexConfig))
                 {
-                    writer.AddDocument(doc);
+                    writer.AddDocuments(docs);
+
                     writer.Flush(triggerMerge: false, applyAllDeletes: false);
                 }
             }
-
             return true;
         }
 
+        #endregion
+
+        #region Search/Query
+
         public IEnumerable<object> Search(string indexName, string term)
         {
-            using (var dir = GetIndexFSDirectory(indexName))
-            using (var indexReader = DirectoryReader.Open(dir))
-            using (var analyzer = new StandardAnalyzer(AppLuceneVersion))
+            var searcher = _resources.GetIIndexSearcher(indexName);
+
+            //var phrase = new MultiPhraseQuery
+            //{
+            //    new Term("content", term)
+            //};
+
+            //var phrase = new WildcardQuery(new Term("content", $"{ term }*"));
+
+            var mapping = _resources.GetMapping(indexName);
+
+            var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+            var query = parser.Parse(term);
+
+            var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
+
+            List<object> docs = new List<object>();
+            if (hits.Length > 0)
             {
-                var searcher = new IndexSearcher(indexReader);
-
-                //var phrase = new MultiPhraseQuery
-                //{
-                //    new Term("content", term)
-                //};
-
-                //var phrase = new WildcardQuery(new Term("content", $"{ term }*"));
-
-                var parser = new QueryParser(AppLuceneVersion, "content", analyzer);
-                var query = parser.Parse(term);
-
-                var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
-
-                List<object> docs=new List<object>();
                 foreach (var hit in hits)
                 {
                     var foundDoc = searcher.Doc(hit.Doc);
 
                     if (foundDoc != null)
                     {
-                        docs.Add(new
+                        var doc = new Dictionary<string, object>();
+
+                        doc.Add("_id", hit.Doc);
+                        doc.Add("_score", hit.Score);
+
+                        foreach(var field in mapping.Fields)
                         {
-                            _id = hit.Doc,
-                            _score = hit.Score,
-                            title = foundDoc.Get("title"),
-                            content = foundDoc.Get("content")
-                        });
+                            doc.Add(field.Name, foundDoc.Get(field.Name));
+                        }
+
+                        docs.Add(doc);
                     }
                 }
-
-
-                return docs;
             }
+
+            return docs;
         }
+
+        #endregion
 
         #region Helper
 
@@ -150,6 +268,11 @@ namespace LuceneServerNET.Services
             var indexPath = Path.Combine(_rootPath, indexName);
 
             return FSDirectory.Open(indexPath);
+        }
+
+        private string MetaIndexName(string indexName)
+        {
+            return $".{ indexName }";
         }
 
         #endregion

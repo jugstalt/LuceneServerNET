@@ -4,6 +4,7 @@ using LuceneServerNET.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Controllers
@@ -39,8 +40,8 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
-        [Route("create/{id}")]
-        async public Task<IApiResult> Create(string id)
+        [Route("createindex/{id}")]
+        async public Task<IApiResult> CreateIndex(string id)
         {
             return await SecureMethodHandler(id, (id) =>
             {
@@ -48,26 +49,49 @@ namespace LuceneServerNET.Controllers
             });
         }
 
+        [HttpGet]
+        [Route("removeindex/{id}")]
+        async public Task<IApiResult> RemoveIndex(string id)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                return Task.FromResult<IApiResult>(new ApiResult(_lucene.RemoveIndex(id)));
+            });
+        }
+
         [HttpPost]
         [Route("map/{id}")]
-        async public Task<IApiResult> Map(string id, Mapping mapping)
+        async public Task<IApiResult> Map(string id,[FromBody] IndexMapping mapping)
         {
             return await SecureMethodHandler(id, (id) =>
             {
                 return Task.FromResult<IApiResult>(new ApiResult(
-                    
-                    ));
+                    _lucene.Map(id, mapping)
+                ));
+            });
+        }
+
+        [HttpGet]
+        [Route("mapping/{id}")]
+        async public Task<IApiResult> Mapping(string id)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                return Task.FromResult<IApiResult>(new MappingResult()
+                {
+                    Mapping = _lucene.Mapping(id)
+                });
             });
         }
 
         [HttpPost]
         [Route("index/{id}")]
-        async public Task<IApiResult> Index(string id, string title, string content)
+        async public Task<IApiResult> Index(string id, [FromBody] IEnumerable<IDictionary<string, object>> items)
         {
             return await SecureMethodHandler(id, (id) =>
             {
                 return Task.FromResult<IApiResult>(new ApiResult(
-                    _lucene.Index(id, title, content)
+                    _lucene.Index(id, items)
                     ));
             });
         }
@@ -85,7 +109,16 @@ namespace LuceneServerNET.Controllers
                     throw new Exception("Index id not specified");
                 }
 
-                return await func(id);
+                var start = DateTime.Now;
+
+                var apiResult = await func(id);
+
+                if (apiResult != null)
+                {
+                    apiResult.MilliSeconds = (DateTime.Now - start).TotalMilliseconds;
+                }
+
+                return apiResult;
             }
             catch (Exception ex)
             {
