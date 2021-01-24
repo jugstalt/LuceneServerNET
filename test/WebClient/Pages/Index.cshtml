@@ -1,0 +1,19 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">LuceneServer.NET Client</h1>
+    <input id="content-search" type="text" />
+
+    <div id="content-search-results">
+
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/lucenesserverclient.js"></script>
+}
+

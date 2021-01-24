@@ -2,6 +2,7 @@
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -69,6 +70,16 @@ namespace LuceneServerNET.Client
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
                 return apiResult.Success;
+            }
+        }
+
+        async public Task<LuceneSearchResult> Search(string indexName, string query)
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ indexName }?q={ WebUtility.UrlEncode(query) }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
+
+                return apiResult;
             }
         }
     }
