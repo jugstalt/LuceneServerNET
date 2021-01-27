@@ -4,10 +4,11 @@
     {
         public FieldMapping()
         {
-            this.Store = Store.YES;
+            this.Store = this.Index = true;
         }
         public string FieldType { get; set; }
         public string Name { get; set; }
-        public Store Store { get; set; }
+        public bool Store { get; set; }
+        public bool Index { get; set; }
     }
 }

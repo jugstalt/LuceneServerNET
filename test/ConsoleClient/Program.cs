@@ -56,11 +56,11 @@ namespace ConsoleClient
                     new FieldMapping()
                     {
                          FieldType = FieldTypes.TextType,
-                         Name = "content", Store = Store.YES
+                         Name = "content"
                     },
                     new FieldMapping()
                     {
-                         FieldType = FieldTypes.StringType,
+                         FieldType = FieldTypes.TextType,
                          Name = "feed"
                     },
                     new FieldMapping()

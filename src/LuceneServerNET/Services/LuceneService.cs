@@ -42,6 +42,11 @@ namespace LuceneServerNET.Services
                 throw new Exception("Index already exists");
             }
 
+            if(_resources.IsUnloading(indexName))
+            {
+                throw new Exception("Index is unloaded");
+            }
+
             var indexPath = Path.Combine(_rootPath, indexName);
             var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
 
@@ -66,8 +71,21 @@ namespace LuceneServerNET.Services
             var indexPath = Path.Combine(_rootPath, indexName);
             var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
 
-            new DirectoryInfo(indexPath).Delete(true);
-            new DirectoryInfo(indexMetaPath).Delete(true);
+            using (var unloader = _resources.UnloadIndex(indexName))
+            {
+                var indexDirectory = new DirectoryInfo(indexPath);
+                var indexMetaDirectory = new DirectoryInfo(indexMetaPath);
+
+                if (indexDirectory.Exists)
+                {
+                    indexDirectory.Delete(true);
+                }
+
+                if (indexMetaDirectory.Exists)
+                {
+                    indexMetaDirectory.Delete(true);
+                }
+            }
 
             return true;
         }
@@ -155,41 +173,69 @@ namespace LuceneServerNET.Services
                     switch (field.FieldType)
                     {
                         case FieldTypes.StringType:
-                            doc.Add(new StringField(
-                                field.Name,
-                                value.ToString(),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                            if (field.Index)
+                            {
+                                doc.Add(new StringField(
+                                    field.Name,
+                                    value.ToString(),
+                                    field.Store ? Field.Store.YES : Field.Store.NO));
+                            } 
+                            else 
+                            {
+                                doc.Add(new StoredField(field.Name, value.ToString()));
+                            }
                             break;
                         case FieldTypes.TextType:
-                            doc.Add(new TextField(
+                            if (field.Index)
+                            {
+                                doc.Add(new TextField(
                                 field.Name,
                                 value.ToString(),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                            }
+                            else
+                            {
+                                doc.Add(new StoredField(field.Name, value.ToString()));
+                            }
                             break;
                         case FieldTypes.Int32Type:
-                            doc.Add(new Int32Field(
+                            if (field.Index)
+                            {
+                                doc.Add(new Int32Field(
                                 field.Name,
                                 Convert.ToInt32(value),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                            }
+                            else
+                            {
+                                doc.Add(new StoredField(field.Name, Convert.ToInt32(value)));
+                            }
                             break;
                         case FieldTypes.DoubleType:
-                            doc.Add(new DoubleField(
+                            if (field.Index)
+                            {
+                                doc.Add(new DoubleField(
                                 field.Name,
                                 Convert.ToDouble(value),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
+                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                            }
+                            else
+                            {
+                                doc.Add(new StoredField(field.Name, Convert.ToDouble(value)));
+                            }
                             break;
                         case FieldTypes.SingleType:
-                            doc.Add(new SingleField(
+                            if (field.Index)
+                            {
+                                doc.Add(new SingleField(
                                 field.Name,
                                 Convert.ToSingle(value),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO));
-                            break;
-                        case FieldTypes.NotIndexedString:
-                            doc.Add(
-                                new Field(field.Name,
-                                value.ToString(),
-                                field.Store == Store.YES ? Field.Store.YES : Field.Store.NO,
-                                Field.Index.NO));
+                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                            }
+                            else
+                            {
+                                doc.Add(new StoredField(field.Name, Convert.ToSingle(value)));
+                            }
                             break;
                     }
                 }

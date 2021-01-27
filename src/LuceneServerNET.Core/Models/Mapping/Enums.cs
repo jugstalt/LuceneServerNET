@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 
 namespace LuceneServerNET.Core.Models.Mapping
 {
-    public enum Store
-    {
-        YES = 0,
-        NO = 1
-    }
+    //public enum Store
+    //{
+    //    YES = 0,
+    //    NO = 1
+    //}
 }

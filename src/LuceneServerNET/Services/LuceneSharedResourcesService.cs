@@ -29,6 +29,8 @@ namespace LuceneServerNET.Services
 
         private void InitResources(string indexName)
         {
+            CheckForUnloading(indexName);
+
             var indexPath = Path.Combine(_rootPath, indexName);
 
             var resource = new LuceneResources(_rootPath, indexName);
@@ -59,6 +61,8 @@ namespace LuceneServerNET.Services
         {
             if (!_mappings.ContainsKey(indexName))
             {
+                CheckForUnloading(indexName);
+
                 _mappings[indexName] = new MappingResource(_rootPath, indexName);
             }
 
@@ -69,6 +73,8 @@ namespace LuceneServerNET.Services
         {
             if (_mappings.ContainsKey(indexName))
             {
+                CheckForUnloading(indexName);
+
                 _mappings[indexName]?.RefreshMapping();
             }
         }
@@ -83,12 +89,55 @@ namespace LuceneServerNET.Services
         {
             if(_resources.ContainsKey(indexName))
             {
-                var resource = _resources[indexName];
-                resource.Dispose();
-
-                _resources.TryRemove(indexName, out LuceneResources removed);
+                if (_resources.TryRemove(indexName, out LuceneResources removed))
+                {
+                    removed.Dispose();
+                }
+                else
+                {
+                    throw new Exception("Can't remove lucene resources from dictionary");
+                }
             }
         }
+
+        #region Unloading
+
+        private ConcurrentDictionary<string, bool> _unloadedIndices = new ConcurrentDictionary<string, bool>();
+        public IDisposable UnloadIndex(string indexName)
+        {
+            var unloader = new Unloader(indexName, _unloadedIndices);
+
+            try
+            {
+                RemoveResources(indexName);
+
+                if(_mappings.ContainsKey(indexName))
+                {
+                    _mappings.TryRemove(indexName, out MappingResource mapping);
+                }
+
+                return unloader;
+            }
+            catch (Exception ex)
+            {
+                unloader.Dispose();
+                throw new Exception($"Error on unloading index { indexName }", ex);
+            }
+        }
+
+        public bool IsUnloading(string indexName)
+        {
+            return _unloadedIndices.ContainsKey(indexName) &&
+                   _unloadedIndices[indexName] == true;
+        }
+
+        private void CheckForUnloading(string indexName)
+        {
+            if (IsUnloading(indexName))
+                throw new Exception($"Index { indexName } is unloaded");
+        }
+
+        #endregion
 
         #region IDisposable
 
@@ -200,6 +249,27 @@ namespace LuceneServerNET.Services
                 catch { }
 
                 _mapping = mapping ?? new IndexMapping();  // default (empty) mapping
+            }
+        }
+
+        private class Unloader : IDisposable
+        {
+            private string _indexName;
+            private readonly ConcurrentDictionary<string, bool> _unloadedIndices = new ConcurrentDictionary<string, bool>();
+
+            public Unloader(string indexName, ConcurrentDictionary<string, bool> unloadedIndices)
+            {
+                _indexName = indexName;
+                _unloadedIndices = unloadedIndices;
+                _unloadedIndices[indexName] = true;
+            }
+
+            public void Dispose()
+            {
+                if(!_unloadedIndices.TryRemove(_indexName, out bool locked))
+                {
+                    _unloadedIndices[_indexName] = false;
+                }
             }
         }
 
