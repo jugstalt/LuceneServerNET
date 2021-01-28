@@ -40,6 +40,21 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
+        [Route("group/{id}")]
+        async public Task<IApiResult> Group(string id, string groupField, string q)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                var hits = _lucene.GroupBy(id, groupField, q);
+
+                return Task.FromResult<IApiResult>(new LuceneSearchResult()
+                {
+                    Hits = hits
+                });
+            });
+        }
+
+        [HttpGet]
         [Route("createindex/{id}")]
         async public Task<IApiResult> CreateIndex(string id)
         {

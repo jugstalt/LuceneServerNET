@@ -2,6 +2,8 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
+using Lucene.Net.Search;
+using Lucene.Net.Search.Grouping;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
@@ -9,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace LuceneServerNET.Services
@@ -41,7 +44,6 @@ namespace LuceneServerNET.Services
             {
                 throw new Exception("Index already exists");
             }
-
             if(_resources.IsUnloading(indexName))
             {
                 throw new Exception("Index is unloaded");
@@ -54,11 +56,6 @@ namespace LuceneServerNET.Services
             new DirectoryInfo(indexMetaPath).Create();
 
             return true;
-
-            //using (var dir = FSDirectory.Open(indexPath))
-            //{
-            //    return true;
-            //}
         }
 
         public bool RemoveIndex(string indexName)
@@ -273,7 +270,9 @@ namespace LuceneServerNET.Services
 
             var mapping = _resources.GetMapping(indexName);
 
+            // https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
             var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+            //var parser = new MultiFieldQueryParser(AppLuceneVersion, new string[] { "title", "content" }, _resources.GetAnalyzer(indexName));
             var query = parser.Parse(term);
 
             var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
@@ -303,6 +302,42 @@ namespace LuceneServerNET.Services
             }
 
             return docs;
+        }
+
+        #endregion
+
+        #region Grouping
+
+        public IEnumerable<object> GroupBy(string indexName, string groupField, string term)
+        {
+            var groupingSearch = new GroupingSearch(groupField);
+            //groupingSearch.SetGroupSort(groupSort);
+            //groupingSearch.SetFillSortFields(fillFields);
+
+            var searcher = _resources.GetIIndexSearcher(indexName);
+
+            var mapping = _resources.GetMapping(indexName);
+
+            Query query = null;
+            if (String.IsNullOrEmpty(term))
+            {
+                query = new MatchAllDocsQuery();
+            }
+            else
+            {
+                var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+                query = parser.Parse(term);
+            }
+
+            var topGroups = groupingSearch.Search(searcher, query, 0, 1000);
+
+            return topGroups.Groups
+                            .Where(g => g.GroupValue is BytesRef)
+                            .Select(g => ((BytesRef)g.GroupValue).Bytes)
+                            .Select(b =>
+                             {
+                                 return Encoding.UTF8.GetString(b);
+                             });
         }
 
         #endregion
