@@ -329,7 +329,7 @@ namespace LuceneServerNET.Services
                 query = parser.Parse(term);
             }
 
-            var topGroups = groupingSearch.Search(searcher, query, 0, 1000);
+            var topGroups = groupingSearch.Search(searcher, query, 0, 100000);
 
             return topGroups.Groups
                             .Where(g => g.GroupValue is BytesRef)

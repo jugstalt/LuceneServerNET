@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Core.Models.Mapping
@@ -12,5 +13,15 @@ namespace LuceneServerNET.Core.Models.Mapping
         public const string Int32Type = "int32";
         public const string DoubleType = "double";
         public const string SingleType = "single";
+
+        static public string[] Values()
+        {
+            var fields = typeof(FieldTypes).GetFields(BindingFlags.Public | BindingFlags.Static);
+
+            return fields
+                .Where(f => f.IsLiteral && !f.IsInitOnly && f.GetValue(null)!=null)
+                .Select(f => f.GetValue(null).ToString())
+                .ToArray();
+        }
     }
 }

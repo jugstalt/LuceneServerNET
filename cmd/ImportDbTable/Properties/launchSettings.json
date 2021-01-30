@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ImportDbTable": {
+      "commandName": "Project",
+      "commandLineArgs": "-s https://localhost:44393  -i new-index -db-type sqlite -db \"Data Source=D:\\GeoDaten\\ALLGEMEIN\\ALLGEMEIN\\offline_allgemein.fdb\" -sql \"select * from FC_DU_TOP_TOP_P_ADRESSEN\" -f suggested_text \"{{PLZ}} {{ORT}} {{ADRESSE}}\""
+    }
+  }
+}

@@ -24,12 +24,21 @@
                             .addClass('result')
                             .appendTo($resultsPanel);
 
+                        /*
                         $("<h3>")
                             .text(item.title)
                             .appendTo($resultPanel);
                         $("<div>")
                             .addClass('content')
                             .html(item.content)
+                            .appendTo($resultPanel);
+                            */
+                        $("<h3>")
+                            .text(item.category)
+                            .appendTo($resultPanel);
+                        $("<div>")
+                            .addClass('content')
+                            .html(item.suggested_text)
                             .appendTo($resultPanel);
                     }
                 },

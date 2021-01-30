@@ -26,7 +26,7 @@ namespace WebClient.Pages
 
         async public Task<IActionResult> OnGetSearch(string term)
         {
-            var result = await _client.Search("testindex", $"{ term }*");
+            var result = await _client.Search("new-index", $"{ term }*");
 
             return new JsonResult(new
             {

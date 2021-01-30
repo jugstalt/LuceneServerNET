@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace LuceneServerNET.Core.Models.Mapping
 {
@@ -15,5 +14,26 @@ namespace LuceneServerNET.Core.Models.Mapping
         }
 
         public string PrimaryField { get; set; }
+
+        public void AddField(FieldMapping fieldMapping)
+        {
+            if (_fields == null)
+            {
+                _fields = new List<FieldMapping>();
+            }
+
+            Fields.Add(fieldMapping);
+
+            if (String.IsNullOrEmpty(PrimaryField) && fieldMapping.Index == true)
+            {
+                this.PrimaryField = fieldMapping.Name;
+            }
+        }
+
+        public bool IsValid()
+        {
+            return !String.IsNullOrWhiteSpace(PrimaryField) &&
+                    this.Fields != null && this.Fields.Count() > 0;
+        }
     }
 }

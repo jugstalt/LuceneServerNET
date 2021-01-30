@@ -173,7 +173,7 @@ namespace LuceneServerNET.Services
 
                 Directory = FSDirectory.Open(indexPath);
                 DirectoryReader = DirectoryReader.Open(Directory);
-                Analyzer = new StandardAnalyzer(AppLuceneVersion);
+                Analyzer = new Lucene.Net.Analysis.De.GermanAnalyzer(AppLuceneVersion); //new StandardAnalyzer(AppLuceneVersion);
                 IndexSearcher = new IndexSearcher(DirectoryReader);
             }
 
