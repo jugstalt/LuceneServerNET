@@ -19,6 +19,8 @@ namespace ImportDbTable
                 string connectionString = null, sqlStatement = null;
                 Dictionary<string, string> fields = new Dictionary<string, string>();
 
+                #region Parse Arguments
+
                 for (int i = 0; i < args.Length; i++)
                 {
                     switch (args[i].ToLower())
@@ -87,46 +89,52 @@ namespace ImportDbTable
                     return 1;
                 }
 
-                var client = new LuceneServerClient(serverUrl);
-                var items = new List<IDictionary<string, object>>();
+                #endregion
 
-                int counter=0;
-                string regexDbFieldsPattern = @"{{(.*?)}}";
-                using (var connection = DbConnectionFactory.CreateInstance(dbType, connectionString))
+                var startTime = DateTime.Now;
+                int counter = 0;
+
+                using (var client = new LuceneServerClient(serverUrl))
                 {
-                    foreach(IDictionary<string, object> row in connection.Query(sqlStatement, buffered: false))
+                    var items = new List<IDictionary<string, object>>();
+
+                    string regexDbFieldsPattern = @"{{(.*?)}}";
+                    using (var connection = DbConnectionFactory.CreateInstance(dbType, connectionString))
                     {
-                        if (row != null)
+                        foreach (IDictionary<string, object> row in connection.Query(sqlStatement, buffered: false))
                         {
-                            var item = new Dictionary<string, object>();
-
-                            foreach(var indexField in fields.Keys)
+                            if (row != null)
                             {
-                                string expression = fields[indexField];
-                                var matches = Regex.Matches(expression, regexDbFieldsPattern).Select(m => m.ToString().Substring(2, m.ToString().Length - 4)).ToArray();
+                                var item = new Dictionary<string, object>();
 
-                                foreach(var match in matches)
+                                foreach (var indexField in fields.Keys)
                                 {
-                                    expression = expression.Replace($"{{{{{ match }}}}}", row[match]?.ToString() ?? String.Empty);
+                                    string expression = fields[indexField];
+                                    var matches = Regex.Matches(expression, regexDbFieldsPattern).Select(m => m.ToString().Substring(2, m.ToString().Length - 4)).ToArray();
+
+                                    foreach (var match in matches)
+                                    {
+                                        expression = expression.Replace($"{{{{{ match }}}}}", row[match]?.ToString() ?? String.Empty);
+                                    }
+
+                                    item[indexField] = expression;
                                 }
 
-                                item[indexField] = expression;
+                                items.Add(item);
+                                counter++;
                             }
 
-                            items.Add(item);
-                            counter++;
-                        }
-
-                        if (counter % 1000 == 0)
-                        {
-                            await IndexItems(client, indexName, items, counter);
+                            if (counter % 1000 == 0)
+                            {
+                                await IndexItems(client, indexName, items, counter);
+                            }
                         }
                     }
+
+                    await client.IndexItems(indexName, items);
                 }
 
-                await client.IndexItems(indexName, items);
-
-                Console.WriteLine($"{ counter } records");
+                Console.WriteLine($"{ counter } records ... { Math.Round((DateTime.Now-startTime).TotalMinutes, 2) } minutes");
 
                 Console.WriteLine("finished successfully");
 

@@ -1,7 +1,9 @@
 ﻿using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
 using LuceneServerNET.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -15,11 +17,15 @@ namespace LuceneServerNET.Controllers
     {
         private readonly LuceneService _lucene;
         private readonly ILogger<LuceneController> _logger;
+        private readonly IWebHostEnvironment _env;
+        
 
         public LuceneController(LuceneService lucene,
+                                IWebHostEnvironment env,
                                 ILogger<LuceneController> logger)
         {
             _lucene = lucene;
+            _env = env;
             _logger = logger;
         }
 
@@ -111,6 +117,17 @@ namespace LuceneServerNET.Controllers
             });
         }
 
+        [HttpGet]
+        [Route("refresh/{id}")]
+        async public Task<IApiResult> Refresh(string id)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                _lucene.RefreshIndex(id);
+                return Task.FromResult<IApiResult>(new ApiResult());
+            });
+        }
+
         #region Helper
 
         private async Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
@@ -143,7 +160,21 @@ namespace LuceneServerNET.Controllers
                 }
                 else
                 {
-                    return new ApiErrorResult(ex.Message);
+                    if(_env.IsDevelopment())
+                    {
+                        return new ApiErrorResult(ex.Message);
+                    } 
+                    else
+                    {
+                        Console.WriteLine($"Exception: { DateTime.Now.ToShortDateString() } { DateTime.Now.ToLongTimeString() }");
+                        Console.WriteLine(ex.Message);
+                        Console.WriteLine(ex.StackTrace);
+
+                        _logger.LogError(ex, $"Exception: { DateTime.Now.ToShortDateString() } { DateTime.Now.ToLongTimeString() }");
+
+                        return new ApiErrorResult($"Error of type { ex.GetType().ToString() }");
+                    }
+                   
                 }
             }
         }

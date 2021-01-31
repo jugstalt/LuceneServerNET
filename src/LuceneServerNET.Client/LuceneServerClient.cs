@@ -1,7 +1,9 @@
 ﻿using LuceneServerNET.Client.Extensions;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -10,10 +12,12 @@ using System.Threading.Tasks;
 
 namespace LuceneServerNET.Client
 {
-    public class LuceneServerClient
+    public class LuceneServerClient : IDisposable
     {
         private readonly HttpClient _httpClient;
         private readonly string _serverUrl;
+
+        private List<string> _refreshIndices = new List<string>();
 
         public LuceneServerClient(string serverUrl, HttpClient httpClient = null)
         {
@@ -25,7 +29,6 @@ namespace LuceneServerNET.Client
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/createindex/{ indexName }"))
             {
-
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
                 return apiResult.Success;
@@ -36,8 +39,22 @@ namespace LuceneServerNET.Client
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/removeindex/{ indexName }"))
             {
-
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                return apiResult.Success;
+            }
+        }
+
+        async public Task<bool> RefreshIndex(string indexName)
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ indexName }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                if (_refreshIndices.Contains(indexName))
+                {
+                    _refreshIndices.Remove(indexName);
+                }
 
                 return apiResult.Success;
             }
@@ -69,9 +86,18 @@ namespace LuceneServerNET.Client
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
+                if(apiResult.Success)
+                {
+                    if (!_refreshIndices.Contains(indexName))
+                    {
+                        _refreshIndices.Add(indexName);
+                    }
+                }
+
                 return apiResult.Success;
             }
         }
+        
 
         async public Task<LuceneSearchResult> Search(string indexName, string query)
         {
@@ -82,5 +108,35 @@ namespace LuceneServerNET.Client
                 return apiResult;
             }
         }
+
+        #region IDispose
+
+        public void Dispose()
+        {
+            foreach (var refreshIndex in _refreshIndices.Distinct())
+            {
+                Console.WriteLine($"Refresh index { refreshIndex }");
+                try
+                {
+                    using (var httpResponse = _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ refreshIndex }").Result)
+                    {
+                        if (httpResponse.StatusCode == HttpStatusCode.OK)
+                        {
+                            Console.WriteLine("succeeded");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Status code { httpResponse.StatusCode }");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Waring: { ex.Message }");
+                }
+            }
+        }
+
+        #endregion
     }
 }

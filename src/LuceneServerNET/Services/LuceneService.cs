@@ -7,6 +7,7 @@ using Lucene.Net.Search.Grouping;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,12 +24,13 @@ namespace LuceneServerNET.Services
         private readonly string _rootPath;
         private readonly LuceneSharedResourcesService _resources; 
 
-        public LuceneService(LuceneSharedResourcesService resources)
+        public LuceneService(LuceneSharedResourcesService resources,
+                             IOptionsMonitor<LuceneServiceOptions> options)
         {
-            _rootPath = @"c:\temp\lucene.net\indices";
+            _rootPath = options.CurrentValue.RootPath;
             _resources = resources;
         }
-
+        
         public bool IndexExists(string indexName)
         {
             var indexPath = Path.Combine(_rootPath, indexName);
@@ -239,18 +241,22 @@ namespace LuceneServerNET.Services
                 docs.Add(doc);
             }
 
-            using (var dir = GetIndexFSDirectory(indexName))
-            using (var analyzer = new StandardAnalyzer(AppLuceneVersion)) // Create an analyzer to process the text
-            {
-                var indexConfig = new IndexWriterConfig(AppLuceneVersion, analyzer);
-                using (var writer = new IndexWriter(dir, indexConfig))
-                {
-                    writer.AddDocuments(docs);
+            var writer = _resources.GetIndexWriter(indexName);
+            writer.AddDocuments(docs);
 
-                    writer.Flush(triggerMerge: false, applyAllDeletes: false);
-                }
-            }
+            writer.Flush(triggerMerge: false, applyAllDeletes: false);
+
             return true;
+        }
+
+        public void RefreshIndex(string indexName)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new Exception("Index not exists");
+            }
+
+            _resources.RefreshResources(indexName);
         }
 
         #endregion
@@ -259,7 +265,7 @@ namespace LuceneServerNET.Services
 
         public IEnumerable<object> Search(string indexName, string term)
         {
-            var searcher = _resources.GetIIndexSearcher(indexName);
+            var searcher = _resources.GetIndexSearcher(indexName);
 
             //var phrase = new MultiPhraseQuery
             //{
@@ -314,7 +320,7 @@ namespace LuceneServerNET.Services
             //groupingSearch.SetGroupSort(groupSort);
             //groupingSearch.SetFillSortFields(fillFields);
 
-            var searcher = _resources.GetIIndexSearcher(indexName);
+            var searcher = _resources.GetIndexSearcher(indexName);
 
             var mapping = _resources.GetMapping(indexName);
 
@@ -343,13 +349,6 @@ namespace LuceneServerNET.Services
         #endregion
 
         #region Helper
-
-        private FSDirectory GetIndexFSDirectory(string indexName)
-        {
-            var indexPath = Path.Combine(_rootPath, indexName);
-
-            return FSDirectory.Open(indexPath);
-        }
 
         private string MetaIndexName(string indexName)
         {
