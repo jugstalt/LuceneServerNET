@@ -118,12 +118,37 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
+        [Route("removedocuments/{id}")]
+
+        async public Task<IApiResult> RemoveDocuments(string id, string term, string termField = "id")
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                return Task.FromResult<IApiResult>(new ApiResult(
+                    _lucene.RemoveDocuments(id, term, termField)
+                    ));
+            });
+        }
+
+
+        [HttpGet]
         [Route("refresh/{id}")]
         async public Task<IApiResult> Refresh(string id)
         {
             return await SecureMethodHandler(id, (id) =>
             {
                 _lucene.RefreshIndex(id);
+                return Task.FromResult<IApiResult>(new ApiResult());
+            });
+        }
+
+        [HttpGet]
+        [Route("releaseall")]
+        async public Task<IApiResult> ReleaseAll()
+        {
+            return await SecureMethodHandler("*", (id) =>
+            {
+                _lucene.ReleaseAll();
                 return Task.FromResult<IApiResult>(new ApiResult());
             });
         }

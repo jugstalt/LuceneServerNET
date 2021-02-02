@@ -38,6 +38,11 @@ namespace LuceneServerNET.Services
             return new DirectoryInfo(indexPath).Exists;
         }
 
+        public void ReleaseAll()
+        {
+            _resources.ReleaseAllResources();
+        }
+
         #region Index Operations
 
         public bool CreateIndex(string indexName)
@@ -249,6 +254,23 @@ namespace LuceneServerNET.Services
             return true;
         }
 
+        public bool RemoveDocuments(string indexName, string term, string termField = "id")
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new Exception("Index not exists");
+            }
+
+            var parser = new QueryParser(AppLuceneVersion, termField, _resources.GetAnalyzer(indexName));
+            var query = parser.Parse(term);
+
+            var writer = _resources.GetIndexWriter(indexName);
+            writer.DeleteDocuments(query);
+            writer.Commit();
+
+            return true;
+        }
+
         public void RefreshIndex(string indexName)
         {
             if (!IndexExists(indexName))
@@ -258,6 +280,8 @@ namespace LuceneServerNET.Services
 
             _resources.RefreshResources(indexName);
         }
+
+        
 
         #endregion
 

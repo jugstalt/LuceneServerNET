@@ -1,4 +1,5 @@
 ﻿using Lucene.Net.Analysis;
+using Lucene.Net.Analysis.Core;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
@@ -6,11 +7,13 @@ using Lucene.Net.Store;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Extensions;
 using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Extensions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using LuceneServerNET.Extensions;
+using System.Linq;
+using System.Threading;
 
 namespace LuceneServerNET.Services
 {
@@ -22,12 +25,16 @@ namespace LuceneServerNET.Services
         private readonly ConcurrentDictionary<string, LuceneResources> _resources;
         private readonly ConcurrentDictionary<string, MappingResource> _mappings;
 
+        private System.Threading.Timer _timer;
+
         public LuceneSharedResourcesService(IOptionsMonitor<LuceneServiceOptions> options)
         {
             _rootPath = options.CurrentValue.RootPath.CreateDirectoryIfNotExists();
 
             _resources = new ConcurrentDictionary<string, LuceneResources>();
             _mappings = new ConcurrentDictionary<string, MappingResource>();
+
+            _timer= new System.Threading.Timer(Timer_Elapsed, null, TimeSpan.Zero, TimeSpan.FromSeconds(20));
         }
 
         private void InitResources(string indexName)
@@ -96,8 +103,12 @@ namespace LuceneServerNET.Services
 
         public void RefreshResources(string indexName)
         {
-            
-            InitResources(indexName);
+
+            if (_resources.ContainsKey(indexName))
+            {
+                _resources[indexName].DirectoryWriter.Commit();
+                _resources[indexName].RefreshReaderSearcher();
+            }
         }
 
         public void RemoveResources(string indexName)
@@ -114,6 +125,18 @@ namespace LuceneServerNET.Services
                 }
             }
         }
+
+        #region Timer
+
+        private void Timer_Elapsed(object sender)
+        {
+            foreach(var indexName in _resources.Keys)
+            {
+                _resources[indexName].RefreshReaderSearcher();
+            }
+        }
+
+        #endregion
 
         #region Unloading
 
@@ -156,11 +179,9 @@ namespace LuceneServerNET.Services
 
         #endregion
 
-        #region IDisposable
-
-        public void Dispose()
+        public void ReleaseAllResources()
         {
-            foreach(var key in _resources.Keys)
+            foreach (var key in _resources.Keys.ToArray())
             {
                 var resources = _resources[key];
                 if (resources != null)
@@ -171,6 +192,13 @@ namespace LuceneServerNET.Services
 
             _resources.Clear();
             _mappings.Clear();
+        }
+
+        #region IDisposable
+
+        public void Dispose()
+        {
+            
         }
 
         #endregion
@@ -186,36 +214,51 @@ namespace LuceneServerNET.Services
                 _rootPath = rootPath;
                 _indexName = indexName;
 
-                Analyzer = /*new Lucene.Net.Analysis.De.GermanAnalyzer(AppLuceneVersion);*/ new StandardAnalyzer(AppLuceneVersion);
+                Analyzer = //new Lucene.Net.Analysis.De.GermanAnalyzer(AppLuceneVersion);
+                           new StandardAnalyzer(AppLuceneVersion);
+                           //new WhitespaceAnalyzer(AppLuceneVersion);
             }
 
             #region Lucene.NET Resources
 
             public Analyzer Analyzer { get; private set; }
 
-            #region Reader/Searcher Resources
-
-            private void InitReaderResources()
+            private void InitResources()
             {
                 var indexPath = Path.Combine(_rootPath, _indexName);
 
                 _directory = FSDirectory.Open(indexPath);
                 //Directory = new RAMDirectory(FSDirectory.Open(indexPath), IOContext.DEFAULT);
-                _directoryReader = DirectoryReader.Open(Directory);
+
+                var indexConfig = new IndexWriterConfig(AppLuceneVersion, this.Analyzer);
+                _directoryWriter = new IndexWriter(_directory, indexConfig);
+                _directoryReader = _directoryWriter.GetReader(false);
                 _indexSearcher = new IndexSearcher(DirectoryReader);
             }
 
-            private void ReleaseReaderResources()
+            private void ReleaseResources()
             {
                 if (_indexSearcher != null)
                 {
                     _indexSearcher = null;
                 }
 
+                if (Analyzer != null)
+                {
+                    Analyzer.Dispose();
+                    Analyzer = null;
+                }
+
                 if (_directoryReader != null)
                 {
                     _directoryReader.Dispose();
                     _directoryReader = null;
+                }
+
+                if(_directoryWriter!=null)
+                {
+                    _directoryWriter.Dispose();
+                    _directoryWriter = null;
                 }
 
                 if (_directory != null)
@@ -226,6 +269,7 @@ namespace LuceneServerNET.Services
             }
 
             private Lucene.Net.Store.Directory _directory = null;
+            private IndexWriter _directoryWriter = null;
             private DirectoryReader _directoryReader = null;
             private IndexSearcher _indexSearcher = null;
 
@@ -235,7 +279,7 @@ namespace LuceneServerNET.Services
                 {
                     if (_directory == null)
                     {
-                        InitReaderResources();
+                        InitResources();
                     }
 
                     return _directory;
@@ -245,7 +289,7 @@ namespace LuceneServerNET.Services
                 {
                     if (_directoryReader == null)
                     {
-                        InitReaderResources();
+                        InitResources();
                     }
 
                     return _directoryReader;
@@ -257,72 +301,47 @@ namespace LuceneServerNET.Services
                 {
                     if (_indexSearcher == null)
                     {
-                        InitReaderResources();
+                        InitResources();
                     }
 
                     return _indexSearcher;
                 }
             }
 
-            #endregion
-
-            #region Writer Resources
-
-            public Lucene.Net.Store.Directory WriterDirectory
-            {
-                get
-                {
-                    if (_writerDirectory == null)
-                    {
-                        InitWriterResources();
-                    }
-
-                    return _writerDirectory;
-                }
-            }
             public IndexWriter DirectoryWriter
             {
                 get
                 {
                     if (_directoryWriter == null)
                     {
-                        InitWriterResources();
+                        InitResources();
                     }
 
                     return _directoryWriter;
                 }
             }
 
-            private Lucene.Net.Store.Directory _writerDirectory = null;
-            private IndexWriter _directoryWriter = null;
-
-            private void InitWriterResources()
-            {
-                ReleaseWriteResources();
-
-                var indexPath = Path.Combine(_rootPath, _indexName);
-
-                _writerDirectory = FSDirectory.Open(indexPath);
-
-                var indexConfig = new IndexWriterConfig(AppLuceneVersion, this.Analyzer);
-                _directoryWriter = new IndexWriter(_writerDirectory, indexConfig);
-            }
-
-            public void ReleaseWriteResources()
-            {
-                if (_directoryWriter != null)
-                {
-                    _directoryWriter.Dispose();
-                    _directoryWriter = null;
-                }
-                if (_writerDirectory != null)
-                {
-                    _writerDirectory.Dispose();
-                    _writerDirectory = null;
-                }
-            }
-
             #endregion
+
+            #region Refresh Reader/Searcher
+
+            public void RefreshReaderSearcher()
+            {
+                if (_directoryReader == null || _directoryReader.IsCurrent())
+                {
+                    return;
+                }
+
+                var oldReader = _directoryReader;
+
+                _directoryReader = _directoryWriter.GetReader(false);
+                var newSearcher = new IndexSearcher(_directoryReader);
+                Interlocked.Exchange(ref _indexSearcher, newSearcher);
+
+                oldReader.Dispose();
+
+                Console.WriteLine($"Index { _indexName }: Searcher updated");
+            }
 
             #endregion
 
@@ -330,15 +349,7 @@ namespace LuceneServerNET.Services
 
             public void Dispose()
             {
-                ReleaseWriteResources();
-
-                ReleaseReaderResources();
-
-                if(Analyzer!=null)
-                {
-                    Analyzer.Dispose();
-                    Analyzer = null;
-                }
+                ReleaseResources();
             }
 
             #endregion
