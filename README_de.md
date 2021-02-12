@@ -27,7 +27,7 @@ wieder eine Verbindung zum ursprünglichen Datenbankobjekt hergestellt werden.
 ## REST Schnittstelle
 
 Hier werden die Endpunkte für die API beschrieben. {index} entspricht immer dem Names des Index.
-Der Rückgabewert ist immer vom Typ *IApiResult*:
+Der Rückgabewert ist immer vom Typ `IApiResult`:
 
 <pre>
 IApiResult {
@@ -36,7 +36,7 @@ IApiResult {
 }
 </pre>
 
-Je nach Kontext gibt es noch zusätzliche Attribute, zB ein *hits* Array bei Abfragen.
+Je nach Kontext gibt es noch zusätzliche Attribute, zB ein `hits`[]` bei Abfragen.
 
 ### Index Verwaltung
 
@@ -54,18 +54,18 @@ Löscht den Index unwiderruflich
 
 **[GET] /Lucene/refresh/{index}**
 
-Für zu einem Refresh des angeführten Index. Damit wird nach einem Hinzufügen von Dokumenten gewährleistet, dass nach den neu indizierten Dokumenten gesucht werden kann.
-Verwendet man den `LuceneServerClient` erfolgt dieser Aufruf automatisch in der *disposen* des Clients.
+Führt zu einem Refresh des angeführten Index. Damit wird nach einem Hinzufügen von Dokumenten gewährleistet, dass nach den neu indizierten Dokumenten gesucht werden kann.
+Verwendet man den `LuceneServerClient` erfolgt dieser Aufruf automatisch beim Entladen (`Dispose()`) des Clients.
 
 **[GET] /Lucene/releaseall**
 
 Gibt alle geteilten Resourcen innerhalb des Servers frei. Dies sind beispielsweise der `IndexReader` oder `IndexWriter`, die im Server über mehrere Abfragen geteilt werden, um eine optimale Performance zu bieten.
 Nach dem Freigeben werden die Resourcen beim nächsten Zugriff auf einen Index wieder initialisiert.
-Dieser Aufruf ist hauptsächlich für die Entwicklung notwendig und sollte in einem Standardbetrieb nicht notwendig sein.
+Dieser Aufruf ist hauptsächlich für die Entwicklung notwendig und sollte in einem Produktivbetrieb nicht notwendig sein.
 
 ### Mapping
 
-Damit wird die Struktur der Dokumente für diesen Index bestimmt. Das *Mapping* gibt an, welche Felder die einzelne Dokumente für diesen Index aufweisen können und ob diese Indiziert werden zur Zusatzinformation (ohne Suchmöglichkeiten) sind.
+Damit wird die Struktur der Dokumente für diesen Index bestimmt. Das *Mapping* gibt an, welche Felder die einzelne Dokumente für diesen Index aufweisen können und ob diese Indiziert werden oder nur Zusatzinformation (ohne Suchmöglichkeiten) sind.
 
 **[POST] /Lucene/map/{index}**
 
@@ -97,16 +97,16 @@ Es wird ein Json File übergeben, in dem die einzelnen Felder definiert werden. 
 
 * `int32`, `single`, `double`: Integer oder Fließkommazahlen
 
-* `datetime*: Ein Datum mit Uhrzeit
+* `datetime`: Ein Datum mit Uhrzeit
 
-Für jedes Feld kann angegeben werden ob es indiziert und/oder gespeichert werden soll.
+Für jedes Feld kann angegeben werden, ob es indiziert und/oder gespeichert werden soll.
 Nach indizierten Feldern kann gesucht werden. Bei *gespeicherten* Feldern wird auch der Inhalt 1:n bei einem Treffer zurückgegeben.
 
 Unter `primaryFields` muss ein Array mit Spaltennamen angegeben werden, in denen bei einer Suche standardmäßig gesucht werden sollte. In allen anderen Feldern wird nur gesucht, wenn dies in der Abfrage explizit angeführt wird.
 
 **[GET] /Lucene/mapping/{index}**
 
-Hier kann das *Mapping* für diesen Index abgefragt werden. Das Ergebnis ist wieder ein `IApiResult` Objekt mit einer zusätzlichen Eigenschaft *mapping*:
+Hier kann das *Mapping* für diesen Index abgefragt werden. Das Ergebnis ist wieder ein `IApiResult` Objekt mit einer zusätzlichen Eigenschaft `mapping`:
 
 <pre>
 {
