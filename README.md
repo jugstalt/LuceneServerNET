@@ -1,2 +1,4 @@
 # LuceneServerNET
-A REST Server on top of Lucene.NET
+
+Ein REST Server auf Basis von Lucene.NET
+
