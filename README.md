@@ -133,3 +133,73 @@ Here you can query the *mapping* for this index. The result is again an `IApiRes
   "milliSeconds": 12.2342
 }
 </pre>
+
+### Index Documents
+
+An entry in the index is called a document. Documents can be indexed, queried, and deleted using the following interfaces.
+If new documents are added to or deleted to an index, this will only become visible after a refresh (see above).
+
+**[POST] /Lucene/index/{index}**
+
+This allows individual documents to be transferred to the index. The fields of the documents passed must correspond to the *Mapping*. Unmapped fields are ignored.
+
+Request Body
+
+<pre>
+[
+  {   
+      // any kind of properties
+      "title": "my book title",
+      "summary": "lorem ispum..."
+  }
+]
+</pre>
+
+**[GET] /Lucene/remove/{index}?term={query-term}&termField={optinal:field-used-for-term}**
+
+A query can be passed as `term`. The criteria from the query are searched in `termField` and the corresponding objects are deleted.
+
+The *Default* value for termField is `_guid`. Ideally, in the *Mapping* you specify a field with the type `guid`. This is the only way to delete individual documents.
+
+**[GET] /Lucene/search/{index}?q={query-term}&outField={optional:fields-for-the-result-comma-separated}**
+
+This method can be used to search for documents. The result is of type `IApiResult` with an additional `hits` attributes:
+
+Example: /Lucene/search/{index}?q=Blümchen
+<pre>
+{
+  "hits": [
+    {
+      "_score": 1.4272848,
+      "_guid": "256c3f501ef64327b81f4b8141a6f5ef",
+      "title": "Korruption in der ÖFP? Alles zur Causa Blümchen",
+      "publish_date": "2021-02-12T17:09:17"
+    }
+  ],
+  "success": true,
+  "milliSeconds": 1.8725
+}
+</pre>
+
+The *Query-Term* corresponds to the *Lucene* syntax, see also [here](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
+
+**[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
+
+This method can be used to determine possible values of a field that optionally correspond to a *query term*. The method is similar to a `DISTINCT` in a database.
+The `hits` are a *string array*.
+
+Example: /Lucene/search/{index}?groupField=feed
+
+<pre>
+{
+  "hits": [
+    "derstandard",
+    "diepresse",
+    "kurier",
+    "krone",
+    "futurezone"
+  ],
+  "success": true,
+  "milliSeconds": 81.4196
+}
+</pre>
