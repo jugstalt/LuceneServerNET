@@ -1,8 +1,10 @@
 # LuceneServerNET
 
-A REST Server on top of Lucene.NET
-
 [German](./README_de.md)
+
+Note: This project is still at a very early stage of development. There may be even more major conversions of the interface.
+
+## A REST Server on top of Lucene.NET
 
 LuceneServer provides a REST interface, with the search indexes based on [Apache Lucene. NET](https://github.com/apache/lucenenet).
 The source code is fully implemented in *Dotnet Core* (C#) The REST interface can be addressed via simple GET/POST request.

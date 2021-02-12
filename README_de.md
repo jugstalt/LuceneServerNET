@@ -1,5 +1,7 @@
 # LuceneServer.NET
 
+Hinweis: Diese Projekt befinded sich noch in einen sehr frühen Entwicklungsstadium. Es kann noch zu größeren Umbauten der Schnittstelle kommen.
+
 ## Ein REST Server auf Basis von Lucene.NET
 
 LuceneServer bietet eine REST Schnittstelle, mit der Suchindices auf Basis von [Apache Lucene. NET](https://github.com/apache/lucenenet) erstellt werden können.
