@@ -1,12 +1,10 @@
-﻿using Lucene.Net.Analysis.Standard;
-using Lucene.Net.Documents;
-using Lucene.Net.Index;
+﻿using Lucene.Net.Documents;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Search.Grouping;
-using Lucene.Net.Store;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Extensions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -163,6 +161,20 @@ namespace LuceneServerNET.Services
 
                 foreach (var field in mapping.Fields)
                 {
+                    #region AutoSetValues
+
+                    switch (field.FieldType)
+                    {
+                        case FieldTypes.GuidType:
+                            doc.Add(new StringField(
+                                    field.Name,
+                                    Guid.NewGuid().ToString("N").ToLower(),
+                                    Field.Store.YES));
+                            continue;
+                    }
+
+                    #endregion
+
                     if (!item.ContainsKey(field.Name))
                     {
                         continue;
@@ -176,6 +188,7 @@ namespace LuceneServerNET.Services
 
                     switch (field.FieldType)
                     {
+                        
                         case FieldTypes.StringType:
                             if (field.Index)
                             {
@@ -186,7 +199,7 @@ namespace LuceneServerNET.Services
                             } 
                             else 
                             {
-                                doc.Add(new StoredField(field.Name, value.ToString()));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
                             }
                             break;
                         case FieldTypes.TextType:
@@ -199,7 +212,7 @@ namespace LuceneServerNET.Services
                             }
                             else
                             {
-                                doc.Add(new StoredField(field.Name, value.ToString()));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
                             }
                             break;
                         case FieldTypes.Int32Type:
@@ -212,7 +225,7 @@ namespace LuceneServerNET.Services
                             }
                             else
                             {
-                                doc.Add(new StoredField(field.Name, Convert.ToInt32(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToInt32(value)));
                             }
                             break;
                         case FieldTypes.DoubleType:
@@ -225,7 +238,7 @@ namespace LuceneServerNET.Services
                             }
                             else
                             {
-                                doc.Add(new StoredField(field.Name, Convert.ToDouble(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToDouble(value)));
                             }
                             break;
                         case FieldTypes.SingleType:
@@ -238,7 +251,21 @@ namespace LuceneServerNET.Services
                             }
                             else
                             {
-                                doc.Add(new StoredField(field.Name, Convert.ToSingle(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToSingle(value)));
+                            }
+                            break;
+                        case FieldTypes.DateTimeType:
+                            if (field.Index)
+                            {
+                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()), DateTools.Resolution.SECOND);
+                                doc.Add(new StringField(
+                                field.Name,
+                                (string)value,
+                                field.Store ? Field.Store.YES : Field.Store.NO));
+                            }
+                            else
+                            {
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
                             }
                             break;
                     }
@@ -281,13 +308,11 @@ namespace LuceneServerNET.Services
             _resources.RefreshResources(indexName);
         }
 
-        
-
         #endregion
 
         #region Search/Query
 
-        public IEnumerable<object> Search(string indexName, string term)
+        public IEnumerable<object> Search(string indexName, string term, IEnumerable<string> outFields)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
 
@@ -301,8 +326,12 @@ namespace LuceneServerNET.Services
             var mapping = _resources.GetMapping(indexName);
 
             // https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
-            var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
-            //var parser = new MultiFieldQueryParser(AppLuceneVersion, new string[] { "title", "content" }, _resources.GetAnalyzer(indexName));
+            //var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+            var parser = new MultiFieldQueryParser(
+                AppLuceneVersion, 
+                mapping.PrimaryFields.ToArray(), 
+                _resources.GetAnalyzer(indexName));
+
             var query = parser.Parse(term);
 
             var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
@@ -318,12 +347,18 @@ namespace LuceneServerNET.Services
                     {
                         var doc = new Dictionary<string, object>();
 
-                        doc.Add("_id", hit.Doc);
+                        //doc.Add("_id", hit.Doc);
                         doc.Add("_score", hit.Score);
 
                         foreach(var field in mapping.Fields)
                         {
-                            doc.Add(field.Name, foundDoc.Get(field.Name));
+                            if (outFields != null && !outFields.Contains(field.Name))
+                            {
+                                continue;
+                            }
+
+                            string val = foundDoc.Get(field.Name);
+                            doc.Add(field.Name, field.GetValue(foundDoc));
                         }
 
                         docs.Add(doc);
@@ -355,7 +390,10 @@ namespace LuceneServerNET.Services
             }
             else
             {
-                var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+                var parser = new MultiFieldQueryParser(
+                    AppLuceneVersion, 
+                    mapping.PrimaryFields.ToArray(),
+                    _resources.GetAnalyzer(indexName));
                 query = parser.Parse(term);
             }
 

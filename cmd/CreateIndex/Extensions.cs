@@ -1,7 +1,5 @@
 ﻿using LuceneServerNET.Core.Models.Mapping;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace CreateIndex
 {
@@ -37,10 +35,8 @@ namespace CreateIndex
                 }
             }
 
-            return new FieldMapping()
+            return new FieldMapping(fieldName, fieldType)
             {
-                Name = fieldName,
-                FieldType = fieldType,
                 Store = stored,
                 Index = index
             };

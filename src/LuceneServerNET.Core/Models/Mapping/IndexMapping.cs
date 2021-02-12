@@ -13,7 +13,7 @@ namespace LuceneServerNET.Core.Models.Mapping
             set { _fields = value; }
         }
 
-        public string PrimaryField { get; set; }
+        public ICollection<string> PrimaryFields { get; set; }
 
         public void AddField(FieldMapping fieldMapping)
         {
@@ -24,16 +24,18 @@ namespace LuceneServerNET.Core.Models.Mapping
 
             Fields.Add(fieldMapping);
 
-            if (String.IsNullOrEmpty(PrimaryField) && fieldMapping.Index == true)
+            if (PrimaryFields == null && fieldMapping.Index == true)
             {
-                this.PrimaryField = fieldMapping.Name;
+                this.PrimaryFields = new List<string>(new string[] { fieldMapping.Name });
             }
         }
 
         public bool IsValid()
         {
-            return !String.IsNullOrWhiteSpace(PrimaryField) &&
-                    this.Fields != null && this.Fields.Count() > 0;
+            return 
+                PrimaryFields != null &&
+                PrimaryFields.Count > 0 &&
+                this.Fields != null && this.Fields.Count() > 0;
         }
     }
 }

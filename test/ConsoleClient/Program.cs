@@ -3,7 +3,6 @@ using LuceneServerNET.Core.Models.Mapping;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace ConsoleClient
@@ -12,7 +11,7 @@ namespace ConsoleClient
     {
         static string serverUrl = "https://localhost:44393";
         static string indexName = "TestIndex";
-        static LuceneServerClient client = new LuceneServerClient(serverUrl);
+        static LuceneServerClient client = new LuceneServerClient(serverUrl, indexName);
 
         async static Task<int> Main(string[] args)
         {
@@ -26,6 +25,8 @@ namespace ConsoleClient
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: { ex.Message }");
+                Console.WriteLine("Stacktrace:");
+                Console.WriteLine(ex.StackTrace);
             }
             Console.ReadLine();
 
@@ -36,8 +37,8 @@ namespace ConsoleClient
         {
             #region Create Index
 
-            await client.RemoveIndex(indexName);
-            await client.CreateIndex(indexName);
+            await client.RemoveIndex();
+            await client.CreateIndex();
 
             #endregion
 
@@ -45,38 +46,20 @@ namespace ConsoleClient
 
             var mapping = new IndexMapping()
             {
-                PrimaryField = "title",
+                PrimaryFields = new string[] { "title", "content" },
                 Fields = new FieldMapping[]
                 {
-                    new FieldMapping()
-                    {
-                         FieldType = FieldTypes.TextType,
-                         Name = "title"
-                    },
-                    new FieldMapping()
-                    {
-                         FieldType = FieldTypes.TextType,
-                         Name = "content"
-                    },
-                    new FieldMapping()
-                    {
-                         FieldType = FieldTypes.TextType,
-                         Name = "feed"
-                    },
-                    new FieldMapping()
-                    {
-                         FieldType = FieldTypes.StringType,
-                         Name = "url"
-                    },
-                    new FieldMapping()
-                    {
-                         FieldType = FieldTypes.StringType,
-                         Name = "image"
-                    }
+                    new DocumentGuidField(),
+                    new IndexField("title"),
+                    new IndexField("content"),
+                    new IndexField("feed", FieldTypes.StringType),
+                    new StoredField("url"),
+                    new StoredField("image"),
+                    new IndexField("publish_date", FieldTypes.DateTimeType)
                 }
             };
 
-            await client.Map(indexName, mapping);
+            await client.Map(mapping);
 
             #endregion
         }
@@ -85,11 +68,11 @@ namespace ConsoleClient
         {
             var rssFeeds = new Dictionary<string, string>()
             {
-                { "DerStandard","https://www.derstandard.at/rss" },
-                { "DiePresse", "https://diepresse.com/rss//home" },
-                { "Kurier", "https://kurier.at/politik/xml/rssd" },
-                { "Krone", "http://www.krone.at/nachrichten/rss.html" },
-                { "Futurezone","https://futurezone.at/xml/rss" }
+                { "derstandard","https://www.derstandard.at/rss" },
+                { "diepresse", "https://diepresse.com/rss//home" },
+                { "kurier", "https://kurier.at/politik/xml/rssd" },
+                { "krone", "http://www.krone.at/nachrichten/rss.html" },
+                { "futurezone","https://futurezone.at/xml/rss" }
             };
 
             foreach (var feed in rssFeeds.Keys)
@@ -106,11 +89,15 @@ namespace ConsoleClient
                         doc["content"] = item.Content;
                         doc["url"] = item.Link;
                         doc["feed"] = feed;
+                        if (item.PublishDate.HasValue)
+                        {
+                            doc["publish_date"] = item.PublishDate.Value;
+                        }
 
                         return doc;
                     });
 
-                await client.IndexItems(indexName, docs);
+                await client.IndexDocuments(docs);
             }
         }
     }

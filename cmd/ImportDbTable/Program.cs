@@ -94,7 +94,7 @@ namespace ImportDbTable
                 var startTime = DateTime.Now;
                 int counter = 0;
 
-                using (var client = new LuceneServerClient(serverUrl))
+                using (var client = new LuceneServerClient(serverUrl, indexName))
                 {
                     var items = new List<IDictionary<string, object>>();
 
@@ -126,12 +126,12 @@ namespace ImportDbTable
 
                             if (counter % 1000 == 0)
                             {
-                                await IndexItems(client, indexName, items, counter);
+                                await IndexItems(client, items, counter);
                             }
                         }
                     }
 
-                    await client.IndexItems(indexName, items);
+                    await client.IndexDocuments(items);
                 }
 
                 Console.WriteLine($"{ counter } records ... { Math.Round((DateTime.Now-startTime).TotalMinutes, 2) } minutes");
@@ -151,10 +151,10 @@ namespace ImportDbTable
             }
         }
 
-        async static Task IndexItems(LuceneServerClient client, string indexName, List<IDictionary<string,object>> items, int counter)
+        async static Task IndexItems(LuceneServerClient client, List<IDictionary<string,object>> items, int counter)
         {
             Console.Write($"Index { items.Count() } items...");
-            if(!await client.IndexItems(indexName, items))
+            if(!await client.IndexDocuments(items))
             {
                 throw new Exception("Can't index items");
             }

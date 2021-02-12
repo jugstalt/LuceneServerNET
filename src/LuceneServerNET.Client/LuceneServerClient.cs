@@ -16,18 +16,20 @@ namespace LuceneServerNET.Client
     {
         private readonly HttpClient _httpClient;
         private readonly string _serverUrl;
+        private readonly string _indexName;
 
         private List<string> _refreshIndices = new List<string>();
 
-        public LuceneServerClient(string serverUrl, HttpClient httpClient = null)
+        public LuceneServerClient(string serverUrl, string indexName, HttpClient httpClient = null)
         {
             _httpClient = httpClient ?? new HttpClient();
             _serverUrl = serverUrl;
+            _indexName = indexName;
         }
 
-        async public Task<bool> CreateIndex(string indexName)
+        async public Task<bool> CreateIndex()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/createindex/{ indexName }"))
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/createindex/{ _indexName }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
@@ -35,9 +37,9 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<bool> RemoveIndex(string indexName)
+        async public Task<bool> IndexExists()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/removeindex/{ indexName }"))
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/indexexists/{ _indexName }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
@@ -45,29 +47,39 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<bool> RefreshIndex(string indexName)
+        async public Task<bool> RemoveIndex()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ indexName }"))
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                if (_refreshIndices.Contains(indexName))
+                return apiResult.Success;
+            }
+        }
+
+        async public Task<bool> RefreshIndex()
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ _indexName }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                if (_refreshIndices.Contains(_indexName))
                 {
-                    _refreshIndices.Remove(indexName);
+                    _refreshIndices.Remove(_indexName);
                 }
 
                 return apiResult.Success;
             }
         }
 
-        async public Task<bool> Map(string indexName, IndexMapping mapping)
+        async public Task<bool> Map(IndexMapping mapping)
         {
             HttpContent postContent = new StringContent(
                     JsonSerializer.Serialize(mapping),
                     Encoding.UTF8,
                     "application/json");
 
-            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/map/{ indexName }", postContent))
+            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/map/{ _indexName }", postContent))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
@@ -75,33 +87,61 @@ namespace LuceneServerNET.Client
             }
         } 
 
-        async public Task<bool> IndexItems(string indexName, IEnumerable<IDictionary<string,object>> items)
+        async public Task<bool> IndexDocuments(IEnumerable<IDictionary<string,object>> documents)
         {
             HttpContent postContent = new StringContent(
-                    JsonSerializer.Serialize(items),
+                    JsonSerializer.Serialize(documents),
                     Encoding.UTF8,
                     "application/json");
 
-            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/index/{ indexName }", postContent))
+            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/index/{ _indexName }", postContent))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
                 if(apiResult.Success)
                 {
-                    if (!_refreshIndices.Contains(indexName))
+                    if (!_refreshIndices.Contains(_indexName))
                     {
-                        _refreshIndices.Add(indexName);
+                        _refreshIndices.Add(_indexName);
                     }
                 }
 
                 return apiResult.Success;
             }
         }
-        
 
-        async public Task<LuceneSearchResult> Search(string indexName, string query)
+        public Task<bool> RemoveDocuments(IEnumerable<Guid> guids)
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ indexName }?q={ WebUtility.UrlEncode(query) }"))
+            var term = String.Join(" OR ", guids.Select(g => g.ToString().ToLower()));
+
+            return RemoveDocuments("_guid", term);
+        }
+
+        async public Task<bool> RemoveDocuments(string field, string term)
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                if (apiResult.Success)
+                {
+                    if (!_refreshIndices.Contains(_indexName))
+                    {
+                        _refreshIndices.Add(_indexName);
+                    }
+                }
+
+                return apiResult.Success;
+            }
+        }
+
+        async public Task<LuceneSearchResult> Search(string query, IEnumerable<string> outFields = null)
+        {
+            string outFieldsString = outFields != null ?
+                String.Join(",", outFields.Where(f => !String.IsNullOrEmpty(f)).Select(f => f.Trim())) :
+                null;
+
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFieldsString }&q={ WebUtility.UrlEncode(query) }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
 

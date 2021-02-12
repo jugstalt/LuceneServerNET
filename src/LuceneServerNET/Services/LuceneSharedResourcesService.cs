@@ -227,6 +227,9 @@ namespace LuceneServerNET.Services
             {
                 var indexPath = Path.Combine(_rootPath, _indexName);
 
+                if (new DirectoryInfo(indexPath).Exists == false)
+                    throw new Exception("Index not exists");
+
                 _directory = FSDirectory.Open(indexPath);
                 //Directory = new RAMDirectory(FSDirectory.Open(indexPath), IOContext.DEFAULT);
 

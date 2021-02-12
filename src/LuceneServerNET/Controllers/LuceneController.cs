@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Controllers
@@ -31,11 +32,11 @@ namespace LuceneServerNET.Controllers
 
         [HttpGet]
         [Route("search/{id}")]
-        async public Task<IApiResult> Search(string id, string q)
+        async public Task<IApiResult> Search(string id, string q, string outFields)
         {
             return await SecureMethodHandler(id, (id) =>
             {
-                var hits = _lucene.Search(id, q);
+                var hits = _lucene.Search(id, q, String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s=>s.Trim()));
 
                 return Task.FromResult<IApiResult>(new LuceneSearchResult()
                 {
@@ -80,6 +81,16 @@ namespace LuceneServerNET.Controllers
             });
         }
 
+        [HttpGet]
+        [Route("indexexists/{id}")]
+        async public Task<IApiResult> IndexExists(string id)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                return Task.FromResult<IApiResult>(new ApiResult(_lucene.IndexExists(id)));
+            });
+        }
+
         [HttpPost]
         [Route("map/{id}")]
         async public Task<IApiResult> Map(string id,[FromBody] IndexMapping mapping)
@@ -118,9 +129,9 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
-        [Route("removedocuments/{id}")]
+        [Route("remove/{id}")]
 
-        async public Task<IApiResult> RemoveDocuments(string id, string term, string termField = "id")
+        async public Task<IApiResult> Remove(string id, string term, string termField = "_guid")
         {
             return await SecureMethodHandler(id, (id) =>
             {

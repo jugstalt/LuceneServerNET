@@ -11,7 +11,8 @@ namespace WebClient.Pages
 {
     public class IndexModel : PageModel
     {
-        static LuceneServerClient _client = new LuceneServerClient("https://localhost:44393");
+        const string IndexName = "new-index";
+        static LuceneServerClient _client = new LuceneServerClient("https://localhost:44393", IndexName);
         private readonly ILogger<IndexModel> _logger;
 
         public IndexModel(ILogger<IndexModel> logger)
@@ -27,7 +28,7 @@ namespace WebClient.Pages
         async public Task<IActionResult> OnGetSearch(string term)
         {
             var termParser = new TermParser();
-            var result = await _client.Search("new-index", $"{ termParser.Parse(term) }");
+            var result = await _client.Search($"{ termParser.Parse(term) }");
 
             return new JsonResult(new
             {

@@ -1,6 +1,8 @@
 ﻿using LuceneServerNET.Client;
 using LuceneServerNET.Core.Models.Mapping;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CreateIndex
@@ -43,7 +45,9 @@ namespace CreateIndex
                                 indexMapping.AddField(args[++i].ToFieldMapping(stored: true, index: false));
                                 break;
                             case "-primary":
-                                indexMapping.PrimaryField = args[++i];
+                                indexMapping.PrimaryFields =
+                                    new List<string>(
+                                        args[++i].Split(',').Select(s => s.Trim()));
                                 break;
                         }
                     }
@@ -68,21 +72,21 @@ namespace CreateIndex
                     return 1;
                 }
 
-                var client = new LuceneServerClient(serverUrl);
+                var client = new LuceneServerClient(serverUrl, indexName);
 
                 #region Create Index
 
                 if (removeIndex)
                 {
                     Console.WriteLine($"Delete index { indexName }...");
-                    if (!await client.RemoveIndex(indexName))
+                    if (!await client.RemoveIndex())
                     {
                         throw new Exception("Can't deleting index");
                     }
                 }
 
                 Console.WriteLine($"Create index { indexName }...");
-                if(!await client.CreateIndex(indexName))
+                if(!await client.CreateIndex())
                 {
                     throw new Exception("Can't creating index");
                 }
@@ -92,7 +96,7 @@ namespace CreateIndex
                 #region Mapping
 
                 Console.WriteLine($"Map index { indexName }...");
-                if(!await client.Map(indexName, indexMapping))
+                if(!await client.Map(indexMapping))
                 {
                     throw new Exception("Can't map index");
                 }
