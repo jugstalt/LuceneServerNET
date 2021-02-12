@@ -1,4 +1,5 @@
 # LuceneServerNET
 
-Ein REST Server auf Basis von Lucene.NET
+A REST Server on top of Lucene.NET
 
+[German](./README_de.md)
