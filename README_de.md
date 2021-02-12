@@ -129,3 +129,73 @@ Hier kann das *Mapping* für diesen Index abgefragt werden. Das Ergebnis ist wie
   "milliSeconds": 12.2342
 }
 </pre>
+
+### Index Dokumente
+
+Ein Eintrag im Index wird als Dokument bezeichnet. Dokumente können mit den folgenden Schnittstellen indiziert, abgefragt und gelöscht werden.
+Werden neue Dokumente zu einem Index hinzufügt oder gelöscht, wird das erst nach einem Refresh sichtbar (siehe oben).
+
+**[POST] /Lucene/index/{index}**
+
+Damit werden einzelnen Dokumente in den Index übernommen. Die Felder der übergebenen Dokumente müssen dem *Mapping* entsprechen. Nicht *gemappte* Felder werden ignoriert.
+
+Request Body
+
+<pre>
+[
+  {   
+      // any kind of properties
+      "title": "my book title",
+      "summary": "lorem ispum..."
+  }
+]
+</pre>
+
+**[GET] /Lucene/remove/{index}?term={query-term}&termField={optinal:field-used-for-term}**
+
+Als `term` kann eine Abfrage übergeben werden. Nach den Kriterien aus der Abfrage wird in `termField` gesucht und die entsprechenden Objekte gelöscht.
+
+Der *Default* Wert für `termField` ist `_guid`. Idealweise stellt man im *Mapping* für Dokument ein Field mit den Type `guid` ein. Nur so können einzelne Dokument wieder gezielt gelöscht werden.
+
+**[GET] /Lucene/search/{index}?q={query-term}&outField={optional:fields-for-the-result-comma-separated}**
+
+Mit dieser Methode können Dokumente gesucht werden. Das Ergebnis ist vom Typ `IApiResult` mit einem zusätzlichen ``hits`` Attribute:
+
+Beispiel: /Lucene/search/{index}?q=Blümchen
+<pre>
+{
+  "hits": [
+    {
+      "_score": 1.4272848,
+      "_guid": "256c3f501ef64327b81f4b8141a6f5ef",
+      "title": "Korruption in der ÖFP? Alles zur Causa Blümchen",
+      "publish_date": "2021-02-12T17:09:17"
+    }
+  ],
+  "success": true,
+  "milliSeconds": 1.8725
+}
+</pre>
+
+Der *Query-Term* entspricht der *Lucene* Syntax, siehe auch [hier](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
+
+**[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
+
+Mit dieser Methode können mögliche Werte eines Feldes ermittelt werden, die optional einem *Query-Term* entsprechen. Die Methode ist vergleichbar mit einem `DISTINCT` in einer Datenbank.
+Die `hits` sind ein *String-Array*.
+
+Beispiel: /Lucene/search/{index}?groupField=feed
+
+<pre>
+{
+  "hits": [
+    "derstandard",
+    "diepresse",
+    "kurier",
+    "krone",
+    "futurezone"
+  ],
+  "success": true,
+  "milliSeconds": 81.4196
+}
+</pre>
