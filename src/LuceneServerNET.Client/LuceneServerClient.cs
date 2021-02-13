@@ -41,7 +41,7 @@ namespace LuceneServerNET.Client
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/indexexists/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>(false);
 
                 return apiResult.Success;
             }

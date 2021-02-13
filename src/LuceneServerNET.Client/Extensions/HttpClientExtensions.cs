@@ -10,7 +10,7 @@ namespace LuceneServerNET.Client.Extensions
 {
     static class HttpClientExtensions
     {
-        async public static Task<T> DeserializeFromSuccessResponse<T>(this HttpResponseMessage httpResponse)
+        async public static Task<T> DeserializeFromSuccessResponse<T>(this HttpResponseMessage httpResponse, bool throwExcpeitonIfNotSucceeded = true)
             where T : IApiResult
         {
             if (httpResponse.StatusCode != System.Net.HttpStatusCode.OK)
@@ -22,7 +22,7 @@ namespace LuceneServerNET.Client.Extensions
 
             var apiResult = resultJson.DeserializeJson<T>(); 
 
-            if (apiResult.Success == false)
+            if (apiResult.Success == false && throwExcpeitonIfNotSucceeded)
             {
                 var errorResult = resultJson.DeserializeJson<ApiErrorResult>();
                 throw new LuceneServerClientException(errorResult.Message ?? "Unknown error");
