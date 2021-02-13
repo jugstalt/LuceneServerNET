@@ -1,13 +1,13 @@
 # LuceneServerClient
 
-Die `LuceneServerClient` Klasse ist Teil einer .NET Standard Bibliothek und bietet eine einfache Abstration für den Zugriff auf die REST Schnittstelle der **LuceneServer.NET**.
+Die `LuceneServerClient` Klasse ist Teil einer .NET Standard Bibliothek und bietet eine einfache Abstration für den Zugriff auf die REST Schnittstelle des **LuceneServer.NET**.
 
 Die Klasse befindet sich in der `LuceneServerNET.Client.dll` und kann über [nuget.org](https://www.nuget.org/packages/LuceneServerNET.Client/) in bestehende Projekte hinzugefügt werden. Der Sourcecode befindet sich ebenfalls in 
 diesem Repository.
 
 ## Instanzierung
 
-Ein Client kann folgendermaßen instanziert werden:
+Ein Client kann folgendermaßen instanziiert werden:
 
 ```csharp
 using(var client = new LuceneServerClient(serverUrl, indexName)) 
@@ -16,14 +16,14 @@ using(var client = new LuceneServerClient(serverUrl, indexName))
 }
 ```
 
-Der Client sollte in Verbindung mit `using` Verwendet werden,  wenn innerhalb der Client Änderungen am Index vornimmt (Dokument erzeugen oder löschen).
+Der Client sollte in Verbindung mit `using` Verwendet werden, wenn innerhalb des Clients Änderungen am Index vorgenommen werden (Dokument erzeugen oder löschen).
 Beim `Dispose()` wird gewährleistet, dass der Index am Server *refreshed* wird und alle Änderungen sichtbar werden. Wird der Client nur zum Abfragen verwendet,
 kann ein `using` auch entfallen.
 
-Ein Client bezieht sich immer auf einen Index. Der entsprechende Index kann über den `indexName` übergeben werden.
+Ein Client bezieht sich immer auf einen Index. Der entsprechende Index kann über den `indexName` angegeben werden.
 
-Für die Kommunikation mit den LuceneServerNET verwendet der Client eine Instanz von `System.Net.Http.HttpClient`. Bei jeder Instanzierung wird ein neuer `HttpClient` erzeugt.
-Sollte ein bestehender `HttpClient` verwendet werden, kann dieser als zusätzlicher Parameter bei der Instanzierung übergeben werden:
+Für die Kommunikation mit den LuceneServerNET verwendet der Client eine Instanz von `System.Net.Http.HttpClient`. Bei jeder Instanziierung wird ein neuer `HttpClient` erzeugt.
+Sollte ein bestehender `HttpClient` verwendet werden, kann dieser als zusätzlicher Parameter bei der Instanziierung übergeben werden:
 
 ```csharp
 using(var client = new LuceneServerClient(serverUrl, indexName, myHttpClient)) 
@@ -32,11 +32,11 @@ using(var client = new LuceneServerClient(serverUrl, indexName, myHttpClient))
 }
 ```
 
-Damit kann gewährleistet werden, dass beispielsweise *Authoriation-Header* an den Server übergeben werden.
+Damit kann gewährleistet werden, dass beispielsweise *Authorize-Header* an den Server übergeben werden.
 
 ## Methoden
 
-Folgende Methoden dienen der Index Verwaltung
+Folgende Methoden dienen zur Index Verwaltung:
 
 ```csharp
 // Überprüfen, ob Index existiert
@@ -49,7 +49,7 @@ if (await client.IndexExistsAsync())
 await client.CreateIndexAsync();
 ```
 
-Für das Mapping eines Index muss zuerst ein `MappingIndex` Objekt erzeugt werden. In diesem werden dann die Felder und primären Suchfelder angegeben. Mit der Funktion ``MapAsync`` wird das *Mapping" für den Index festgelegt:
+Für das Mapping eines Index muss zuerst ein `MappingIndex` Objekt erzeugt werden. In diesem werden dann die Felder und primären Suchfelder angegeben. Mit der Funktion `MapAsync` wird das *Mapping" für den Index festgelegt:
 
 ```csharp
 var mapping = new IndexMapping()
@@ -58,18 +58,18 @@ var mapping = new IndexMapping()
     PrimaryFields = new string[] { "title", "content" },
     Fields = new FieldMapping[]
     {
-        // _guid Feld anlegen, damit Dokument einzeln abgefragt oder gelöscht werden können
+        // _guid Feld anlegen, damit Dokumente einzeln abgefragt oder gelöscht werden können
         new DocumentGuidField(),
         // Indizierte (suchbare) Felder, default-type: FieldTypes.TextType
         new IndexField("title"),
         new IndexField("content"),
         new IndexField("feed_id", FieldTypes.StringType),
         new IndexField("publish_date", FieldTypes.DateTimeType),
-        // Gespeicherte (nicht suchbare) Feldere
+        // Gespeicherte (nicht suchbare) Felder
         new StoredField("url"),
         new StoredField("image"),
     }
-};
+}
 
 // Map
 await client.MapAsync(mapping);
@@ -93,7 +93,7 @@ await client.IndexDocumentsAsync(new IDictionary<string, object>[] {
 });
 ```
 
-Für das Löschen von Dokumenten können folgende Methoden verwendet werden.
+Für das Löschen von Dokumenten können folgende Methoden verwendet werden:
 
 ```csharp
 // Löschen über die _guid der Dokument: Task<bool> RemoveDocumentsAsync(IEnumerable<Guid> guids)
@@ -103,7 +103,7 @@ await client.RemoveDocumentsAsync(new Guid[] { guid_doc1, guid_doc2 /*, ...*/  }
 await client.RemoveDocumentsAsync("title", "Batman");  // title contains Batman
 ```
 
-Für die Suche steht die Funktion ``Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null)`` zur Verfügung.
+Für die Suche steht die Funktion `Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null)` zur Verfügung.
 Die *Query* Syntax entspricht der von Lucene. Beispiele finden sich [hier](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html)
 
 Primär wird in den beim Mapping angeführten Felder gesucht. Über die *Query* Syntax kann allerdings auch in allen anderen indexierten Feldern gesucht werden.

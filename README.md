@@ -28,3 +28,5 @@ Also in this repository you will find tools (console applications) that can be u
 link to the original database object. 
 
 [REST Interface](./doc/rest/interface_en.md)
+
+[LuceneServerClient](./doc/clients/luceneserverclient_en.md)
