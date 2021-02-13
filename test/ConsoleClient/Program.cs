@@ -37,8 +37,11 @@ namespace ConsoleClient
         {
             #region Create Index
 
-            await client.RemoveIndex();
-            await client.CreateIndex();
+            if (await client.IndexExistsAsync())
+            {
+                await client.RemoveIndexAsync();
+            }
+            await client.CreateIndexAsync();
 
             #endregion
 
@@ -52,14 +55,14 @@ namespace ConsoleClient
                     new DocumentGuidField(),
                     new IndexField("title"),
                     new IndexField("content"),
-                    new IndexField("feed", FieldTypes.StringType),
+                    new IndexField("feed_id", FieldTypes.StringType),
+                    new IndexField("publish_date", FieldTypes.DateTimeType),
                     new StoredField("url"),
                     new StoredField("image"),
-                    new IndexField("publish_date", FieldTypes.DateTimeType)
                 }
             };
 
-            await client.Map(mapping);
+            await client.MapAsync(mapping);
 
             #endregion
         }
@@ -88,7 +91,7 @@ namespace ConsoleClient
                         doc["title"] = item.Title;
                         doc["content"] = item.Content;
                         doc["url"] = item.Link;
-                        doc["feed"] = feed;
+                        doc["feed_id"] = feed;
                         if (item.PublishDate.HasValue)
                         {
                             doc["publish_date"] = item.PublishDate.Value;
@@ -97,7 +100,7 @@ namespace ConsoleClient
                         return doc;
                     });
 
-                await client.IndexDocuments(docs);
+                await client.IndexDocumentsAsync(docs);
             }
         }
     }

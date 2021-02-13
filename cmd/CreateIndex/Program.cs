@@ -79,14 +79,14 @@ namespace CreateIndex
                 if (removeIndex)
                 {
                     Console.WriteLine($"Delete index { indexName }...");
-                    if (!await client.RemoveIndex())
+                    if (!await client.RemoveIndexAsync())
                     {
                         throw new Exception("Can't deleting index");
                     }
                 }
 
                 Console.WriteLine($"Create index { indexName }...");
-                if(!await client.CreateIndex())
+                if(!await client.CreateIndexAsync())
                 {
                     throw new Exception("Can't creating index");
                 }
@@ -96,7 +96,7 @@ namespace CreateIndex
                 #region Mapping
 
                 Console.WriteLine($"Map index { indexName }...");
-                if(!await client.Map(indexMapping))
+                if(!await client.MapAsync(indexMapping))
                 {
                     throw new Exception("Can't map index");
                 }

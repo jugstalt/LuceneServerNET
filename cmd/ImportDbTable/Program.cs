@@ -131,7 +131,7 @@ namespace ImportDbTable
                         }
                     }
 
-                    await client.IndexDocuments(items);
+                    await client.IndexDocumentsAsync(items);
                 }
 
                 Console.WriteLine($"{ counter } records ... { Math.Round((DateTime.Now-startTime).TotalMinutes, 2) } minutes");
@@ -154,7 +154,7 @@ namespace ImportDbTable
         async static Task IndexItems(LuceneServerClient client, List<IDictionary<string,object>> items, int counter)
         {
             Console.Write($"Index { items.Count() } items...");
-            if(!await client.IndexDocuments(items))
+            if(!await client.IndexDocumentsAsync(items))
             {
                 throw new Exception("Can't index items");
             }

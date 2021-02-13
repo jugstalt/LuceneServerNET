@@ -27,7 +27,7 @@ namespace LuceneServerNET.Client
             _indexName = indexName;
         }
 
-        async public Task<bool> CreateIndex()
+        async public Task<bool> CreateIndexAsync()
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/createindex/{ _indexName }"))
             {
@@ -37,7 +37,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<bool> IndexExists()
+        async public Task<bool> IndexExistsAsync()
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/indexexists/{ _indexName }"))
             {
@@ -47,7 +47,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<bool> RemoveIndex()
+        async public Task<bool> RemoveIndexAsync()
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
             {
@@ -72,7 +72,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<bool> Map(IndexMapping mapping)
+        async public Task<bool> MapAsync(IndexMapping mapping)
         {
             HttpContent postContent = new StringContent(
                     JsonSerializer.Serialize(mapping),
@@ -87,7 +87,7 @@ namespace LuceneServerNET.Client
             }
         } 
 
-        async public Task<bool> IndexDocuments(IEnumerable<IDictionary<string,object>> documents)
+        async public Task<bool> IndexDocumentsAsync(IEnumerable<IDictionary<string,object>> documents)
         {
             HttpContent postContent = new StringContent(
                     JsonSerializer.Serialize(documents),
@@ -110,14 +110,14 @@ namespace LuceneServerNET.Client
             }
         }
 
-        public Task<bool> RemoveDocuments(IEnumerable<Guid> guids)
+        public Task<bool> RemoveDocumentsAsync(IEnumerable<Guid> guids)
         {
             var term = String.Join(" OR ", guids.Select(g => g.ToString().ToLower()));
 
-            return RemoveDocuments("_guid", term);
+            return RemoveDocumentsAsync("_guid", term);
         }
 
-        async public Task<bool> RemoveDocuments(string field, string term)
+        async public Task<bool> RemoveDocumentsAsync(string field, string term)
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
             {
@@ -135,7 +135,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<LuceneSearchResult> Search(string query, IEnumerable<string> outFields = null)
+        async public Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null)
         {
             string outFieldsString = outFields != null ?
                 String.Join(",", outFields.Where(f => !String.IsNullOrEmpty(f)).Select(f => f.Trim())) :

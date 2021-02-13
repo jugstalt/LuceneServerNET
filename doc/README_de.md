@@ -25,3 +25,4 @@ Ebenso im diesem Repository findet man Tools (Konsolenanwendungen), mit denen ei
 wieder eine Verbindung zum ursprünglichen Datenbankobjekt hergestellt werden. 
 
 [REST Schnittstelle](./rest/interface_de.md)
+[LuceneServerClient](./clients/luceneserverclient_de.md)

@@ -1,6 +1,6 @@
 # LuceneServerNET
 
-[German](./doc/README_de.md)
+[German - Deutsch](./doc/README_de.md)
 
 Note: This project is still at a very early stage of development. There may be even more major conversions of the interface.
 
