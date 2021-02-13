@@ -3,12 +3,12 @@
 The server provides the following endpoints via REST. {index} always is the name of the index.
 The return value is always of type `IApiResult`:
 
-<pre>
+```javascript
 IApiResult {
-    success	        boolean,
+    success	      boolean,
     milliSeconds	number($double)
 }
-</pre>
+```
 
 Depending on the context, there are additional attributes, e.g. a  `hits'[]` for queries.
 
@@ -45,7 +45,7 @@ This determines the structure of the documents for this index. The *Mapping* spe
 
 Request Body
 
-<pre>
+```javascript
 {
   "fields": [
     {
@@ -59,7 +59,7 @@ Request Body
     "string"
   ]
 }
-</pre>
+```
 
 A Json File is passed in which each field is defined. Values for 'fieldType' are:
 
@@ -83,7 +83,7 @@ You can search for indexed fields. For *saved* fields, the content is also retur
 
 Here you can query the *mapping* for this index. The result is again an `IApiResult` object with an additional property `mapping`:
 
-<pre>
+```javascript
 {
   "mapping": {
     "fields": [
@@ -103,7 +103,7 @@ Here you can query the *mapping* for this index. The result is again an `IApiRes
   "success": true,
   "milliSeconds": 12.2342
 }
-</pre>
+```
 
 ## Documents
 
@@ -116,7 +116,7 @@ This allows individual documents to be transferred to the index. The fields of t
 
 Request Body
 
-<pre>
+```javascript
 [
   {   
       // any kind of properties
@@ -124,7 +124,7 @@ Request Body
       "summary": "lorem ispum..."
   }
 ]
-</pre>
+```
 
 **[GET] /Lucene/remove/{index}?term={query-term}&termField={optinal:field-used-for-term}**
 
@@ -140,7 +140,7 @@ Example:
 /Lucene/search/{index}?q=rules
 /Lucene/search/{index}?q=rules&outFields=_guid,title,publish_date
 
-<pre>
+```javascript
 {
   "hits": [
     {
@@ -153,7 +153,7 @@ Example:
   "success": true,
   "milliSeconds": 1.8725
 }
-</pre>
+```
 
 The *Query-Term* corresponds to the *Lucene* syntax, see also [here](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
 
@@ -164,7 +164,7 @@ The `hits` are a *string array*.
 
 Example: /Lucene/search/{index}?groupField=feed
 
-<pre>
+```javascript
 {
   "hits": [
     "derstandard",
@@ -176,4 +176,4 @@ Example: /Lucene/search/{index}?groupField=feed
   "success": true,
   "milliSeconds": 81.4196
 }
-</pre>
+```
