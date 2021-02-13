@@ -11,7 +11,7 @@ namespace WebClient.Pages
 {
     public class IndexModel : PageModel
     {
-        const string IndexName = "new-index";
+        const string IndexName = "feedclient";
         static LuceneServerClient _client = new LuceneServerClient("https://localhost:44393", IndexName);
         private readonly ILogger<IndexModel> _logger;
 

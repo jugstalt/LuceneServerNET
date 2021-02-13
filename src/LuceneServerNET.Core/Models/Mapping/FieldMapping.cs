@@ -47,5 +47,41 @@ namespace LuceneServerNET.Core.Models.Mapping
         public string Name { get; set; }
         public bool Store { get; set; }
         public bool Index { get; set; }
+
+        private Type _valueType = null;
+        public Type ValueType()
+        {
+            switch(FieldType)
+            {
+                case FieldTypes.Int32Type:
+                    return _valueType = typeof(int);
+                case FieldTypes.SingleType:
+                    return _valueType = typeof(float);
+                case FieldTypes.DoubleType:
+                    return _valueType = typeof(double);
+                case FieldTypes.DateTimeType:
+                    return _valueType = typeof(DateTime);
+            }
+
+            return _valueType = typeof(string);
+        }
+        public object ToValueType(object value)
+        {
+            var valueType = _valueType ?? ValueType();
+
+            if (valueType != typeof(string))
+            {
+                if (valueType.Equals(value?.GetType()))
+                    return value;
+
+                try
+                {
+                    return Convert.ChangeType(value?.ToString(), valueType);
+                }
+                catch { }
+            }
+
+            return value?.ToString();
+        }
     }
 }

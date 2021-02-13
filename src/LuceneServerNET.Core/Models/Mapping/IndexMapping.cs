@@ -37,5 +37,7 @@ namespace LuceneServerNET.Core.Models.Mapping
                 PrimaryFields.Count > 0 &&
                 this.Fields != null && this.Fields.Count() > 0;
         }
+
+        public FieldMapping GetField(string name) => _fields == null ? null : _fields.Where(f => f.Name == name).FirstOrDefault();
     }
 }

@@ -56,7 +56,7 @@ namespace LuceneServerNET.Controllers
 
                 return Task.FromResult<IApiResult>(new LuceneSearchResult()
                 {
-                    Hits = hits
+                    //Hits = hits
                 });
             });
         }

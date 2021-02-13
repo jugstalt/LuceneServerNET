@@ -7,6 +7,6 @@ namespace LuceneServerNET.Core.Models.Result
 {
     public class LuceneSearchResult : ApiResult
     {
-        public IEnumerable<object> Hits { get; set; }
+        public IEnumerable<IDictionary<string, object>> Hits { get; set; }
     }
 }

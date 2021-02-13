@@ -312,7 +312,7 @@ namespace LuceneServerNET.Services
 
         #region Search/Query
 
-        public IEnumerable<object> Search(string indexName, string term, IEnumerable<string> outFields)
+        public IEnumerable<IDictionary<string, object>> Search(string indexName, string term, IEnumerable<string> outFields)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
 
@@ -336,7 +336,7 @@ namespace LuceneServerNET.Services
 
             var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
 
-            List<object> docs = new List<object>();
+            List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
             if (hits.Length > 0)
             {
                 foreach (var hit in hits)
