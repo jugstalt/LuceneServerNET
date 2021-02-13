@@ -1,30 +1,4 @@
-# LuceneServer.NET
-
-Hinweis: Diese Projekt befinded sich noch in einen sehr frühen Entwicklungsstadium. Es kann noch zu größeren Umbauten der Schnittstelle kommen.
-
-## Ein REST Server auf Basis von Lucene.NET
-
-LuceneServer bietet eine REST Schnittstelle, mit der Suchindices auf Basis von [Apache Lucene. NET](https://github.com/apache/lucenenet) erstellt werden können.
-Der Sourcecode ist vollständig in *Dotnet Core* (C#) umgesetzt. Die REST Schnittstelle kann über einfache GET/POST Request angesprochen. 
-LuceneServer.NET bietet zusätzlich einee Client Library [LucenceServerNET.Client](https://www.nuget.org/packages/LuceneServerNET.Client/), mit die Request abstrahiert werden können.
-Der Sourcecode für den Client befindet sich ebenfalls in diesem Repository.
-
-## Motivation
-
-Ziel ist es eine schnelle und einfache Suche zu implementieren. Die Performance sollte hoch genug sein, um auch in großen Datenmengen in Echtzeit mit *Autocomplete* Eingabefeldern zu suchen.
-Beispiele für einen Suchindex sind beispielsweise:
-
-* Suchen in Produktlisten
-* Suchen in großen Geo Daten Beständen wie Adressen, Grundstücken, usw.
-* Indizieren von Dokumenten
-
-Der Suchindex sollte dabei in erster Line für eine schnelle Suche verwendet werden. Über die gefunden Element kann dann auf die tatsächlichen Daten verlinkt werden. Der Suchindex ist vorrangig kein Ersatz für eine Datenbank,
-sondern trägt lediglich zur einer performanten und bedienbaren Suche bei. 
-
-Ebenso im diesem Repository findet man Tools (Konsolenanwendungen), mit denen ein Index über bestehende (rationale) Datenbanken befüllt werden kann. Dies kann beispielsweise regelmäßig erfolgen. Über Datenbank Schlüssel kann dann 
-wieder eine Verbindung zum ursprünglichen Datenbankobjekt hergestellt werden. 
-
-## REST Schnittstelle
+# REST Schnittstelle
 
 Hier werden die Endpunkte für die API beschrieben. {index} entspricht immer dem Names des Index.
 Der Rückgabewert ist immer vom Typ `IApiResult`:
@@ -38,7 +12,7 @@ IApiResult {
 
 Je nach Kontext gibt es noch zusätzliche Attribute, zB ein `hits`[]` bei Abfragen.
 
-### Index Verwaltung
+## Index Verwaltung
 
 **[GET] /Lucene/createindex/{index}**
 
@@ -63,7 +37,7 @@ Gibt alle geteilten Resourcen innerhalb des Servers frei. Dies sind beispielswei
 Nach dem Freigeben werden die Resourcen beim nächsten Zugriff auf einen Index wieder initialisiert.
 Dieser Aufruf ist hauptsächlich für die Entwicklung notwendig und sollte in einem Produktivbetrieb nicht notwendig sein.
 
-### Mapping
+## Mapping
 
 Damit wird die Struktur der Dokumente für diesen Index bestimmt. Das *Mapping* gibt an, welche Felder die einzelne Dokumente für diesen Index aufweisen können und ob diese Indiziert werden oder nur Zusatzinformation (ohne Suchmöglichkeiten) sind.
 
@@ -130,7 +104,7 @@ Hier kann das *Mapping* für diesen Index abgefragt werden. Das Ergebnis ist wie
 }
 </pre>
 
-### Index Dokumente
+## Dokumente
 
 Ein Eintrag im Index wird als Dokument bezeichnet. Dokumente können mit den folgenden Schnittstellen indiziert, abgefragt und gelöscht werden.
 Werden neue Dokumente zu einem Index hinzufügt oder gelöscht, wird das erst nach einem Refresh sichtbar (siehe oben).
@@ -157,18 +131,21 @@ Als `term` kann eine Abfrage übergeben werden. Nach den Kriterien aus der Abfra
 
 Der *Default* Wert für `termField` ist `_guid`. Idealweise stellt man im *Mapping* für Dokument ein Field mit den Type `guid` ein. Nur so können einzelne Dokument wieder gezielt gelöscht werden.
 
-**[GET] /Lucene/search/{index}?q={query-term}&outField={optional:fields-for-the-result-comma-separated}**
+**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}**
 
 Mit dieser Methode können Dokumente gesucht werden. Das Ergebnis ist vom Typ `IApiResult` mit einem zusätzlichen ``hits`` Attribute:
 
-Beispiel: /Lucene/search/{index}?q=Blümchen
+Beispiel: 
+/Lucene/search/{index}?q=rules
+/Lucene/search/{index}?q=rules&outFields=_guid,title,publish_date
+
 <pre>
 {
   "hits": [
     {
       "_score": 1.4272848,
       "_guid": "256c3f501ef64327b81f4b8141a6f5ef",
-      "title": "Korruption in der ÖFP? Alles zur Causa Blümchen",
+      "title": "LuceneServerNET rules!",
       "publish_date": "2021-02-12T17:09:17"
     }
   ],
