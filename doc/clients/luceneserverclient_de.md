@@ -111,13 +111,14 @@ Primär wird in den beim Mapping angeführten Felder gesucht. Über die *Query* 
 Für einfache Volltextsuchen, bei denen der Anwender Schlagwörter eingibt, empfiehlt es sich, die Eingabe noch anzupassen:
 
 Eingabe: `Batm Robi`
+
 Query: `+Batm* +Robi*` => Beide Suchbegriffe müssen vorkommen (+), Suche mit Wildcard => alle Dokumente mit `Batman` und `Robin` werden gefunden    
 
 Für die Umwandlung in diese Syntax kann die `TermParser` Klasse verwendet werden:
 
 ```csharp
 var termParser = new TermParser();
-var result = await _client.SearchAsync($"{ termParser.Parse(term) }");
+var result = await client.SearchAsync($"{ termParser.Parse(term) }");
 
 return result.Hits;
 ```
