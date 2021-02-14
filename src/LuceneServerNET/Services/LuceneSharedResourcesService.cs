@@ -37,16 +37,23 @@ namespace LuceneServerNET.Services
             _timer= new System.Threading.Timer(Timer_Elapsed, null, TimeSpan.Zero, TimeSpan.FromSeconds(20));
         }
 
-        private void InitResources(string indexName)
+        private static object _initResorceLocker = new object();
+        private void InitResources(string indexName, bool ifNoExists = true)
         {
-            CheckForUnloading(indexName);
+            lock (_initResorceLocker)
+            {
+                if (ifNoExists == true && _resources.ContainsKey(indexName))
+                    return;
 
-            var indexPath = Path.Combine(_rootPath, indexName);
+                CheckForUnloading(indexName);
 
-            RemoveResources(indexName);
+                var indexPath = Path.Combine(_rootPath, indexName);
 
-            var resource = new LuceneResources(_rootPath, indexName);
-            _resources[indexName] = resource;
+                RemoveResources(indexName);
+
+                var resource = new LuceneResources(_rootPath, indexName);
+                _resources[indexName] = resource;
+            }
         }
 
         public IndexSearcher GetIndexSearcher(string indexName)
@@ -223,6 +230,7 @@ namespace LuceneServerNET.Services
 
             public Analyzer Analyzer { get; private set; }
 
+            private static object _initLocker = new object();
             private void InitResources()
             {
                 var indexPath = Path.Combine(_rootPath, _indexName);
@@ -230,13 +238,19 @@ namespace LuceneServerNET.Services
                 if (new DirectoryInfo(indexPath).Exists == false)
                     throw new Exception("Index not exists");
 
-                _directory = FSDirectory.Open(indexPath);
-                //Directory = new RAMDirectory(FSDirectory.Open(indexPath), IOContext.DEFAULT);
+                lock (_initLocker)
+                {
+                    if (_directory == null)
+                    {
+                        _directory = FSDirectory.Open(indexPath);
+                        //Directory = new RAMDirectory(FSDirectory.Open(indexPath), IOContext.DEFAULT);
 
-                var indexConfig = new IndexWriterConfig(AppLuceneVersion, this.Analyzer);
-                _directoryWriter = new IndexWriter(_directory, indexConfig);
-                _directoryReader = _directoryWriter.GetReader(false);
-                _indexSearcher = new IndexSearcher(DirectoryReader);
+                        var indexConfig = new IndexWriterConfig(AppLuceneVersion, this.Analyzer);
+                        _directoryWriter = new IndexWriter(_directory, indexConfig);
+                        _directoryReader = _directoryWriter.GetReader(false);
+                        _indexSearcher = new IndexSearcher(DirectoryReader);
+                    }
+                }
             }
 
             private void ReleaseResources()
@@ -328,22 +342,26 @@ namespace LuceneServerNET.Services
 
             #region Refresh Reader/Searcher
 
+            private static object _refreshReaderLocker = new object();
             public void RefreshReaderSearcher()
             {
-                if (_directoryReader == null || _directoryReader.IsCurrent())
+                lock (_refreshReaderLocker)
                 {
-                    return;
+                    if (_directoryReader == null || _directoryReader.IsCurrent())
+                    {
+                        return;
+                    }
+
+                    var oldReader = _directoryReader;
+
+                    _directoryReader = _directoryWriter.GetReader(false);
+                    var newSearcher = new IndexSearcher(_directoryReader);
+                    Interlocked.Exchange(ref _indexSearcher, newSearcher);
+
+                    oldReader.Dispose();
+
+                    Console.WriteLine($"Index { _indexName }: Searcher updated");
                 }
-
-                var oldReader = _directoryReader;
-
-                _directoryReader = _directoryWriter.GetReader(false);
-                var newSearcher = new IndexSearcher(_directoryReader);
-                Interlocked.Exchange(ref _indexSearcher, newSearcher);
-
-                oldReader.Dispose();
-
-                Console.WriteLine($"Index { _indexName }: Searcher updated");
             }
 
             #endregion

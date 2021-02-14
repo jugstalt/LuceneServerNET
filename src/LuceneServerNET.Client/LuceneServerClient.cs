@@ -157,7 +157,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null)
+        async public Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null, int size = 20)
         {
             string outFieldsString = outFields != null ?
                 String.Join(",", outFields.Where(f => !String.IsNullOrEmpty(f)).Select(f => f.Trim())) :
@@ -165,11 +165,11 @@ namespace LuceneServerNET.Client
 
             var mapping = await CurrentIndexMapping();
 
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFieldsString }&q={ WebUtility.UrlEncode(query) }"))
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFieldsString }&size={ size }&q={ WebUtility.UrlEncode(query) }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
 
-                if(apiResult.Success && apiResult.Hits!=null)
+                if (apiResult.Success && apiResult.Hits != null)
                 {
                     foreach (var hit in apiResult.Hits)
                     {
@@ -203,19 +203,14 @@ namespace LuceneServerNET.Client
                 {
                     using (var httpResponse = _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ refreshIndex }").Result)
                     {
-                        if (httpResponse.StatusCode == HttpStatusCode.OK)
-                        {
-                            Console.WriteLine("succeeded");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Warning: Status code { httpResponse.StatusCode }");
-                        }
+                        var apiResult = httpResponse.DeserializeFromSuccessResponse<ApiResult>().Result;
+
+                        Console.WriteLine($"Info - Refreshing index { refreshIndex }: succeeded");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Waring: { ex.Message }");
+                    Console.WriteLine($"Waring - Refreshing index { refreshIndex }: { ex.Message }");
                 }
             }
         }

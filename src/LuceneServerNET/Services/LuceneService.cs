@@ -134,6 +134,8 @@ namespace LuceneServerNET.Services
 
         #region Indexing
 
+        private static object _writeLocker = new object();
+
         public bool Index(string indexName, IEnumerable<IDictionary<string,object>> items)
         {
             if(!IndexExists(indexName))
@@ -273,10 +275,13 @@ namespace LuceneServerNET.Services
                 docs.Add(doc);
             }
 
-            var writer = _resources.GetIndexWriter(indexName);
-            writer.AddDocuments(docs);
+            //lock (_writeLocker)
+            {
+                var writer = _resources.GetIndexWriter(indexName);
+                writer.AddDocuments(docs);
 
-            writer.Flush(triggerMerge: false, applyAllDeletes: false);
+                writer.Flush(triggerMerge: false, applyAllDeletes: false);
+            }
 
             return true;
         }
@@ -312,7 +317,7 @@ namespace LuceneServerNET.Services
 
         #region Search/Query
 
-        public IEnumerable<IDictionary<string, object>> Search(string indexName, string term, IEnumerable<string> outFields)
+        public IEnumerable<IDictionary<string, object>> Search(string indexName, string term, IEnumerable<string> outFields, int size = 20)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
 
@@ -328,13 +333,13 @@ namespace LuceneServerNET.Services
             // https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
             //var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
             var parser = new MultiFieldQueryParser(
-                AppLuceneVersion, 
-                mapping.PrimaryFields.ToArray(), 
+                AppLuceneVersion,
+                mapping.PrimaryFields.ToArray(),
                 _resources.GetAnalyzer(indexName));
 
             var query = parser.Parse(term);
 
-            var hits = searcher.Search(query, 20 /* top 20 */).ScoreDocs;
+            var hits = searcher.Search(query, size).ScoreDocs;
 
             List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
             if (hits.Length > 0)
@@ -350,7 +355,7 @@ namespace LuceneServerNET.Services
                         //doc.Add("_id", hit.Doc);
                         doc.Add("_score", hit.Score);
 
-                        foreach(var field in mapping.Fields)
+                        foreach (var field in mapping.Fields)
                         {
                             if (outFields != null && !outFields.Contains(field.Name))
                             {
@@ -373,7 +378,7 @@ namespace LuceneServerNET.Services
 
         #region Grouping
 
-        public IEnumerable<object> GroupBy(string indexName, string groupField, string term)
+        public IEnumerable<IDictionary<string, object>> GroupBy(string indexName, string groupField, string term)
         {
             var groupingSearch = new GroupingSearch(groupField);
             //groupingSearch.SetGroupSort(groupSort);
@@ -400,12 +405,19 @@ namespace LuceneServerNET.Services
             var topGroups = groupingSearch.Search(searcher, query, 0, 100000);
 
             return topGroups.Groups
-                            .Where(g => g.GroupValue is BytesRef)
-                            .Select(g => ((BytesRef)g.GroupValue).Bytes)
-                            .Select(b =>
-                             {
-                                 return Encoding.UTF8.GetString(b);
-                             });
+                            .Select(g =>
+                            {
+                                var value = g.GroupValue;
+                                if (g.GroupValue is BytesRef)
+                                    value = Encoding.UTF8.GetString(((BytesRef)g.GroupValue).Bytes);
+
+                                return new Dictionary<string, object>()
+                                {
+                                    { "value", value  },
+                                    { "_hits", g.TotalHits },
+                                    //{ "_score", g.Score }
+                                };
+                            });
         }
 
         #endregion

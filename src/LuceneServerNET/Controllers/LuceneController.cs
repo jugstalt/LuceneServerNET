@@ -32,11 +32,11 @@ namespace LuceneServerNET.Controllers
 
         [HttpGet]
         [Route("search/{id}")]
-        async public Task<IApiResult> Search(string id, string q, string outFields)
+        async public Task<IApiResult> Search(string id, string q, string outFields, int size = 20)
         {
             return await SecureMethodHandler(id, (id) =>
             {
-                var hits = _lucene.Search(id, q, String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s=>s.Trim()));
+                var hits = _lucene.Search(id, q, String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s => s.Trim()), size);
 
                 return Task.FromResult<IApiResult>(new LuceneSearchResult()
                 {
@@ -54,9 +54,9 @@ namespace LuceneServerNET.Controllers
             {
                 var hits = _lucene.GroupBy(id, groupField, q);
 
-                return Task.FromResult<IApiResult>(new LuceneSearchResult()
+                return Task.FromResult<IApiResult>(new LuceneGroupResult()
                 {
-                    //Hits = hits
+                    Hits = hits
                 });
             });
         }
