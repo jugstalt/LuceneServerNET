@@ -1,4 +1,5 @@
 ﻿using Lucene.Net.Documents;
+using Lucene.Net.Search;
 using LuceneServerNET.Core.Models.Mapping;
 using System;
 using System.Collections.Generic;
@@ -32,6 +33,21 @@ namespace LuceneServerNET.Extensions
             }
 
             return val;
+        }
+
+        static public SortFieldType GetSortFieldType(this FieldMapping fieldMapping)
+        {
+            switch(fieldMapping?.FieldType)
+            {
+                case FieldTypes.DoubleType:
+                    return SortFieldType.DOUBLE;
+                case FieldTypes.Int32Type:
+                    return SortFieldType.INT32;
+                case FieldTypes.SingleType:
+                    return SortFieldType.SINGLE;
+                default:
+                    return SortFieldType.STRING;
+            }
         }
     }
 }

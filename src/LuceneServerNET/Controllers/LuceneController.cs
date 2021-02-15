@@ -32,18 +32,27 @@ namespace LuceneServerNET.Controllers
 
         [HttpGet]
         [Route("search/{id}")]
-        async public Task<IApiResult> Search(string id, string q, string outFields, int size = 20)
+        async public Task<IApiResult> Search(string id,
+                                             string q,
+                                             string outFields,
+                                             int size = 20,
+                                             string sortField = null,
+                                             bool sortReverse = false)
         {
             return await SecureMethodHandler(id, (id) =>
             {
-                var hits = _lucene.Search(id, q, String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s => s.Trim()), size);
+                var hits = _lucene.Search(id,
+                                          term: q,
+                                          outFields: String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s => s.Trim()),
+                                          size: size,
+                                          sortFieldName: sortField,
+                                          sortReverse: sortReverse);
 
                 return Task.FromResult<IApiResult>(new LuceneSearchResult()
                 {
                     Hits = hits
-                });  
+                });
             });
-            
         }
 
         [HttpGet]

@@ -317,16 +317,14 @@ namespace LuceneServerNET.Services
 
         #region Search/Query
 
-        public IEnumerable<IDictionary<string, object>> Search(string indexName, string term, IEnumerable<string> outFields, int size = 20)
+        public IEnumerable<IDictionary<string, object>> Search(string indexName, 
+                                                               string term, 
+                                                               IEnumerable<string> outFields = null, 
+                                                               int size = 20,
+                                                               string sortFieldName = null,
+                                                               bool sortReverse = false)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
-
-            //var phrase = new MultiPhraseQuery
-            //{
-            //    new Term("content", term)
-            //};
-
-            //var phrase = new WildcardQuery(new Term("content", $"{ term }*"));
 
             var mapping = _resources.GetMapping(indexName);
 
@@ -339,10 +337,23 @@ namespace LuceneServerNET.Services
 
             var query = parser.Parse(term);
 
-            var hits = searcher.Search(query, size).ScoreDocs;
+            ScoreDoc[] hits = null;
+            FieldMapping sortField = String.IsNullOrEmpty(sortFieldName) ?
+                null :
+                mapping.GetField(sortFieldName);
+
+            if (sortField != null)
+            {
+                Sort sort = new Sort(new SortField(sortFieldName, sortField.GetSortFieldType(), sortReverse));
+                hits = searcher.Search(query, size, sort).ScoreDocs;
+            }
+            else
+            {
+                hits = searcher.Search(query, size).ScoreDocs;
+            }
 
             List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
-            if (hits.Length > 0)
+            if (hits != null && hits.Length > 0)
             {
                 foreach (var hit in hits)
                 {
@@ -353,7 +364,10 @@ namespace LuceneServerNET.Services
                         var doc = new Dictionary<string, object>();
 
                         //doc.Add("_id", hit.Doc);
-                        doc.Add("_score", hit.Score);
+                        if (!float.IsNaN(hit.Score))
+                        {
+                            doc.Add("_score", hit.Score);
+                        }
 
                         foreach (var field in mapping.Fields)
                         {

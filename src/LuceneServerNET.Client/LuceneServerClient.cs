@@ -157,7 +157,11 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<LuceneSearchResult> SearchAsync(string query, IEnumerable<string> outFields = null, int size = 20)
+        async public Task<LuceneSearchResult> SearchAsync(string query, 
+                                                          IEnumerable<string> outFields = null, 
+                                                          int size = 20,
+                                                          string sortField = "",
+                                                          bool sortReverse = false)
         {
             string outFieldsString = outFields != null ?
                 String.Join(",", outFields.Where(f => !String.IsNullOrEmpty(f)).Select(f => f.Trim())) :
@@ -165,7 +169,7 @@ namespace LuceneServerNET.Client
 
             var mapping = await CurrentIndexMapping();
 
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFieldsString }&size={ size }&q={ WebUtility.UrlEncode(query) }"))
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFieldsString }&sortField={ sortField }&sortReverse={ sortReverse }&size={ size }&q={ WebUtility.UrlEncode(query) }"))
             {
                 var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
 
