@@ -259,7 +259,7 @@ namespace LuceneServerNET.Services
                         case FieldTypes.DateTimeType:
                             if (field.Index)
                             {
-                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()), DateTools.Resolution.SECOND);
+                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()).ToUniversalTime(), DateTools.Resolution.SECOND);
                                 doc.Add(new StringField(
                                 field.Name,
                                 (string)value,
@@ -328,14 +328,22 @@ namespace LuceneServerNET.Services
 
             var mapping = _resources.GetMapping(indexName);
 
-            // https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
-            //var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
-            var parser = new MultiFieldQueryParser(
-                AppLuceneVersion,
-                mapping.PrimaryFields.ToArray(),
-                _resources.GetAnalyzer(indexName));
+            Query query = null;
+            if (String.IsNullOrEmpty(term))
+            {
+                query = new MatchAllDocsQuery();
+            }
+            else
+            {
+                // https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
+                //var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
+                var parser = new MultiFieldQueryParser(
+                    AppLuceneVersion,
+                    mapping.PrimaryFields.ToArray(),
+                    _resources.GetAnalyzer(indexName));
 
-            var query = parser.Parse(term);
+                query = parser.Parse(term);
+            }
 
             ScoreDoc[] hits = null;
             FieldMapping sortField = String.IsNullOrEmpty(sortFieldName) ?
@@ -352,6 +360,15 @@ namespace LuceneServerNET.Services
                 hits = searcher.Search(query, size).ScoreDocs;
             }
 
+            Dictionary<string, string> outFieldExpressions = new Dictionary<string, string>();
+            if(outFields!=null)
+            {
+                foreach(var outField in outFields)
+                {
+                    var expression = outField.Split(':');
+                    outFieldExpressions[expression[0]] = expression.Length > 1 ? expression[1] : String.Empty;
+                }
+            }
             List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
             if (hits != null && hits.Length > 0)
             {
@@ -371,13 +388,24 @@ namespace LuceneServerNET.Services
 
                         foreach (var field in mapping.Fields)
                         {
-                            if (outFields != null && !outFields.Contains(field.Name))
+                            if (outFieldExpressions.Keys.Count() > 0 &&
+                                !outFieldExpressions.Keys.Contains("*") &&
+                                !outFieldExpressions.Keys.Contains(field.Name))
                             {
                                 continue;
                             }
 
-                            string val = foundDoc.Get(field.Name);
-                            doc.Add(field.Name, field.GetValue(foundDoc));
+                            object val = field.GetValue(foundDoc);
+
+                            if (outFieldExpressions.TryGetValue(field.Name, out string expression))
+                            {
+                                if(!String.IsNullOrEmpty(expression))
+                                {
+                                    val = expression.ParseExpression(val);
+                                }
+                            }
+
+                            doc.Add(field.Name, val);
                         }
 
                         docs.Add(doc);

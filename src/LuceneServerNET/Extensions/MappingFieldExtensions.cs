@@ -49,5 +49,33 @@ namespace LuceneServerNET.Extensions
                     return SortFieldType.STRING;
             }
         }
+
+        static public object ParseExpression(this string expression, object val)
+        {
+            try
+            {
+                if (!String.IsNullOrEmpty(expression))
+                {
+                    var type = expression.Last();
+                    var quantity = int.Parse(expression.Substring(0, expression.Length - 1));
+
+                    var stringVal = val?.ToString() ?? String.Empty;
+                    switch (type)
+                    {
+                        case 'c':
+                            if (stringVal.Length >= quantity)
+                            {
+                                stringVal = $"{ stringVal.Substring(0, quantity) }...";
+                            }
+                            break;
+                    }
+
+                    val = stringVal;
+                }
+            }
+            catch { }
+
+            return val;
+        }
     }
 }
