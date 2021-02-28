@@ -382,24 +382,18 @@ namespace LuceneServerNET.Services
 
                         foreach (var field in mapping.Fields)
                         {
-                            if (outFields.Names.Count() > 0 &&
-                                !outFields.Names.Contains("*") &&
-                                !outFields.Names.Contains(field.Name))
+                            if (!outFields.UseField(field.Name))
                             {
                                 continue;
                             }
 
                             object val = field.GetValue(foundDoc);
 
-                            //if (outFieldExpressions.TryGetValue(field.Name, out string expression))
-                            //{
-                            //    if(!String.IsNullOrEmpty(expression))
-                            //    {
-                            //        val = expression.ParseExpression(val);
-                            //    }
-                            //}
+                            var fieldName = field.Name;
+                            var outField = outFields[field.Name];
+                            val = outField.Invoke(val, ref fieldName);
 
-                            doc.Add(field.Name, val);
+                            doc.Add(fieldName, val);
                         }
 
                         docs.Add(doc);

@@ -34,7 +34,7 @@ namespace LuceneServerNET.Controllers
         [Route("search/{id}")]
         async public Task<IApiResult> Search(string id,
                                              string q,
-                                             string outFields,
+                                             string outFields = null,
                                              int size = 20,
                                              string sortField = null,
                                              bool sortReverse = false)
@@ -43,7 +43,7 @@ namespace LuceneServerNET.Controllers
             {
                 var hits = _lucene.Search(id,
                                           term: q,
-                                          outFieldNames: outFields,
+                                          outFieldNames: outFields ?? String.Empty,
                                           size: size,
                                           sortFieldName: sortField,
                                           sortReverse: sortReverse);

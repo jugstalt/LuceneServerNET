@@ -17,10 +17,9 @@ namespace LuceneServerNET.Parse
 
             if (String.IsNullOrEmpty(outFieldsText))
             {
-                return;
+               // do nothing
             }
-                
-            if(outFieldsText.Contains(";"))
+            else if (outFieldsText.Contains(";"))
             {
                 // Parse, Lexer
                 if (!outFieldsText.EndsWith(";"))
@@ -42,7 +41,13 @@ namespace LuceneServerNET.Parse
                                       .ToArray();
             }
 
-            _names = this.Fields.Select(f => f.Name).ToArray();
+            _names = this.Fields?.Select(f => f.Name).ToArray() ?? new string[0];
+
+            if (this.Fields == null || Fields.Count() == 0)
+                this.Fields = new QueryOutField[]
+                {
+                    new QueryOutField("*")
+                };
         }
 
         public IEnumerable<QueryOutField> Fields
@@ -51,5 +56,14 @@ namespace LuceneServerNET.Parse
         }
 
         public IEnumerable<string> Names => _names;
+
+        public QueryOutField this[string name]
+            => this.Fields.Where(f => f.Name == name).FirstOrDefault() ??
+               this.Fields.Where(f => f.Name == "*").FirstOrDefault();
+
+        public bool UseField(string name) =>
+            _names.Count() == 0 ||  // any field
+            _names.Contains("*") ||
+            _names.Contains(name);
     }
 }

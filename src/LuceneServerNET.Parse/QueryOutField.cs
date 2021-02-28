@@ -49,5 +49,18 @@ namespace LuceneServerNET.Parse
         }
 
         public IEnumerable<OutFieldMethod> ApplyMethods => _methods ?? new OutFieldMethod[0];
+
+        public object Invoke(object val, ref string name)
+        {
+            if (_methods == null || _methods.Count() == 0)
+                return val;
+
+            foreach(var method in _methods)
+            {
+                val = method.MethodInstance.Invoke(val, method.Parameters, ref name);
+            }
+
+            return val;
+        }
     }
 }

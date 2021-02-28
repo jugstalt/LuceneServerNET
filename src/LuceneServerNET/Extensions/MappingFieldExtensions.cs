@@ -51,27 +51,27 @@ namespace LuceneServerNET.Extensions
             }
         }
 
-        static public object ParseExpression(this string expression, object val)
-        {
-            try
-            {
-                if (!String.IsNullOrEmpty(expression))
-                {
-                    string newVal = Regex.Replace(val.ToString() ?? String.Empty,
-                        //@"^((?:\S+\s+){0}\S+).*", 
-                        expression,
-                        "${1}",
-                        RegexOptions.Multiline);
+        //static public object ParseExpression(this string expression, object val)
+        //{
+        //    try
+        //    {
+        //        if (!String.IsNullOrEmpty(expression))
+        //        {
+        //            string newVal = Regex.Replace(val.ToString() ?? String.Empty,
+        //                //@"^((?:\S+\s+){0}\S+).*", 
+        //                expression,
+        //                "${1}",
+        //                RegexOptions.Multiline);
 
-                    if (newVal.Length < val.ToString().Length)
-                        newVal = $"{ newVal }...";
+        //            if (newVal.Length < val.ToString().Length)
+        //                newVal = $"{ newVal }...";
 
-                    val = newVal;
-                }
-            }
-            catch { }
+        //            val = newVal;
+        //        }
+        //    }
+        //    catch { }
 
-            return val;
-        }
+        //    return val;
+        //}
     }
 }
