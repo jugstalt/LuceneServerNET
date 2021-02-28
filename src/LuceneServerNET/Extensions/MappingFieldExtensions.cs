@@ -4,6 +4,7 @@ using LuceneServerNET.Core.Models.Mapping;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Extensions
@@ -56,21 +57,16 @@ namespace LuceneServerNET.Extensions
             {
                 if (!String.IsNullOrEmpty(expression))
                 {
-                    var type = expression.Last();
-                    var quantity = int.Parse(expression.Substring(0, expression.Length - 1));
+                    string newVal = Regex.Replace(val.ToString() ?? String.Empty,
+                        //@"^((?:\S+\s+){0}\S+).*", 
+                        expression,
+                        "${1}",
+                        RegexOptions.Multiline);
 
-                    var stringVal = val?.ToString() ?? String.Empty;
-                    switch (type)
-                    {
-                        case 'c':
-                            if (stringVal.Length >= quantity)
-                            {
-                                stringVal = $"{ stringVal.Substring(0, quantity) }...";
-                            }
-                            break;
-                    }
+                    if (newVal.Length < val.ToString().Length)
+                        newVal = $"{ newVal }...";
 
-                    val = stringVal;
+                    val = newVal;
                 }
             }
             catch { }

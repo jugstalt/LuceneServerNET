@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
+    <ProjectReference Include="..\LuceneServerNET.Parse\LuceneServerNET.Parse.csproj" />
   </ItemGroup>
 
   <ItemGroup>

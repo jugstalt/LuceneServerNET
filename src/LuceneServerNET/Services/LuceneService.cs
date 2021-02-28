@@ -5,6 +5,7 @@ using Lucene.Net.Search.Grouping;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Extensions;
+using LuceneServerNET.Parse;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -319,7 +320,7 @@ namespace LuceneServerNET.Services
 
         public IEnumerable<IDictionary<string, object>> Search(string indexName, 
                                                                string term, 
-                                                               IEnumerable<string> outFields = null, 
+                                                               string outFieldNames = null, 
                                                                int size = 20,
                                                                string sortFieldName = null,
                                                                bool sortReverse = false)
@@ -360,15 +361,8 @@ namespace LuceneServerNET.Services
                 hits = searcher.Search(query, size).ScoreDocs;
             }
 
-            Dictionary<string, string> outFieldExpressions = new Dictionary<string, string>();
-            if(outFields!=null)
-            {
-                foreach(var outField in outFields)
-                {
-                    var expression = outField.Split(':');
-                    outFieldExpressions[expression[0]] = expression.Length > 1 ? expression[1] : String.Empty;
-                }
-            }
+            var outFields = new QueryOutFields(outFieldNames);
+            
             List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
             if (hits != null && hits.Length > 0)
             {
@@ -388,22 +382,22 @@ namespace LuceneServerNET.Services
 
                         foreach (var field in mapping.Fields)
                         {
-                            if (outFieldExpressions.Keys.Count() > 0 &&
-                                !outFieldExpressions.Keys.Contains("*") &&
-                                !outFieldExpressions.Keys.Contains(field.Name))
+                            if (outFields.Names.Count() > 0 &&
+                                !outFields.Names.Contains("*") &&
+                                !outFields.Names.Contains(field.Name))
                             {
                                 continue;
                             }
 
                             object val = field.GetValue(foundDoc);
 
-                            if (outFieldExpressions.TryGetValue(field.Name, out string expression))
-                            {
-                                if(!String.IsNullOrEmpty(expression))
-                                {
-                                    val = expression.ParseExpression(val);
-                                }
-                            }
+                            //if (outFieldExpressions.TryGetValue(field.Name, out string expression))
+                            //{
+                            //    if(!String.IsNullOrEmpty(expression))
+                            //    {
+                            //        val = expression.ParseExpression(val);
+                            //    }
+                            //}
 
                             doc.Add(field.Name, val);
                         }

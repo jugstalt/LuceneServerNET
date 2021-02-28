@@ -1,5 +1,7 @@
 ﻿using LuceneServerNET.Client;
 using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Parse;
+using LuceneServerNET.Parse.Lexer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,25 +12,45 @@ namespace ConsoleClient
     class Program
     {
         static string serverUrl = "https://localhost:44393";
-        static string indexName = "TestIndex";
+        static string indexName = "feedclient-news";
         static LuceneServerClient client = new LuceneServerClient(serverUrl, indexName);
 
         async static Task<int> Main(string[] args)
         {
-            try
-            {
-                await CreateIndex();
-                await IndexItems();
+            //try
+            //{
+            //    //await CreateIndex();
+            //    //await IndexItems();
 
-                Console.WriteLine("finished");
-            }
-            catch (Exception ex)
+            //    await Group();
+
+            //    Console.WriteLine("finished");
+            //}
+            //catch (Exception ex)
+            //{
+            //    Console.WriteLine($"Error: { ex.Message }");
+            //    Console.WriteLine("Stacktrace:");
+            //    Console.WriteLine(ex.StackTrace);
+            //}
+            //Console.ReadLine();
+
+            //string text = "f1,f2,f3";
+            string text = @"*;FieldName2.REGEX_REPLACE(""\b[^()]+\(\(.*)\)$"",""xy\""z"",'x').AS(""COUNTER"");FieldName3;";
+
+            var outFields = new QueryOutFields(text);
+            foreach(var outField in outFields.Fields)
             {
-                Console.WriteLine($"Error: { ex.Message }");
-                Console.WriteLine("Stacktrace:");
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine($"{ outField.Name } => { outField.CommandLine() }");
+
+                foreach(var method in outField.ApplyMethods)
+                {
+                    Console.WriteLine($".{ method.MethodInstance.Name }");
+                    foreach(var parameter in method.Parameters)
+                    {
+                        Console.WriteLine($"    ParameterValue: { parameter }");
+                    }
+                }
             }
-            Console.ReadLine();
 
             return 0;
         }
@@ -102,6 +124,11 @@ namespace ConsoleClient
 
                 await client.IndexDocumentsAsync(docs);
             }
+        }
+
+        async static Task Group()
+        {
+            var result = await client.GroupAsync("feed_id");
         }
     }
 }

@@ -43,7 +43,7 @@ namespace LuceneServerNET.Controllers
             {
                 var hits = _lucene.Search(id,
                                           term: q,
-                                          outFields: String.IsNullOrEmpty(outFields) ? null : outFields.Split(',').Select(s => s.Trim()),
+                                          outFieldNames: outFields,
                                           size: size,
                                           sortFieldName: sortField,
                                           sortReverse: sortReverse);

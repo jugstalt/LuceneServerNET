@@ -177,7 +177,7 @@ namespace LuceneServerNET.Client
                 {
                     foreach (var hit in apiResult.Hits)
                     {
-                        foreach (var key in hit.Keys)
+                        foreach (var key in hit.Keys.ToArray())
                         {
                             var field = _mapping?.GetField(key);
                             if (field != null)
@@ -187,6 +187,35 @@ namespace LuceneServerNET.Client
                             else
                             {
                                 hit[key] = hit[key]?.ToString();
+                            }
+                        }
+                    }
+                }
+
+                return apiResult;
+            }
+        }
+
+        async public Task<LuceneGroupResult> GroupAsync(string groupField, string query = "")
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/group/{ _indexName }?groupField={ groupField }&q={ WebUtility.UrlEncode(query) }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGroupResult>();
+
+                if (apiResult.Success && apiResult.Hits != null)
+                {
+                    foreach (var hit in apiResult.Hits)
+                    {
+                        foreach (var key in hit.Keys.ToArray())
+                        {
+                            switch(key)
+                            {
+                                case "value":
+                                    hit[key] = hit[key]?.ToString();
+                                    break;
+                                case "_hits":
+                                    hit[key] = int.Parse(hit[key].ToString());
+                                    break;
                             }
                         }
                     }
