@@ -22,11 +22,11 @@ namespace LuceneServerNET.Extensions
                     {
                         if (fieldMapping.Index == true)
                         {
-                            val = DateTools.StringToDate(val?.ToString());
+                            val = val != null ? DateTools.StringToDate(val.ToString()) : null;
                         }
                         else
                         {
-                            val = Convert.ToDateTime(val.ToString());
+                            val = val != null ? Convert.ToDateTime(val.ToString()) : null;
                         }
                     }
                     catch { }

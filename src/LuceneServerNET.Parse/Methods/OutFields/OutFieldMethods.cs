@@ -12,7 +12,11 @@ namespace LuceneServerNET.Parse.Methods.OutFields
             new IOutFieldMethod[]
             {
                 new RegexReplace(),
-                new As()
+                new As(),
+                new NCharacters(),
+                new NWords(),
+                new IncludedTerms(),
+                new SentencesWith()
             };
 
         static public IOutFieldMethod Get(string name)

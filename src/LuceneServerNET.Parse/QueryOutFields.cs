@@ -1,4 +1,5 @@
-﻿using LuceneServerNET.Parse.Lexer;
+﻿using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Parse.Lexer;
 using LuceneServerNET.Parse.Lexer.Extensions;
 using System;
 using System.Collections.Generic;
@@ -56,6 +57,43 @@ namespace LuceneServerNET.Parse
         }
 
         public IEnumerable<string> Names => _names;
+
+        public IEnumerable<QueryOutField> SelectOutFields(IndexMapping mapping)
+        {
+            List<QueryOutField> outFields = new List<QueryOutField>();
+
+            if (_names == null || _names.Count() == 0)
+            {
+                foreach(string name in mapping.Fields.Select(f => f.Name))
+                {
+                    outFields.Add(new QueryOutField(name));
+                }
+            }
+            else
+            {
+                foreach (var outField in this.Fields)
+                {
+                    if (outField.Name == "*")
+                    {
+                        foreach (var field in mapping.Fields.Where(f => f.Store))
+                        {
+                            if (_names.Contains(field.Name))
+                            {
+                                continue;
+                            }
+
+                            outFields.Add(new QueryOutField(field.Name));
+                        }
+                    }
+                    else if (mapping.Fields.Where(f => f.Store && f.Name == outField.Name).Count() == 1)
+                    {
+                        outFields.Add(outField);
+                    }
+                }
+            }
+
+            return outFields;
+        }
 
         public QueryOutField this[string name]
             => this.Fields.Where(f => f.Name == name).FirstOrDefault() ??

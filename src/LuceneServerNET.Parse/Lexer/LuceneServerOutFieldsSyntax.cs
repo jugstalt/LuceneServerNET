@@ -6,7 +6,7 @@ namespace LuceneServerNET.Parse.Lexer
     {
         #region Const
 
-        private string[] _keywords = new[] { "REGEX_REPLACE", "AS" };
+        private string[] _keywords = new[] { "REGEX_REPLACE", "AS", "CHARS", "WORDS", "INCL", "SENTENCES_WITH" };
 
         private string[] _separator = new[] { ";" };
 

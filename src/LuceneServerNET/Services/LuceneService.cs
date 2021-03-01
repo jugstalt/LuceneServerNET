@@ -362,7 +362,8 @@ namespace LuceneServerNET.Services
             }
 
             var outFields = new QueryOutFields(outFieldNames);
-            
+            var selectOutFields = outFields.SelectOutFields(mapping);
+
             List<IDictionary<string, object>> docs = new List<IDictionary<string, object>>();
             if (hits != null && hits.Length > 0)
             {
@@ -380,19 +381,19 @@ namespace LuceneServerNET.Services
                             doc.Add("_score", hit.Score);
                         }
 
-                        foreach (var field in mapping.Fields)
+                        foreach (var selectOutField in selectOutFields)
                         {
-                            if (!outFields.UseField(field.Name))
+                            var field = mapping.GetField(selectOutField.Name);
+                            if (field == null)
                             {
                                 continue;
                             }
 
                             object val = field.GetValue(foundDoc);
-
                             var fieldName = field.Name;
-                            var outField = outFields[field.Name];
-                            val = outField.Invoke(val, ref fieldName);
 
+                            val = selectOutField.Invoke(val, ref fieldName);
+         
                             doc.Add(fieldName, val);
                         }
 

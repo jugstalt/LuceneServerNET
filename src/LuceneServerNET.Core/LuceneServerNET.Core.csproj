@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.9.13</Version>
+    <Version>0.9.15</Version>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>

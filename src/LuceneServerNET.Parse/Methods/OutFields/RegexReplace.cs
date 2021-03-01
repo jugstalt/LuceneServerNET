@@ -40,7 +40,7 @@ namespace LuceneServerNET.Parse.Methods.OutFields
                 throw new Exception($"{ this.Name }: Invalid parameter count");
             }
 
-            string newVal = Regex.Replace(instance.ToString() ?? String.Empty,
+            string newVal = Regex.Replace(instance?.ToString() ?? String.Empty,
                                     parameters[0]?.ToString(),
                                     parameters[1]?.ToString(),
                                     RegexOptions.Multiline);
