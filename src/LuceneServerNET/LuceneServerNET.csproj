@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <AssemblyName>LuceneServerNET</AssemblyName>
+    <UserSecretsId>749b9899-f020-4ca4-8919-5644711e99b1</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
