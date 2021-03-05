@@ -156,23 +156,58 @@ Beispiel:
 
 Der *Query-Term* entspricht der *Lucene* Syntax, siehe auch [hier](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
 
+Auf die ``oufFields`` können zusätzlich Funktionen angewendet werden, um beispielsweise nur eine bestimmte Anzeil an Zeichen zurück zu liefern. Das man Sinn, wenn sehr große Dokumente Indiziert werden und nicht immer der komplette Inhalt der Dokumente zurückgeben werden soll. Werden *outField-Funktionen* verwendet, muss als Trennzeichen zwischen den einzelnen Werten ein Strichpunkt (``;``) verwendet werden. Wird nur ein Feld übergeben, muss die Anweisung mit einem Strichpunkt abgeschlossen werden:
+
+Funktionen werden mit einem ``.`` an eine Feld angefügt. In einer Kette können auch mehrere Funktionen hinterander angegeben werden:
+
+``content.WORDS(10);``
+``content.SENTENCES_WITH("batman robin", 2, 2);content.INCL("batman robin").AS("incl");``
+
+Folgende Funktionen sind möglich:
+
+* ``CHARS([int]number)``: Liefert die angegeben Anzahl von Zeichen zurück
+* ``WORDS([int]number)``: Liefert die angegeben Anzahl an Wörtern zurück
+* ``SENTENCES_WITH("[string]terms", [int]takeHits, [int]takeDefaults)``: Liefert nur Sätze in denen mindestens einer der angeführten Schlagwörter enthalten sind. ``terms`` sind die Schlagwörter getrennt mit einem Leerzeichen. ``takeHits`` gibt an, wie viele Sätze maximal zurückgeben werden. ``takeDefaults`` - wenn keine Treffer gefunden werden, werden stattdessen die hier angegeben Anzahl der ersten n-Sätze zurückgegeben.
+* ``INCL("[string]terms")``: gibt die Schlagwörter zurück, die tatsächlich im Feldwert vorhanden sind. Trennzeichen sind hier wieder Leerzeichen
+* ``AS("[string]name")``: Hiermit wird das Feld in der Rückgabe umbenannt. Das macht Sinn, wenn ein Feld mehrfach zurückgeben werden sollte, zB einmal im Original und einmal nur die enthalten Schlagwörter. 
+
+
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
 
 Mit dieser Methode können mögliche Werte eines Feldes ermittelt werden, die optional einem *Query-Term* entsprechen. Die Methode ist vergleichbar mit einem `DISTINCT` in einer Datenbank.
-Die `hits` sind ein *String-Array*.
+Die `hits` sind Objekte mit dem Werte ``value`` und der Anzahl der Treffer ``_hits``.
 
 Beispiel: /Lucene/search/{index}?groupField=feed
 
 ```javascript
 {
   "hits": [
-    "derstandard",
-    "diepresse",
-    "kurier",
-    "krone",
-    "futurezone"
+    {
+      "value": "heise",
+      "_hits": 564
+    },
+    {
+      "value": "derstandard",
+      "_hits": 1119
+    },
+    {
+      "value": "kurier",
+      "_hits": 183
+    },
+    {
+      "value": "diepresse",
+      "_hits": 393
+    },
+    {
+      "value": "krone",
+      "_hits": 493
+    },
+    {
+      "value": "futurezone",
+      "_hits": 140
+    }
   ],
   "success": true,
-  "milliSeconds": 81.4196
+  "milliSeconds": 358.4401
 }
 ```

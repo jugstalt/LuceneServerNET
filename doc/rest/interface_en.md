@@ -157,23 +157,57 @@ Example:
 
 The *Query-Term* corresponds to the *Lucene* syntax, see also [here](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
 
+Functions can also be applied to the ''oufFields'', for example, to return only a certain amount of characters. That one makes sense when very large documents are indexed and not always the complete content of the documents should be returned. If *outField functions* are used, a semicolon (``;``) must be used as a separator between each value. If only one field is passed, the statement must be completed with a semicolon.
+
+Functions are appended to a field with a ``.``. Several functions can also be specified in a chain:
+
+``content.WORDS(10).AS("new_field_name");``
+``content.SENTENCES_WITH("batman robin", 2, 2);content.INCL("batman robin").AS("incl");``
+
+The following functions are available:
+
+* ``CHARS([int]number)``: Returns the specified number of characters
+* ``WORDS([int]number)``: Returns the specified number of words
+* ``SENTENCES_WITH("[string]terms", [int]takeHits, [int]takeDefaults)``: Returns only sentences containing at least one of the keywords listed. ``terms`` are the keywords separated by a space. ``takeHits`` indicates the maximum number of sentences will return. ``takeDefaults`` - if no hits are found, the number of first n-sentences specified here is returned instead.
+* ``INCL("[string]terms")``: returns the keywords that actually exist in the field value. Separators are spaces here again
+* ``AS("[string]name")``: Renames the field in the result. This makes sense if a field should be returned multiple times, e.g. once as original and once only with the keywords included. 
+
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
 
 This method can be used to determine possible values of a field that optionally correspond to a *query term*. The method is similar to a `DISTINCT` in a database.
-The `hits` are a *string array*.
+The `hits` are a objects with the value (``value``) and the number of hits (``_hits``).
 
 Example: /Lucene/search/{index}?groupField=feed
 
 ```javascript
 {
   "hits": [
-    "derstandard",
-    "diepresse",
-    "kurier",
-    "krone",
-    "futurezone"
+    {
+      "value": "heise",
+      "_hits": 564
+    },
+    {
+      "value": "derstandard",
+      "_hits": 1119
+    },
+    {
+      "value": "kurier",
+      "_hits": 183
+    },
+    {
+      "value": "diepresse",
+      "_hits": 393
+    },
+    {
+      "value": "krone",
+      "_hits": 493
+    },
+    {
+      "value": "futurezone",
+      "_hits": 140
+    }
   ],
   "success": true,
-  "milliSeconds": 81.4196
+  "milliSeconds": 358.4401
 }
 ```

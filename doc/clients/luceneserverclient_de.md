@@ -123,3 +123,19 @@ var result = await client.SearchAsync($"{ termParser.Parse(term) }");
 return result.Hits;
 ```
 
+Neben dem Term könne auch noch die Felder übergeben werden, die zurückgeben werden sollte.
+Für die Felder stehen, wie schon bei der [REST](./../rest/interface_de.md) beschreiben, zusätzlich Funktionen zur Verfügung:
+
+```csharp
+var result = await client.SearchAsync(term,
+                                      outFields: new[]
+                                      {
+                                        "*",  // all fields
+                                        "content".SentencesWith("batman robin",1,1),
+                                        "content".IncludedTerms("batman robin").As("incl")
+                                      },
+                                      size: 50,
+                                      sortField: "publish_date",
+                                      sortReverse: true);
+
+```

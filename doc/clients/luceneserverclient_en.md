@@ -124,3 +124,20 @@ var result = await client.SearchAsync($"{ termParser.Parse(term) }");
 return result.Hits;
 ```
 
+In addition to the term, you can specify the fields that should be returned.
+For the ``outfields`` also special functions are aveilable, see [REST](./.. /rest/interface_de.md) interface description.
+
+```csharp
+var result = await client.SearchAsync(term,
+                                      outFields: new[]
+                                      {
+                                        "*",  // all fields
+                                        "content".SentencesWith("batman robin",1,1),
+                                        "content".IncludedTerms("batman robin").As("incl")
+                                      },
+                                      size: 50,
+                                      sortField: "publish_date",
+                                      sortReverse: true);
+
+```
+
