@@ -125,7 +125,7 @@ return result.Hits;
 ```
 
 In addition to the term, you can specify the fields that should be returned.
-For the ``outfields`` also special functions are aveilable, see [REST](./.. /rest/interface_de.md) interface description.
+For the ``outfields`` also special functions are aveilable, see [REST](./../rest/interface_de.md) interface description.
 
 ```csharp
 var result = await client.SearchAsync(term,
