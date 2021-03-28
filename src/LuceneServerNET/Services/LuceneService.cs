@@ -13,6 +13,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace LuceneServerNET.Services
 {
@@ -21,12 +22,15 @@ namespace LuceneServerNET.Services
         const LuceneVersion AppLuceneVersion = LuceneVersion.LUCENE_48;
 
         private readonly string _rootPath;
+        private readonly ArchiveService _archive;
         private readonly LuceneSharedResourcesService _resources; 
 
         public LuceneService(LuceneSharedResourcesService resources,
+                             ArchiveService archive,
                              IOptionsMonitor<LuceneServiceOptions> options)
         {
             _rootPath = options.CurrentValue.RootPath;
+            _archive = archive;
             _resources = resources;
         }
         
@@ -61,11 +65,15 @@ namespace LuceneServerNET.Services
             new DirectoryInfo(indexPath).Create();
             new DirectoryInfo(indexMetaPath).Create();
 
+            _archive.CreateArchive(indexName);
+
             return true;
         }
 
         public bool RemoveIndex(string indexName)
         {
+            _archive.RemoveArchive(indexName);
+
             if(!IndexExists(indexName))
             {
                 return true;
@@ -95,6 +103,8 @@ namespace LuceneServerNET.Services
 
         #endregion
 
+        #region Metadata
+
         #region Mapping
 
         public bool Map(string indexName, IndexMapping mapping)
@@ -104,7 +114,7 @@ namespace LuceneServerNET.Services
                 throw new Exception("Index not exists");
             }
 
-            if(mapping==null)
+            if (mapping == null)
             {
                 throw new ArgumentException("Parameter mapping == null");
             }
@@ -119,7 +129,9 @@ namespace LuceneServerNET.Services
 
             File.WriteAllText(
                 filePath,
-                JsonSerializer.Serialize(mapping)); ;
+                JsonSerializer.Serialize(mapping));
+
+            _archive.Map(indexName, mapping);
 
             _resources.RefreshMapping(indexName);
 
@@ -133,11 +145,71 @@ namespace LuceneServerNET.Services
 
         #endregion
 
+        #region Custom
+
+        public bool AddCustomMetadata(string indexName, string name, string metaData)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new Exception("Index not exists");
+            }
+
+            name = name?.Replace("\\", "/")
+                        .Trim()
+                        .ToLower();
+
+            if (String.IsNullOrEmpty(name) ||
+                name.EndsWith(".meta") ||
+                name.Contains("/") ||
+                new string[] { "mapping " }.Contains(name))
+            {
+                throw new Exception($"Invalid or reserved metadata name '{ name }'.");
+            }
+
+            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{ name }.meta");
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Exists)
+            {
+                fileInfo.Delete();
+            }
+
+            File.WriteAllText(
+                filePath,
+                metaData);
+
+            _archive.AddCustomMetadata(indexName, name, metaData);
+
+            return true;
+        }
+
+        async public Task<string> GetCustomMetadata(string indexName, string name)
+        {
+            name = name?.Trim().ToLower();
+
+            if (String.IsNullOrEmpty(name))
+                return null;
+
+            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{ name }.meta");
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Exists)
+            {
+                return await File.ReadAllTextAsync(fileInfo.FullName);
+            }
+
+            return null;
+        }
+
+        #endregion
+
+        #endregion
+
         #region Indexing
 
         private static object _writeLocker = new object();
 
-        public bool Index(string indexName, IEnumerable<IDictionary<string,object>> items)
+        public bool Index(string indexName, IEnumerable<IDictionary<string,object>> items, bool archive = true)
         {
             if(!IndexExists(indexName))
             {
@@ -282,6 +354,11 @@ namespace LuceneServerNET.Services
                 writer.AddDocuments(docs);
 
                 writer.Flush(triggerMerge: false, applyAllDeletes: false);
+            }
+
+            if (archive)
+            {
+                _archive.Index(indexName, items);
             }
 
             return true;

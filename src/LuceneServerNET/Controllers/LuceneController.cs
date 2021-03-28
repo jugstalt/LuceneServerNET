@@ -1,4 +1,5 @@
-﻿using LuceneServerNET.Core.Models.Mapping;
+﻿using LuceneServerNET.Core.Models.Custom;
+using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
 using LuceneServerNET.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -122,6 +123,31 @@ namespace LuceneServerNET.Controllers
                 {
                     Mapping = _lucene.Mapping(id)
                 });
+            });
+        }
+
+        [HttpPost]
+        [Route("addmeta/{id}")]
+        async public Task<IApiResult> AddMeta(string id, string name, [FromBody] CustomMetadata metaData)
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                return Task.FromResult<IApiResult>(new ApiResult(
+                    _lucene.AddCustomMetadata(id, name, metaData.Metadata)
+                ));
+            });
+        }
+
+        [HttpGet]
+        [Route("getmeta/{id}")]
+        async public Task<IApiResult> GetMeta(string id, string name)
+        {
+            return await SecureMethodHandler(id, async (id) =>
+            {
+                return new CustomMetadataResult()
+                {
+                    Metadata = await _lucene.GetCustomMetadata(id,name)
+                };
             });
         }
 

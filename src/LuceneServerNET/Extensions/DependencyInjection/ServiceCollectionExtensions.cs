@@ -15,6 +15,16 @@ namespace LuceneServerNET.Extensions.DependencyInjection
 
             services.AddSingleton<LuceneSharedResourcesService>();
             services.AddTransient<LuceneService>();
+            services.AddTransient<ArchiveService>();
+
+            return services;
+        }
+
+        static public IServiceCollection AddRestoreService(this IServiceCollection services, Action<RestoreServiceOptions> optionsAction)
+        {
+            services.Configure<RestoreServiceOptions>(optionsAction);
+
+            services.AddTransient<RestoreService>();
 
             return services;
         }

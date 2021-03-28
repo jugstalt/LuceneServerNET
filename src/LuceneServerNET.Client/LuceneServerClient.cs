@@ -1,4 +1,5 @@
 ﻿using LuceneServerNET.Client.Extensions;
+using LuceneServerNET.Core.Models.Custom;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
 using System;
@@ -73,6 +74,10 @@ namespace LuceneServerNET.Client
             }
         }
 
+        #region Metadata
+
+        #region Mapping
+
         async public Task<bool> MapAsync(IndexMapping mapping)
         {
             HttpContent postContent = new StringContent(
@@ -108,6 +113,44 @@ namespace LuceneServerNET.Client
                 return new LuceneMappingResult() { Mapping = _mapping };
             }
         }
+
+        #endregion
+
+        #region Custom Metadata
+
+        async public Task<bool> AddCustomMetadata(string name, string metadata)
+        {
+            var customMeta = new CustomMetadata()
+            {
+                Metadata = metadata
+            };
+
+            HttpContent postContent = new StringContent(
+                   JsonSerializer.Serialize(customMeta),
+                   Encoding.UTF8,
+                   "application/json");
+
+            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/addmeta/{ _indexName }?name={ name }", postContent))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                return apiResult.Success;
+            }
+        }
+
+        async public Task<CustomMetadataResult> GetCustomMetadata(string name)
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmeta/{ _indexName }?name={ name }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadataResult>();
+
+                return apiResult;
+            }
+        }
+
+        #endregion
+
+        #endregion
 
         async public Task<bool> IndexDocumentsAsync(IEnumerable<IDictionary<string,object>> documents)
         {

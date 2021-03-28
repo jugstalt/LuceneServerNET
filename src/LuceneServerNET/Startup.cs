@@ -24,6 +24,16 @@ namespace LuceneServerNET
             services.AddLuceneService(options =>
             {
                 options.RootPath = Configuration["LuceneServer:RootPath"];
+                options.ArchivePath = Configuration["LuceneServer:ArchivePath"];
+            });
+
+            services.AddRestoreService(options =>
+            {
+                var luceneServerSettings = Configuration.GetSection("LuceneServer");
+
+                options.RestoreOnRestart = luceneServerSettings.GetValue<bool>("AutoRestoreOnStartup");
+                options.RestoreOnRestartCount = luceneServerSettings.GetValue<int>("AutoRestoreOnStartupCount");
+                options.RestoreOnRestartSince = luceneServerSettings.GetValue<int>("AutoRestoreOnStartupSinceSeconds");
             });
 
             services.AddControllers();
@@ -34,7 +44,9 @@ namespace LuceneServerNET
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, 
+                              IWebHostEnvironment env,
+                              RestoreService restore)
         {
             if (env.IsDevelopment())
             {
@@ -42,6 +54,8 @@ namespace LuceneServerNET
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "LuceneServer.NET v1"));
             }
+
+            restore.TryRestoreIndices();
 
             app.UseHttpsRedirection();
 
