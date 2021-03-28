@@ -118,7 +118,7 @@ namespace LuceneServerNET.Client
 
         #region Custom Metadata
 
-        async public Task<bool> AddCustomMetadata(string name, string metadata)
+        async public Task<bool> AddCustomMetadataAsync(string name, string metadata)
         {
             var customMeta = new CustomMetadata()
             {
@@ -138,7 +138,7 @@ namespace LuceneServerNET.Client
             }
         }
 
-        async public Task<CustomMetadataResult> GetCustomMetadata(string name)
+        async public Task<CustomMetadataResult> GetCustomMetadataAsync(string name)
         {
             using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmeta/{ _indexName }?name={ name }"))
             {
