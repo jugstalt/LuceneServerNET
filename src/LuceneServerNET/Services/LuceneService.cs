@@ -209,7 +209,7 @@ namespace LuceneServerNET.Services
 
         private static object _writeLocker = new object();
 
-        public bool Index(string indexName, IEnumerable<IDictionary<string,object>> items, bool archive = true)
+        public bool Index(string indexName, IEnumerable<IDictionary<string, object>> items, bool archive = true)
         {
             if(!IndexExists(indexName))
             {
@@ -295,7 +295,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new Int32Field(
                                 field.Name,
-                                Convert.ToInt32(value),
+                                value.ToInt32(),
                                 field.Store  ? Field.Store.YES : Field.Store.NO));
                             }
                             else
@@ -308,7 +308,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new DoubleField(
                                 field.Name,
-                                Convert.ToDouble(value),
+                                value.ToDouble(),
                                 field.Store  ? Field.Store.YES : Field.Store.NO));
                             }
                             else
@@ -321,7 +321,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new SingleField(
                                 field.Name,
-                                Convert.ToSingle(value),
+                                value.ToSingle(),
                                 field.Store  ? Field.Store.YES : Field.Store.NO));
                             }
                             else

@@ -1,6 +1,7 @@
 ﻿using LuceneServerNET.Client.Exceptions;
 using LuceneServerNET.Core.Extensions;
 using LuceneServerNET.Core.Models.Result;
+using System;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
