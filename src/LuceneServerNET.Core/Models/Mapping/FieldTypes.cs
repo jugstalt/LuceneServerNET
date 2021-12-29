@@ -14,6 +14,7 @@ namespace LuceneServerNET.Core.Models.Mapping
         public const string DoubleType = "double";
         public const string SingleType = "single";
         public const string DateTimeType = "datetime";
+        public const string GeoType = "geo";
 
         public const string GuidType = "guid";
 

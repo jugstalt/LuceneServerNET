@@ -2,11 +2,15 @@
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Search.Grouping;
+using Lucene.Net.Spatial.Prefix;
+using Lucene.Net.Spatial.Prefix.Tree;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Core.Models.Spatial;
 using LuceneServerNET.Extensions;
 using LuceneServerNET.Parse;
 using Microsoft.Extensions.Options;
+using Spatial4n.Core.Context;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,7 +27,10 @@ namespace LuceneServerNET.Services
 
         private readonly string _rootPath;
         private readonly ArchiveService _archive;
-        private readonly LuceneSharedResourcesService _resources; 
+        private readonly LuceneSharedResourcesService _resources;
+
+        private SpatialContext _spatialContext = null;
+        private SpatialPrefixTree _tree = null;
 
         public LuceneService(LuceneSharedResourcesService resources,
                              ArchiveService archive,
@@ -33,7 +40,7 @@ namespace LuceneServerNET.Services
             _archive = archive;
             _resources = resources;
         }
-        
+
         public bool IndexExists(string indexName)
         {
             var indexPath = Path.Combine(_rootPath, indexName);
@@ -54,7 +61,7 @@ namespace LuceneServerNET.Services
             {
                 throw new Exception("Index already exists");
             }
-            if(_resources.IsUnloading(indexName))
+            if (_resources.IsUnloading(indexName))
             {
                 throw new Exception("Index is unloaded");
             }
@@ -74,7 +81,7 @@ namespace LuceneServerNET.Services
         {
             _archive.RemoveArchive(indexName);
 
-            if(!IndexExists(indexName))
+            if (!IndexExists(indexName))
             {
                 return true;
             }
@@ -188,7 +195,9 @@ namespace LuceneServerNET.Services
             name = name?.Trim().ToLower();
 
             if (String.IsNullOrEmpty(name))
+            {
                 return null;
+            }
 
             var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{ name }.meta");
 
@@ -246,7 +255,7 @@ namespace LuceneServerNET.Services
 
         public bool Index(string indexName, IEnumerable<IDictionary<string, object>> items, bool archive = true)
         {
-            if(!IndexExists(indexName))
+            if (!IndexExists(indexName))
             {
                 throw new Exception("Index not exists");
             }
@@ -298,7 +307,7 @@ namespace LuceneServerNET.Services
 
                     switch (field.FieldType)
                     {
-                        
+
                         case FieldTypes.StringType:
                             if (field.Index)
                             {
@@ -306,8 +315,8 @@ namespace LuceneServerNET.Services
                                     field.Name,
                                     value.ToString(),
                                     field.Store ? Field.Store.YES : Field.Store.NO));
-                            } 
-                            else 
+                            }
+                            else
                             {
                                 doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
                             }
@@ -318,7 +327,7 @@ namespace LuceneServerNET.Services
                                 doc.Add(new TextField(
                                 field.Name,
                                 value.ToString(),
-                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                                field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
                             {
@@ -331,7 +340,7 @@ namespace LuceneServerNET.Services
                                 doc.Add(new Int32Field(
                                 field.Name,
                                 value.ToInt32(),
-                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                                field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
                             {
@@ -344,7 +353,7 @@ namespace LuceneServerNET.Services
                                 doc.Add(new DoubleField(
                                 field.Name,
                                 value.ToDouble(),
-                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                                field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
                             {
@@ -357,7 +366,7 @@ namespace LuceneServerNET.Services
                                 doc.Add(new SingleField(
                                 field.Name,
                                 value.ToSingle(),
-                                field.Store  ? Field.Store.YES : Field.Store.NO));
+                                field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
                             {
@@ -376,6 +385,34 @@ namespace LuceneServerNET.Services
                             else
                             {
                                 doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
+                            }
+                            break;
+                        case FieldTypes.GeoType:
+                            InitSpatial();
+
+                            GeoType geoValue = null;
+                            if (value is GeoType)
+                            {
+                                geoValue = (GeoType)value;
+                            }
+                            else
+                            {
+                                geoValue = JsonSerializer.Deserialize<GeoPoint>(value.ToString());
+                            }
+
+                            if (geoValue is GeoPoint && geoValue.IsValid())
+                            {
+                                var geoPoint = (GeoPoint)geoValue;
+                                var strategy = new RecursivePrefixTreeStrategy(_tree, field.Name);
+                                var point = _spatialContext.MakePoint(geoPoint.Longidute, geoPoint.Latitude);
+                                foreach (var f in strategy.CreateIndexableFields(point))
+                                {
+                                    doc.Add(f);
+                                }
+                                if (field.Store)
+                                {
+                                    doc.Add(new Lucene.Net.Documents.StoredField(field.Name, geoPoint.ToString()));
+                                }
                             }
                             break;
                     }
@@ -430,9 +467,9 @@ namespace LuceneServerNET.Services
 
         #region Search/Query
 
-        public IEnumerable<IDictionary<string, object>> Search(string indexName, 
-                                                               string term, 
-                                                               string outFieldNames = null, 
+        public IEnumerable<IDictionary<string, object>> Search(string indexName,
+                                                               string term,
+                                                               string outFieldNames = null,
                                                                int size = 20,
                                                                string sortFieldName = null,
                                                                bool sortReverse = false)
@@ -505,7 +542,7 @@ namespace LuceneServerNET.Services
                             var fieldName = field.Name;
 
                             val = selectOutField.Invoke(val, ref fieldName);
-         
+
                             doc.Add(fieldName, val);
                         }
 
@@ -539,7 +576,7 @@ namespace LuceneServerNET.Services
             else
             {
                 var parser = new MultiFieldQueryParser(
-                    AppLuceneVersion, 
+                    AppLuceneVersion,
                     mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
                 query = parser.Parse(term);
@@ -552,7 +589,9 @@ namespace LuceneServerNET.Services
                             {
                                 var value = g.GroupValue;
                                 if (g.GroupValue is BytesRef)
+                                {
                                     value = Encoding.UTF8.GetString(((BytesRef)g.GroupValue).Bytes);
+                                }
 
                                 return new Dictionary<string, object>()
                                 {
@@ -570,6 +609,17 @@ namespace LuceneServerNET.Services
         private string MetaIndexName(string indexName)
         {
             return $".{ indexName }";
+        }
+
+        private void InitSpatial()
+        {
+            if (_spatialContext == null)
+            {
+                _spatialContext = SpatialContext.GEO;
+
+                int maxLevels = 11;
+                _tree = new GeohashPrefixTree(_spatialContext, maxLevels);
+            }
         }
 
         #endregion
