@@ -147,7 +147,34 @@ namespace LuceneServerNET.Controllers
             {
                 return new CustomMetadataResult()
                 {
-                    Metadata = await _lucene.GetCustomMetadata(id,name)
+                    Metadata = await _lucene.GetCustomMetadata(id, name)
+                };
+            });
+        }
+
+        [HttpGet]
+        [Route("getmetas/{id}")]
+        async public Task<IApiResult> GetMetas(string id)
+        {
+            return await SecureMethodHandler(id, async (id) =>
+            {
+                var dict = await _lucene.GetCustomMetadatas(id);
+                return new CustomMetadatasResult()
+                {
+                    Metadata = await _lucene.GetCustomMetadatas(id)
+                };
+            });
+        }
+
+        [HttpGet]
+        [Route("getmetanames/{id}")]
+        async public Task<IApiResult> GetMetaNames(string id)
+        {
+            return await SecureMethodHandler(id, async (id) =>
+            {
+                return new LuceneGenericListResult<string>()
+                {
+                    Result = await _lucene.GetCustomMetadataNames(id)
                 };
             });
         }

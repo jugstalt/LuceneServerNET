@@ -148,6 +148,26 @@ namespace LuceneServerNET.Client
             }
         }
 
+        async public Task<IEnumerable<string>> GetCustomMetadataNamesAsync()
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmetanames/{ _indexName }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGenericListResult<string>>();
+
+                return apiResult.Result;
+            }
+        }
+
+        async public Task<IDictionary<string, string>> GetCustomMetadatasAsync()
+        {
+            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmetas/{ _indexName }"))
+            {
+                var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadatasResult>();
+
+                return apiResult.Metadata;
+            }
+        }
+
         #endregion
 
         #endregion

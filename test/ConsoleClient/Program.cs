@@ -12,7 +12,7 @@ namespace ConsoleClient
     class Program
     {
         static string serverUrl = "https://localhost:44393";
-        static string indexName = "feedclient-news";
+        static string indexName = "allgemein"; //"feedclient-news";
         static LuceneServerClient client = new LuceneServerClient(serverUrl, indexName);
 
         async static Task<int> Main(string[] args)
@@ -35,21 +35,35 @@ namespace ConsoleClient
             //Console.ReadLine();
 
             //string text = "f1,f2,f3";
-            string text = @"*;FieldName2.REGEX_REPLACE(""\b[^()]+\(\(.*)\)$"",""xy\""z"",'x').AS(""COUNTER"");FieldName3;";
 
-            var outFields = new QueryOutFields(text);
-            foreach(var outField in outFields.Fields)
+            //string text = @"*;FieldName2.REGEX_REPLACE(""\b[^()]+\(\(.*)\)$"",""xy\""z"",'x').AS(""COUNTER"");FieldName3;";
+
+            //var outFields = new QueryOutFields(text);
+            //foreach(var outField in outFields.Fields)
+            //{
+            //    Console.WriteLine($"{ outField.Name } => { outField.CommandLine() }");
+
+            //    foreach(var method in outField.ApplyMethods)
+            //    {
+            //        Console.WriteLine($".{ method.MethodInstance.Name }");
+            //        foreach(var parameter in method.Parameters)
+            //        {
+            //            Console.WriteLine($"    ParameterValue: { parameter }");
+            //        }
+            //    }
+            //}
+
+            Console.WriteLine("Metadata names:");
+            foreach(var name in await client.GetCustomMetadataNamesAsync())
             {
-                Console.WriteLine($"{ outField.Name } => { outField.CommandLine() }");
+                Console.WriteLine(name);
+            }
 
-                foreach(var method in outField.ApplyMethods)
-                {
-                    Console.WriteLine($".{ method.MethodInstance.Name }");
-                    foreach(var parameter in method.Parameters)
-                    {
-                        Console.WriteLine($"    ParameterValue: { parameter }");
-                    }
-                }
+            Console.WriteLine("Metadatas");
+            var dict = await client.GetCustomMetadatasAsync();
+            foreach (var key in dict.Keys)
+            {
+                Console.WriteLine($"{ key }: { dict[key] }");
             }
 
             return 0;

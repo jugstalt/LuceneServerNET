@@ -201,6 +201,41 @@ namespace LuceneServerNET.Services
             return null;
         }
 
+        async public Task<Dictionary<string, string>> GetCustomMetadatas(string indexName)
+        {
+            try
+            {
+                Dictionary<string, string> customMetadatas = new Dictionary<string, string>();
+                string path = Path.Combine(_rootPath, MetaIndexName(indexName));
+
+                foreach (var fileInfo in new DirectoryInfo(path).GetFiles("*.meta"))
+                {
+                    var name = fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length);
+                    customMetadatas.Add(name, await File.ReadAllTextAsync(fileInfo.FullName));
+                }
+
+                return customMetadatas;
+            }
+            catch { return null; }
+        }
+
+        public Task<IEnumerable<string>> GetCustomMetadataNames(string indexName)
+        {
+            try
+            {
+                List<string> customMetadataNames = new List<string>();
+                string path = Path.Combine(_rootPath, MetaIndexName(indexName));
+
+                foreach (var fileInfo in new DirectoryInfo(path).GetFiles("*.meta"))
+                {
+                    customMetadataNames.Add(fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length));
+                }
+
+                return Task.FromResult<IEnumerable<string>>(customMetadataNames);
+            }
+            catch { return null; }
+        }
+
         #endregion
 
         #endregion
