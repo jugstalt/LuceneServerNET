@@ -1,6 +1,7 @@
 ﻿using LuceneServerNET.Core.Models.Custom;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
+using LuceneServerNET.Models.Spatial;
 using LuceneServerNET.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +22,6 @@ namespace LuceneServerNET.Controllers
         private readonly LuceneService _lucene;
         private readonly ILogger<LuceneController> _logger;
         private readonly IWebHostEnvironment _env;
-        
 
         public LuceneController(LuceneService lucene,
                                 IWebHostEnvironment env,
@@ -39,16 +39,36 @@ namespace LuceneServerNET.Controllers
                                              string outFields = null,
                                              int size = 20,
                                              string sortField = null,
-                                             bool sortReverse = false)
+                                             bool sortReverse = false,
+                                             string filter = "",
+                                             string format = "")
         {
             return await SecureMethodHandler(id, (id) =>
             {
+                ISpatialFilter spatialFilter = null;
+                if (!String.IsNullOrEmpty(filter))
+                {
+                    filter = filter.Trim();
+                    if (filter.StartsWith("bbox(", StringComparison.OrdinalIgnoreCase))
+                    {
+                        spatialFilter = BBoxFilter.Parse(filter.Substring(5, filter.Length - 6));
+                    }
+                }
+
                 var hits = _lucene.Search(id,
                                           term: q,
                                           outFieldNames: outFields ?? String.Empty,
                                           size: size,
                                           sortFieldName: sortField,
-                                          sortReverse: sortReverse);
+                                          sortReverse: sortReverse,
+                                          spatialFilter: spatialFilter);
+
+                if(format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Task.FromResult<IApiResult>(new GeoJsonResult(
+                        format.Substring(0, format.IndexOf(":geojson", StringComparison.OrdinalIgnoreCase)),
+                        hits));
+                }
 
                 return Task.FromResult<IApiResult>(new LuceneSearchResult()
                 {

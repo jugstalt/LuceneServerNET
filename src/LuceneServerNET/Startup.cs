@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using LuceneServerNET.Extensions.DependencyInjection;
+using LuceneServerNET.Extensions;
+using LuceneServerNET.Services.Abstraction;
 
 namespace LuceneServerNET
 {
@@ -21,19 +23,19 @@ namespace LuceneServerNET
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddTransient<IAppVersionService, AppVersionService>();
+
             services.AddLuceneService(options =>
             {
-                options.RootPath = Configuration["LuceneServer:RootPath"];
-                options.ArchivePath = Configuration["LuceneServer:ArchivePath"];
+                options.RootPath = Configuration.GetStringValue("LuceneServer:RootPath");
+                options.ArchivePath = Configuration.GetStringValue("LuceneServer:ArchivePath");
             });
 
             services.AddRestoreService(options =>
             {
-                var luceneServerSettings = Configuration.GetSection("LuceneServer");
-
-                options.RestoreOnRestart = luceneServerSettings.GetValue<bool>("AutoRestoreOnStartup");
-                options.RestoreOnRestartCount = luceneServerSettings.GetValue<int>("AutoRestoreOnStartupCount");
-                options.RestoreOnRestartSince = luceneServerSettings.GetValue<int>("AutoRestoreOnStartupSinceSeconds");
+                options.RestoreOnRestart = Configuration.GetBoolValue("LuceneServer:AutoRestoreOnStartup");
+                options.RestoreOnRestartCount = Configuration.GetIntValue("LuceneServer:AutoRestoreOnStartupCount", 0);
+                options.RestoreOnRestartSince = Configuration.GetIntValue("LuceneServer:AutoRestoreOnStartupSinceSeconds", 86400);
             });
 
             services.AddControllers();

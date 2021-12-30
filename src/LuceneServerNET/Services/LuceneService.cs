@@ -4,10 +4,12 @@ using Lucene.Net.Search;
 using Lucene.Net.Search.Grouping;
 using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
+using Lucene.Net.Spatial.Queries;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Spatial;
 using LuceneServerNET.Extensions;
+using LuceneServerNET.Models.Spatial;
 using LuceneServerNET.Parse;
 using Microsoft.Extensions.Options;
 using Spatial4n.Core.Context;
@@ -390,15 +392,7 @@ namespace LuceneServerNET.Services
                         case FieldTypes.GeoType:
                             InitSpatial();
 
-                            GeoType geoValue = null;
-                            if (value is GeoType)
-                            {
-                                geoValue = (GeoType)value;
-                            }
-                            else
-                            {
-                                geoValue = JsonSerializer.Deserialize<GeoPoint>(value.ToString());
-                            }
+                            GeoType geoValue = GeoType.Parse(value);
 
                             if (geoValue is GeoPoint && geoValue.IsValid())
                             {
@@ -472,13 +466,16 @@ namespace LuceneServerNET.Services
                                                                string outFieldNames = null,
                                                                int size = 20,
                                                                string sortFieldName = null,
-                                                               bool sortReverse = false)
+                                                               bool sortReverse = false,
+                                                               ISpatialFilter spatialFilter = null)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
 
             var mapping = _resources.GetMapping(indexName);
 
             Query query = null;
+            Filter filter = null;
+
             if (String.IsNullOrEmpty(term))
             {
                 query = new MatchAllDocsQuery();
@@ -495,6 +492,13 @@ namespace LuceneServerNET.Services
                 query = parser.Parse(term);
             }
 
+            // Spatial Filter
+            if(spatialFilter != null)
+            {
+                InitSpatial();
+                filter = spatialFilter.ToFilter(_spatialContext, _tree);
+            }
+
             ScoreDoc[] hits = null;
             FieldMapping sortField = String.IsNullOrEmpty(sortFieldName) ?
                 null :
@@ -503,11 +507,11 @@ namespace LuceneServerNET.Services
             if (sortField != null)
             {
                 Sort sort = new Sort(new SortField(sortFieldName, sortField.GetSortFieldType(), sortReverse));
-                hits = searcher.Search(query, size, sort).ScoreDocs;
+                hits = searcher.Search(query, filter, size, sort).ScoreDocs;
             }
             else
             {
-                hits = searcher.Search(query, size).ScoreDocs;
+                hits = searcher.Search(query, filter, size).ScoreDocs;
             }
 
             var outFields = new QueryOutFields(outFieldNames);

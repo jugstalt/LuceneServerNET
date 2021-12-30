@@ -22,8 +22,4 @@
     <ProjectReference Include="..\LuceneServerNET.Parse\LuceneServerNET.Parse.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Models\" />
-  </ItemGroup>
-
 </Project>
