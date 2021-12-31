@@ -73,6 +73,8 @@ A Json File is passed in which each field is defined. Values for 'fieldType' are
 
 * `datetime`: A date with time
 
+* `geo`: Geometry (e.B latitude and longitude)
+
 For each field, you can specify whether it should be indexed and/or saved.
 You can search for indexed fields. For *saved* fields, the content is also returned 1:n on a hit.
 
@@ -132,7 +134,7 @@ A query can be passed as `term`. The criteria from the query are searched in `te
 
 The *Default* value for termField is `_guid`. Ideally, in the *Mapping* you specify a field with the type `guid`. This is the only way to delete individual documents.
 
-**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}**
+**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
 
 This method can be used to search for documents. The result is of type `IApiResult` with an additional `hits` attributes:
 
@@ -171,6 +173,18 @@ The following functions are available:
 * ``SENTENCES_WITH("[string]terms", [int]takeHits, [int]takeDefaults)``: Returns only sentences containing at least one of the keywords listed. ``terms`` are the keywords separated by a space. ``takeHits`` indicates the maximum number of sentences will return. ``takeDefaults`` - if no hits are found, the number of first n-sentences specified here is returned instead.
 * ``INCL("[string]terms")``: returns the keywords that actually exist in the field value. Separators are spaces here again
 * ``AS("[string]name")``: Renames the field in the result. This makes sense if a field should be returned multiple times, e.g. once as original and once only with the keywords included. 
+
+The *filter (geo-filter)* can be used to restrict the search geographically. To do this, a `geo` field must be defined via the mapping. 
+Possible filter calls can be as follows:
+
+``filter=bbox({geo-feld-name}:15.01,47.01,15.03,47.03)`` In addition to the name of the `geo` field, the coordinates of the *BoundingBox* 
+are specified (minX,minY,maxX,maxY). 
+
+An output format can be determined via the *Format*. The output is usually always a *JSON* format. 
+If the results have a *stored* `geo` field (must be mapped as *stored*), the results can also be output as *GeoJSON*. 
+This makes it easier to integrate the results to an  existing GI applications:
+
+``format={geo-fieldname}:geojson``
 
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
 

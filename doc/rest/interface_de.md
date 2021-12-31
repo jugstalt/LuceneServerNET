@@ -73,6 +73,8 @@ Es wird ein Json File übergeben, in dem die einzelnen Felder definiert werden. 
 
 * `datetime`: Ein Datum mit Uhrzeit
 
+* `geo`: Geometrie (z.B. geographische Breite und Länge)
+
 Für jedes Feld kann angegeben werden, ob es indiziert und/oder gespeichert werden soll.
 Nach indizierten Feldern kann gesucht werden. Bei *gespeicherten* Feldern wird auch der Inhalt 1:n bei einem Treffer zurückgegeben.
 
@@ -131,7 +133,7 @@ Als `term` kann eine Abfrage übergeben werden. Nach den Kriterien aus der Abfra
 
 Der *Default* Wert für `termField` ist `_guid`. Idealweise stellt man im *Mapping* für Dokument ein Field mit den Type `guid` ein. Nur so können einzelne Dokument wieder gezielt gelöscht werden.
 
-**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}**
+**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
 
 Mit dieser Methode können Dokumente gesucht werden. Das Ergebnis ist vom Typ `IApiResult` mit einem zusätzlichen ``hits`` Attribute:
 
@@ -169,7 +171,20 @@ Folgende Funktionen sind möglich:
 * ``WORDS([int]number)``: Liefert die angegeben Anzahl an Wörtern zurück
 * ``SENTENCES_WITH("[string]terms", [int]takeHits, [int]takeDefaults)``: Liefert nur Sätze in denen mindestens einer der angeführten Schlagwörter enthalten sind. ``terms`` sind die Schlagwörter getrennt mit einem Leerzeichen. ``takeHits`` gibt an, wie viele Sätze maximal zurückgeben werden. ``takeDefaults`` - wenn keine Treffer gefunden werden, werden stattdessen die hier angegeben Anzahl der ersten n-Sätze zurückgegeben.
 * ``INCL("[string]terms")``: gibt die Schlagwörter zurück, die tatsächlich im Feldwert vorhanden sind. Trennzeichen sind hier wieder Leerzeichen
-* ``AS("[string]name")``: Hiermit wird das Feld in der Rückgabe umbenannt. Das macht Sinn, wenn ein Feld mehrfach zurückgeben werden sollte, zB einmal im Original und einmal nur die enthalten Schlagwörter. 
+* ``AS("[string]name")``: Hiermit wird das Feld in der Rückgabe umbenannt. Das macht Sinn, wenn ein Feld mehrfach zurückgeben werden sollte, zB einmal im Original und einmal nur die enthalten Schlagwörter.
+
+Der *Filter (geo-filter)* kann verwendet werden, um die Suche geographisch einzuschränken. Dazu muss das über das Mapping ein `geo` Feld definiert
+worden sein. Mögliche Filteraufrufe können sind folgende:
+
+``filter=bbox({geo-feld-name}:15.01,47.01,15.03,47.03)`` Hier werden neben dem Namen des `geo` Feldes die Koordinaten der *BoundingBox* 
+angegeben (minX,minY,maxX,maxY). 
+
+Über das *Format* kann ein Ausgabeformat bestimmt werden. Die Ausgabe ist in der Regel immer ein *JSON* Format. 
+Verfügen die Ergebnisse über ein `geo` Feld (muss beim Mapping als *stored* gekennzeichnet sein), können die Ergebnisse auch als *GeoJSON* ausgegeben werden. Damit können sie leichter in 
+bestehende GI Anwendungen eingebunden werden:
+
+``format={geo-fieldname}:geojson``
+
 
 
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
