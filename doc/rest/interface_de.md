@@ -179,6 +179,8 @@ worden sein. Mögliche Filteraufrufe können sind folgende:
 ``filter=bbox({geo-feld-name}:15.01,47.01,15.03,47.03)`` Hier werden neben dem Namen des `geo` Feldes die Koordinaten der *BoundingBox* 
 angegeben (minX,minY,maxX,maxY). 
 
+``filter=dist_km({geo-feld-name}:15.01,47.01,0.3)`` Filtert Ergebnisse innerhalb von *n* Kilometern (x,y,distance[km])
+
 Über das *Format* kann ein Ausgabeformat bestimmt werden. Die Ausgabe ist in der Regel immer ein *JSON* Format. 
 Verfügen die Ergebnisse über ein `geo` Feld (muss beim Mapping als *stored* gekennzeichnet sein), können die Ergebnisse auch als *GeoJSON* ausgegeben werden. Damit können sie leichter in 
 bestehende GI Anwendungen eingebunden werden:

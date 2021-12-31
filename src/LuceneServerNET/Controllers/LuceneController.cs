@@ -53,6 +53,10 @@ namespace LuceneServerNET.Controllers
                     {
                         spatialFilter = BBoxFilter.Parse(filter.Substring(5, filter.Length - 6));
                     }
+                    else if(filter.StartsWith("dist_km(", StringComparison.OrdinalIgnoreCase))
+                    {
+                        spatialFilter = DistanceKmFilter.Parse(filter.Substring(8, filter.Length - 9));
+                    }
                 }
 
                 var hits = _lucene.Search(id,

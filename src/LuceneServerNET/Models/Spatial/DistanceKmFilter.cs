@@ -3,28 +3,27 @@ using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
 using Lucene.Net.Spatial.Queries;
 using Spatial4n.Core.Context;
+using Spatial4n.Core.Distance;
 using System;
 using System.Globalization;
 using System.Linq;
 
 namespace LuceneServerNET.Models.Spatial
 {
-    public class BBoxFilter : ISpatialFilter
+    public class DistanceKmFilter : ISpatialFilter
     {
-        private BBoxFilter(string fieldName, double minX, double minY, double maxX, double maxY)
+        private DistanceKmFilter(string fieldName, double x, double y, double distance)
         {
             this.GeoFieldName = fieldName;
 
-            this.MinX = minX;
-            this.MinY = minY;
-            this.MaxX = maxX;
-            this.MaxY = maxY;
+            this.X = x;
+            this.Y = y;
+            this.Distance = distance;
         }
 
-        public double MinX { get; }
-        public double MinY { get; }
-        public double MaxX { get; }
-        public double MaxY { get; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Distance { get; set; }
 
         #region ISpatialFilter
 
@@ -35,15 +34,15 @@ namespace LuceneServerNET.Models.Spatial
             var strategy = new RecursivePrefixTreeStrategy(tree, GeoFieldName);
 
             var spatialArgs = new SpatialArgs(SpatialOperation.Intersects,
-                spatialContext.MakeRectangle(this.MinX, this.MaxX, this.MinY, this.MaxY));
+                spatialContext.MakeCircle(X, Y, DistanceUtils.Dist2Degrees(this.Distance, DistanceUtils.EARTH_MEAN_RADIUS_KM)));
 
             return strategy.MakeFilter(spatialArgs);
         }
 
         #endregion
 
-        //&filter_bbox(....)
-        //fieldname:minX,minyY,maxX,maxY
+        //&filter_dist_km(....)
+        //fieldname:x,y,distance [km]
         public static ISpatialFilter Parse(string args)
         {
             try
@@ -53,11 +52,11 @@ namespace LuceneServerNET.Models.Spatial
                 string fieldName = args.Substring(0, pos);
                 var coords = args.Substring(pos + 1).Split(',').Select(c => double.Parse(c, CultureInfo.InvariantCulture)).ToArray();
 
-                return new BBoxFilter(fieldName, coords[0], coords[1], coords[2], coords[3]);
+                return new DistanceKmFilter(fieldName, coords[0], coords[1], coords[2]);
             }
             catch
             {
-                throw new ArgumentException("bbox args - usage:fieldname:minX,minyY,maxX,maxY");
+                throw new ArgumentException("bbox args - usage:fieldname:x,y,distance in km");
             }
         }
     }
