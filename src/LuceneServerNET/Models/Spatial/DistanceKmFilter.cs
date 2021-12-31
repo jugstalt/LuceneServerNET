@@ -41,7 +41,7 @@ namespace LuceneServerNET.Models.Spatial
 
         #endregion
 
-        //&filter_dist_km(....)
+        //&filter=dist_km(....)
         //fieldname:x,y,distance [km]
         public static ISpatialFilter Parse(string args)
         {

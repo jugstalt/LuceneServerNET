@@ -57,6 +57,10 @@ namespace LuceneServerNET.Controllers
                     {
                         spatialFilter = DistanceKmFilter.Parse(filter.Substring(8, filter.Length - 9));
                     }
+                    else if (filter.StartsWith("linedist_km("))
+                    {
+                        spatialFilter = LineStringDistanceKmFilter.Parse(filter.Substring(12, filter.Length - 13));
+                    }
                 }
 
                 var hits = _lucene.Search(id,

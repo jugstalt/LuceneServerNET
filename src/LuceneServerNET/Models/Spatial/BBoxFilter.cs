@@ -42,7 +42,7 @@ namespace LuceneServerNET.Models.Spatial
 
         #endregion
 
-        //&filter_bbox(....)
+        //&filter=bbox(....)
         //fieldname:minX,minyY,maxX,maxY
         public static ISpatialFilter Parse(string args)
         {

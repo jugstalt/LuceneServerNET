@@ -181,6 +181,8 @@ angegeben (minX,minY,maxX,maxY).
 
 ``filter=dist_km({geo-feld-name}:15.01,47.01,0.3)`` Filtert Ergebnisse innerhalb von *n* Kilometern (x,y,distance[km])
 
+``filter=linedist_km({geo-feld-name}:linedist_km(geo:15.43682,47.06630,15.44682,47.07830,15.45682,47.06630,0.01))`` (x1,y1,x2,y2,...dist[km])
+
 Über das *Format* kann ein Ausgabeformat bestimmt werden. Die Ausgabe ist in der Regel immer ein *JSON* Format. 
 Verfügen die Ergebnisse über ein `geo` Feld (muss beim Mapping als *stored* gekennzeichnet sein), können die Ergebnisse auch als *GeoJSON* ausgegeben werden. Damit können sie leichter in 
 bestehende GI Anwendungen eingebunden werden:
