@@ -1,4 +1,5 @@
 ﻿using LuceneServerNET.Client;
+using LuceneServerNET.Client.Language;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Parse;
 using LuceneServerNET.Parse.Lexer;
@@ -53,18 +54,20 @@ namespace ConsoleClient
             //    }
             //}
 
-            Console.WriteLine("Metadata names:");
-            foreach(var name in await client.GetCustomMetadataNamesAsync())
-            {
-                Console.WriteLine(name);
-            }
+            //Console.WriteLine("Metadata names:");
+            //foreach(var name in await client.GetCustomMetadataNamesAsync())
+            //{
+            //    Console.WriteLine(name);
+            //}
 
-            Console.WriteLine("Metadatas");
-            var dict = await client.GetCustomMetadatasAsync();
-            foreach (var key in dict.Keys)
-            {
-                Console.WriteLine($"{ key }: { dict[key] }");
-            }
+            //Console.WriteLine("Metadatas");
+            //var dict = await client.GetCustomMetadatasAsync();
+            //foreach (var key in dict.Keys)
+            //{
+            //    Console.WriteLine($"{ key }: { dict[key] }");
+            //}
+
+            Console.WriteLine(new TermParser().Parse("Körösistrass 10", Languages.None));
 
             return 0;
         }
