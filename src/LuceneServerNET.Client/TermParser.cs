@@ -30,31 +30,43 @@ namespace LuceneServerNET.Client
                 GetLanguageParser(language) :
                 new Lang[0];
 
-            var parts = term
+            var words = term
                 .Split(' ')
                 .Select(t => t.Replace("/", "//"));
 
-            foreach (var lang in langs)
-            {
-                parts = lang.ParseWords(parts, true);
-            }
-
-            parts = parts.Select(t =>
-                {
-                    if (t.StartsWith("(") && t.Contains(")"))
-                    {
-                        return $"+{t}";
-                    }
-                    return $"+{t}*";
-                })
-                .ToArray();
-
-            return String.Join(" ", parts);
+            return $"({ Parse(words, langs, false) }) OR ({ Parse(words, langs, true) })";
         }
 
         #region Helper
 
         static private ConcurrentBag<Lang> _parsers = null;
+
+        private string Parse(IEnumerable<string> words, IEnumerable<Lang> langParsers, bool appendWildcards)
+        {
+            foreach (var langParser in langParsers)
+            {
+                words = langParser.ParseWords(words, appendWildcards);
+            }
+
+            words = words.Select(t =>
+                {
+                    if (t.StartsWith("(") && t.Contains(")"))
+                    {
+                        return $"+{t}";
+                    }
+                    if (t.Length > 2)
+                    {
+                        return appendWildcards ? $"+{t}*" : $"+{t}";
+                    }
+                    else // sort part must must not be inluded with AND "+"
+                    {
+                        return appendWildcards ? $"{t}*" : $"{t}";
+                    }
+                })
+                .ToArray();
+
+            return String.Join(" ", words);
+        }
 
         private IEnumerable<Lang> GetLanguageParser(Languages languageParser)
         {

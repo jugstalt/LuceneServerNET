@@ -67,7 +67,8 @@ namespace ConsoleClient
             //    Console.WriteLine($"{ key }: { dict[key] }");
             //}
 
-            Console.WriteLine(new TermParser().Parse("Körösistrass 10", Languages.None));
+            Console.WriteLine(new TermParser().Parse("Körösistrass 10", Languages.German));
+            Console.WriteLine(new TermParser().Parse("Bruck an der Mur", Languages.German));
 
             return 0;
         }
