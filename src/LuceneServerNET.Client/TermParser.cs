@@ -1,4 +1,5 @@
-﻿using LuceneServerNET.Client.Language;
+﻿using LuceneServerNET.Client.Extensions;
+using LuceneServerNET.Client.Language;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -54,7 +55,7 @@ namespace LuceneServerNET.Client
                     {
                         return $"+{t}";
                     }
-                    if (t.Length > 2)
+                    if (t.Length > 2 || t.IsNumeric())
                     {
                         return appendWildcards ? $"+{t}*" : $"+{t}";
                     }
