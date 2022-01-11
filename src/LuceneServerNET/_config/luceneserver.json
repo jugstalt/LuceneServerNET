@@ -1,0 +1,22 @@
+﻿{
+  "LuceneServer": {
+    "RootPath": "c:\\temp\\lucene.net\\indices",
+    "ArchivePath_": "c:\\temp\\lucene.net\\archive",
+    "AutoRestoreOnStartup": true,
+    "AutoRestoreOnStartupCount": 0,
+    "AutoRestoreOnStartupSinceSeconds": 86400
+  },
+  "Authorization_": {
+    "Type": "Basic",
+    "Clients": [
+      {
+        "Id": "client1",
+        "Secret": "pas3w0rd1"
+      },
+      {
+        "Id": "client2",
+        "Secret": "pas3w0rd2"
+      }
+    ]
+  }
+}

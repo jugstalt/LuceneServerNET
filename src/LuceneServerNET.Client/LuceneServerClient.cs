@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -20,57 +21,108 @@ namespace LuceneServerNET.Client
         private readonly string _indexName;
         private IndexMapping _mapping = null;
 
+        private readonly string _clientId, _clientSecret;
+
         private List<string> _refreshIndices = new List<string>();
 
-        public LuceneServerClient(string serverUrl, string indexName, HttpClient httpClient = null)
+        public LuceneServerClient(string serverUrl,
+                                  string indexName,
+                                  HttpClient httpClient = null)
+            : this(serverUrl, indexName, String.Empty, String.Empty, httpClient)
+        {
+
+        }
+
+        public LuceneServerClient(string serverUrl, 
+                                  string indexName,
+                                  string clientId, string clientSecret,
+                                  HttpClient httpClient = null)
         {
             _httpClient = httpClient ?? new HttpClient();
             _serverUrl = serverUrl;
             _indexName = indexName;
+
+            var uri = new Uri(_serverUrl);
+            var userInfo = uri.UserInfo;
+
+            if (String.IsNullOrEmpty(clientId) &&
+                String.IsNullOrEmpty(clientSecret) &&
+                !String.IsNullOrEmpty(userInfo) && userInfo.Contains(":"))
+            {
+                _clientId = userInfo.Substring(0, userInfo.IndexOf(':'));
+                _clientSecret = userInfo.Substring(userInfo.IndexOf(':') + 1);
+
+                _serverUrl = _serverUrl.Replace($"{ userInfo }@", "");
+            }
+            else
+            {
+                _clientId = clientId;
+                _clientSecret = clientSecret;
+            }
         }
 
         async public Task<bool> CreateIndexAsync()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/createindex/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/createindex/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult.Success;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                    return apiResult.Success;
+                }
             }
         }
 
         async public Task<bool> IndexExistsAsync()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/indexexists/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/indexexists/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>(false);
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult.Success;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>(false);
+
+                    return apiResult.Success;
+                }
             }
         }
 
         async public Task<bool> RemoveIndexAsync()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult.Success;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                    return apiResult.Success;
+                }
             }
         }
 
         async public Task<bool> RefreshIndex()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/refresh/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
 
-                if (_refreshIndices.Contains(_indexName))
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                 {
-                    _refreshIndices.Remove(_indexName);
-                }
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                return apiResult.Success;
+                    if (_refreshIndices.Contains(_indexName))
+                    {
+                        _refreshIndices.Remove(_indexName);
+                    }
+
+                    return apiResult.Success;
+                }
             }
         }
 
@@ -85,11 +137,17 @@ namespace LuceneServerNET.Client
                     Encoding.UTF8,
                     "application/json");
 
-            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/map/{ _indexName }", postContent))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/map/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
+                requestMessage.Content = postContent;
 
-                return apiResult.Success;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+
+                    return apiResult.Success;
+                }
             }
         } 
 
@@ -97,16 +155,21 @@ namespace LuceneServerNET.Client
         {
             if (_mapping == null)
             {
-                using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/mapping/{ _indexName }"))
+                using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/mapping/{ _indexName }"))
                 {
-                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneMappingResult>();
+                    ModifyHttpRequest(requestMessage);
 
-                    if (apiResult != null)
+                    using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                     {
-                        _mapping = apiResult.Mapping;
-                    }
+                        var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneMappingResult>();
 
-                    return apiResult;
+                        if (apiResult != null)
+                        {
+                            _mapping = apiResult.Mapping;
+                        }
+
+                        return apiResult;
+                    }
                 }
             } else
             {
@@ -130,41 +193,62 @@ namespace LuceneServerNET.Client
                    Encoding.UTF8,
                    "application/json");
 
-            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/addmeta/{ _indexName }?name={ name }", postContent))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/addmeta/{ _indexName }?name={ name }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
+                requestMessage.Content = postContent;
+                
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                return apiResult.Success;
+                    return apiResult.Success;
+                }
             }
         }
 
         async public Task<CustomMetadataResult> GetCustomMetadataAsync(string name)
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmeta/{ _indexName }?name={ name }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/getmeta/{ _indexName }?name={ name }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadataResult>();
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadataResult>();
+
+                    return apiResult;
+                }
             }
         }
 
         async public Task<IEnumerable<string>> GetCustomMetadataNamesAsync()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmetanames/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/getmetanames/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGenericListResult<string>>();
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult.Result;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGenericListResult<string>>();
+
+                    return apiResult.Result;
+                }
             }
         }
 
         async public Task<IDictionary<string, string>> GetCustomMetadatasAsync()
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/getmetas/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/getmetas/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadatasResult>();
+                ModifyHttpRequest(requestMessage);
 
-                return apiResult.Metadata;
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<CustomMetadatasResult>();
+
+                    return apiResult.Metadata;
+                }
             }
         }
 
@@ -179,19 +263,25 @@ namespace LuceneServerNET.Client
                     Encoding.UTF8,
                     "application/json");
 
-            using (var httpResponse = await _httpClient.PostAsync($"{ _serverUrl }/lucene/index/{ _indexName }", postContent))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/index/{ _indexName }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
+                requestMessage.Content = postContent;
 
-                if(apiResult.Success)
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                 {
-                    if (!_refreshIndices.Contains(_indexName))
-                    {
-                        _refreshIndices.Add(_indexName);
-                    }
-                }
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                return apiResult.Success;
+                    if (apiResult.Success)
+                    {
+                        if (!_refreshIndices.Contains(_indexName))
+                        {
+                            _refreshIndices.Add(_indexName);
+                        }
+                    }
+
+                    return apiResult.Success;
+                }
             }
         }
 
@@ -204,19 +294,24 @@ namespace LuceneServerNET.Client
 
         async public Task<bool> RemoveDocumentsAsync(string field, string term)
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
+                ModifyHttpRequest(requestMessage);
 
-                if (apiResult.Success)
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                 {
-                    if (!_refreshIndices.Contains(_indexName))
-                    {
-                        _refreshIndices.Add(_indexName);
-                    }
-                }
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                return apiResult.Success;
+                    if (apiResult.Success)
+                    {
+                        if (!_refreshIndices.Contains(_indexName))
+                        {
+                            _refreshIndices.Add(_indexName);
+                        }
+                    }
+
+                    return apiResult.Success;
+                }
             }
         }
 
@@ -226,63 +321,71 @@ namespace LuceneServerNET.Client
                                                           string sortField = "",
                                                           bool sortReverse = false)
         {
-            
-
             var mapping = await CurrentIndexMapping();
 
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFields.ToOutFieldsParameterString() }&sortField={ sortField }&sortReverse={ sortReverse }&size={ size }&q={ WebUtility.UrlEncode(query) }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/search/{ _indexName }?outFields={ outFields.ToOutFieldsParameterString() }&sortField={ sortField }&sortReverse={ sortReverse }&size={ size }&q={ WebUtility.UrlEncode(query) }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
+                ModifyHttpRequest(requestMessage);
 
-                if (apiResult.Success && apiResult.Hits != null)
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                 {
-                    foreach (var hit in apiResult.Hits)
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
+
+                    if (apiResult.Success && apiResult.Hits != null)
                     {
-                        foreach (var key in hit.Keys.ToArray())
+                        foreach (var hit in apiResult.Hits)
                         {
-                            var field = _mapping?.GetField(key);
-                            if (field != null)
+                            foreach (var key in hit.Keys.ToArray())
                             {
-                                hit[key] = field.ToValueType(hit[key]);
-                            }
-                            else
-                            {
-                                hit[key] = hit[key]?.ToString();
+                                var field = mapping?.GetField(key);
+                                if (field != null)
+                                {
+                                    hit[key] = field.ToValueType(hit[key]);
+                                }
+                                else
+                                {
+                                    hit[key] = hit[key]?.ToString();
+                                }
                             }
                         }
                     }
-                }
 
-                return apiResult;
+                    return apiResult;
+                }
             }
         }
 
         async public Task<LuceneGroupResult> GroupAsync(string groupField, string query = "")
         {
-            using (var httpResponse = await _httpClient.GetAsync($"{ _serverUrl }/lucene/group/{ _indexName }?groupField={ groupField }&q={ WebUtility.UrlEncode(query) }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/group/{ _indexName }?groupField={ groupField }&q={ WebUtility.UrlEncode(query) }"))
             {
-                var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGroupResult>();
+                ModifyHttpRequest(requestMessage);
 
-                if (apiResult.Success && apiResult.Hits != null)
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
                 {
-                    foreach (var hit in apiResult.Hits)
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneGroupResult>();
+
+                    if (apiResult.Success && apiResult.Hits != null)
                     {
-                        foreach (var key in hit.Keys.ToArray())
+                        foreach (var hit in apiResult.Hits)
                         {
-                            switch(key)
+                            foreach (var key in hit.Keys.ToArray())
                             {
-                                case "value":
-                                    hit[key] = hit[key]?.ToString();
-                                    break;
-                                case "_hits":
-                                    hit[key] = int.Parse(hit[key].ToString());
-                                    break;
+                                switch (key)
+                                {
+                                    case "value":
+                                        hit[key] = hit[key]?.ToString();
+                                        break;
+                                    case "_hits":
+                                        hit[key] = int.Parse(hit[key].ToString());
+                                        break;
+                                }
                             }
                         }
                     }
-                }
 
-                return apiResult;
+                    return apiResult;
+                }
             }
         }
 
@@ -295,11 +398,16 @@ namespace LuceneServerNET.Client
                 Console.WriteLine($"Refresh index { refreshIndex }");
                 try
                 {
-                    using (var httpResponse = _httpClient.GetAsync($"{ _serverUrl }/lucene/refresh/{ refreshIndex }").Result)
+                    using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/refresh/{ refreshIndex }"))
                     {
-                        var apiResult = httpResponse.DeserializeFromSuccessResponse<ApiResult>().Result;
+                        ModifyHttpRequest(requestMessage);
+                        
+                        using (var httpResponse = _httpClient.SendAsync(requestMessage).Result)
+                        {
+                            var apiResult = httpResponse.DeserializeFromSuccessResponse<ApiResult>().Result;
 
-                        Console.WriteLine($"Info - Refreshing index { refreshIndex }: succeeded");
+                            Console.WriteLine($"Info - Refreshing index { refreshIndex }: succeeded");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -314,6 +422,18 @@ namespace LuceneServerNET.Client
         #region Helper
 
         async private Task<IndexMapping> CurrentIndexMapping() => _mapping ?? (await MappingAsync()).Mapping;
+
+        private void ModifyHttpRequest(HttpRequestMessage requestMessage)
+        {
+            if (!String.IsNullOrEmpty(_clientId) && !String.IsNullOrEmpty(_clientSecret))
+            {
+                // Add Basic Auth
+                var authenticationString = $"{ _clientId }:{ _clientSecret }";
+                var base64EncodedAuthenticationString = Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes(authenticationString));
+
+                requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64EncodedAuthenticationString);
+            }
+        }
 
         #endregion
     }

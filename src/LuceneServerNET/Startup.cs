@@ -1,13 +1,14 @@
+using LuceneServerNET.Extensions;
+using LuceneServerNET.Extensions.DependencyInjection;
+using LuceneServerNET.Middleware.Authentication;
 using LuceneServerNET.Services;
+using LuceneServerNET.Services.Abstraction;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
-using LuceneServerNET.Extensions.DependencyInjection;
-using LuceneServerNET.Extensions;
-using LuceneServerNET.Services.Abstraction;
 
 namespace LuceneServerNET
 {
@@ -46,7 +47,7 @@ namespace LuceneServerNET
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, 
+        public void Configure(IApplicationBuilder app,
                               IWebHostEnvironment env,
                               RestoreService restore)
         {
@@ -64,6 +65,13 @@ namespace LuceneServerNET
             app.UseRouting();
 
             app.UseAuthorization();
+
+            switch (Configuration["Authorization:Type"]?.ToLower())
+            {
+                case "basic":
+                    app.UseMiddleware<BasicAuthenticationMiddleware>();
+                    break;
+            }
 
             app.UseEndpoints(endpoints =>
             {
