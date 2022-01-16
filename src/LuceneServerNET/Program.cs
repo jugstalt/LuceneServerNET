@@ -13,6 +13,12 @@ namespace LuceneServerNET
     {
         public static void Main(string[] args)
         {
+            #region First Start => init configuration
+
+            new Setup().TrySetup(args);
+
+            #endregion
+
             CreateHostBuilder(args).Build().Run();
         }
 
@@ -25,6 +31,28 @@ namespace LuceneServerNET
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
+
+                    #region Expose Ports
+
+                    List<string> urls = new List<string>();
+                    for (int i = 0; i < args.Length - 1; i++)
+                    {
+                        switch (args[i].ToLower())
+                        {
+                            case "-expose-http":
+                                urls.Add("http://localhost:" + int.Parse(args[++i]));
+                                break;
+                            case "-expose-https":
+                                urls.Add("https://localhost:" + int.Parse(args[++i]));
+                                break;
+                        }
+                    }
+                    if (urls.Count > 0)
+                    {
+                        webBuilder = webBuilder.UseUrls(urls.ToArray());
+                    }
+
+                    #endregion
                 });
     }
 }

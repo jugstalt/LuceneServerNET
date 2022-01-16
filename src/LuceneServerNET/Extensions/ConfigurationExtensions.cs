@@ -8,7 +8,6 @@ namespace LuceneServerNET.Extensions
         static public string GetStringValue(this IConfiguration configuration, string key, string defaultValue = "")
         {
             return configuration[key]
-                .OrTake(GetEnvironmentVariable(key.ToUpper().Replace(":", "_")))
                 .OrTake(defaultValue);
         }
 
