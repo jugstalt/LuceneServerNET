@@ -6,6 +6,7 @@
     "AutoRestoreOnStartupCount": 0,
     "AutoRestoreOnStartupSinceSeconds": 86400
   },
+  "useSwagger": true,
   "Authorization_": {
     "Type": "Basic",
     "Clients": [
