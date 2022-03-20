@@ -48,8 +48,6 @@ namespace LuceneServerNET.Core.Models.Mapping
         public bool Store { get; set; }
         public bool Index { get; set; }
 
-        public char[] EncodeCharacters { get; set; }
-
         private Type _valueType = null;
         public Type ValueType()
         {

@@ -8,15 +8,21 @@ namespace LuceneServerNET.Extensions
     {
         #region Encode
 
-        static public string ToStringWithAsciiEncode(this object str, FieldMapping field)
+        static public string ToStringWithAsciiEncode(this object str, 
+                                                     FieldMapping field,
+                                                     IndexMapping mapping)
         {
-            if (str == null || field?.EncodeCharacters == null || field.EncodeCharacters.Length == 0)
+            if (field == null ||
+                mapping?.PrimaryFields == null ||
+                mapping?.PrimaryFieldsEncodeCharacters == null ||
+                mapping.PrimaryFieldsEncodeCharacters.Length == 0 ||
+                field.IsPrimaryField(mapping) == false)
             {
                 return str?.ToString() ?? string.Empty;
             }
 
             var result = str.ToString();
-            foreach (var character in field.EncodeCharacters)
+            foreach (var character in mapping.PrimaryFieldsEncodeCharacters)
             {
                 result = result.Replace(character.ToString(), character.ToAsciiEncoded());
             }
@@ -29,19 +35,24 @@ namespace LuceneServerNET.Extensions
         #region Decode
 
         static public object DecodeAsciiCharacters(this object strObject,
-                                                   FieldMapping field)
+                                                   FieldMapping field,
+                                                   IndexMapping mapping)
         {
-            if (field == null || field?.EncodeCharacters == null || field.EncodeCharacters.Length == 0)
+            if (field == null ||
+                mapping?.PrimaryFields == null ||
+                mapping?.PrimaryFieldsEncodeCharacters == null ||
+                mapping.PrimaryFieldsEncodeCharacters.Length == 0 ||
+                field.IsPrimaryField(mapping) == false)
             {
                 return strObject;
             }
-
+           
             if (strObject is string)
             {
-                if (field.FieldType == "text")
+                if (field.FieldType == "text" || field.FieldType == "string")
                 {
                     var str = strObject.ToString();
-                    foreach (var character in field.EncodeCharacters)
+                    foreach (var character in mapping.PrimaryFieldsEncodeCharacters)
                     {
                         str = str.Replace(character.ToAsciiEncoded(), character.ToString());
                     }
@@ -59,16 +70,22 @@ namespace LuceneServerNET.Extensions
         static public string ParseSerachTerm(this string term, IndexMapping mapping)
         {
             if (term == null ||
-                term.Contains(":") ||
-                mapping?.Fields == null)
+                mapping?.PrimaryFieldsEncodeCharacters == null ||
+                mapping.PrimaryFieldsEncodeCharacters.Length == 0)
             {
                 return term?.ToString() ?? string.Empty;
             }
 
-            foreach (var field in mapping.Fields
-                                         .Where(f => f.Index && f.EncodeCharacters != null))
+            if (term.Contains(":"))
             {
-                foreach (var character in field.EncodeCharacters)
+                // ToDo:
+                return term;
+            }
+            else
+            {
+                // PrimaryFields
+
+                foreach (var character in mapping.PrimaryFieldsEncodeCharacters)
                 {
                     switch (character)
                     {
@@ -86,6 +103,15 @@ namespace LuceneServerNET.Extensions
         }
 
         #endregion
+
+        static public bool IsPrimaryField(this FieldMapping field,
+                                          IndexMapping mapping)
+        {
+            if (mapping?.PrimaryFields == null || field == null)
+                return false;
+
+            return mapping.PrimaryFields.Contains(field.Name);
+        }
 
         static public string ToAsciiEncoded(this char c)
         {

@@ -315,7 +315,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new StringField(
                                     field.Name,
-                                    value.ToString(),
+                                    value.ToStringWithAsciiEncode(field, mapping),
                                     field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
@@ -328,7 +328,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new TextField(
                                 field.Name,
-                                value.ToStringWithAsciiEncode(field),
+                                value.ToStringWithAsciiEncode(field, mapping),
                                 field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
@@ -544,7 +544,7 @@ namespace LuceneServerNET.Services
 
                             object val = field.GetValue(foundDoc);
 
-                            val = val.DecodeAsciiCharacters(field);
+                            val = val.DecodeAsciiCharacters(field, mapping);
 
                             var fieldName = field.Name;
 
@@ -608,7 +608,7 @@ namespace LuceneServerNET.Services
 
                                 return new Dictionary<string, object>()
                                 {
-                                    { "value", value.DecodeAsciiCharacters(field)  },
+                                    { "value", value.DecodeAsciiCharacters(field, mapping)  },
                                     { "_hits", g.TotalHits },
                                     //{ "_score", g.Score }
                                 };

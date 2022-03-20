@@ -15,6 +15,8 @@ namespace LuceneServerNET.Core.Models.Mapping
 
         public ICollection<string> PrimaryFields { get; set; }
 
+        public char[] PrimaryFieldsEncodeCharacters { get; set; }
+
         public void AddField(FieldMapping fieldMapping)
         {
             if (_fields == null)
