@@ -328,7 +328,7 @@ namespace LuceneServerNET.Services
                             {
                                 doc.Add(new TextField(
                                 field.Name,
-                                value.ToString(),
+                                value.ToStringWithAsciiEncode(field),
                                 field.Store ? Field.Store.YES : Field.Store.NO));
                             }
                             else
@@ -489,7 +489,7 @@ namespace LuceneServerNET.Services
                     mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
 
-                query = parser.Parse(term);
+                query = parser.Parse(term.ParseSerachTerm(mapping));
             }
 
             // Spatial Filter
@@ -543,6 +543,9 @@ namespace LuceneServerNET.Services
                             }
 
                             object val = field.GetValue(foundDoc);
+
+                            val = val.DecodeAsciiCharacters(field);
+
                             var fieldName = field.Name;
 
                             val = selectOutField.Invoke(val, ref fieldName);
@@ -562,7 +565,9 @@ namespace LuceneServerNET.Services
 
         #region Grouping
 
-        public IEnumerable<IDictionary<string, object>> GroupBy(string indexName, string groupField, string term)
+        public IEnumerable<IDictionary<string, object>> GroupBy(string indexName, 
+                                                                string groupField, 
+                                                                string term)
         {
             var groupingSearch = new GroupingSearch(groupField);
             //groupingSearch.SetGroupSort(groupSort);
@@ -571,6 +576,9 @@ namespace LuceneServerNET.Services
             var searcher = _resources.GetIndexSearcher(indexName);
 
             var mapping = _resources.GetMapping(indexName);
+            var field = mapping?.Fields
+                .Where(f => f.Name.Equals(groupField, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault();
 
             Query query = null;
             if (String.IsNullOrEmpty(term))
@@ -583,7 +591,8 @@ namespace LuceneServerNET.Services
                     AppLuceneVersion,
                     mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
-                query = parser.Parse(term);
+
+                query = parser.Parse(term.ParseSerachTerm(mapping));
             }
 
             var topGroups = groupingSearch.Search(searcher, query, 0, 100000);
@@ -599,7 +608,7 @@ namespace LuceneServerNET.Services
 
                                 return new Dictionary<string, object>()
                                 {
-                                    { "value", value  },
+                                    { "value", value.DecodeAsciiCharacters(field)  },
                                     { "_hits", g.TotalHits },
                                     //{ "_score", g.Score }
                                 };

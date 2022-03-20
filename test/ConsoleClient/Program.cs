@@ -70,6 +70,9 @@ namespace ConsoleClient
             Console.WriteLine(new TermParser().Parse("Körösistrass 10", Languages.German));
             Console.WriteLine(new TermParser().Parse("Bruck an der Mur", Languages.German));
 
+            Console.WriteLine(new TermParser().Parse("60101 214/", Languages.German));
+            Console.WriteLine(new TermParser().Parse("60101 .583", Languages.German));
+
             return 0;
         }
 

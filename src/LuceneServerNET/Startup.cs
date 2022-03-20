@@ -61,12 +61,12 @@ namespace LuceneServerNET
                 "true".Equals(Configuration["useSwagger"], StringComparison.OrdinalIgnoreCase))
             {
                 app.UseSwagger();
-                app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "LuceneServer.NET v1"));
+                app.UseSwaggerUI(c => c.SwaggerEndpoint("../swagger/v1/swagger.json", "LuceneServer.NET v1"));
             }
 
             restore.TryRestoreIndices();
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseRouting();
 

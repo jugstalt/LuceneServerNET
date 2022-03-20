@@ -1,7 +1,6 @@
 ﻿using LuceneServerNET.Client.Extensions;
 using LuceneServerNET.Client.Language;
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +13,7 @@ namespace LuceneServerNET.Client
         public TermParser()
         {
 
-        } 
+        }
 
         public string Parse(string term, Languages language = Languages.None)
         {
@@ -57,11 +56,11 @@ namespace LuceneServerNET.Client
                     }
                     if (t.Length > 2 || t.IsNumeric())
                     {
-                        return appendWildcards ? $"+{t}*" : $"+{t}";
+                        return AllowWildcards(appendWildcards, t) ? $"+{t}*" : $"+{t}";
                     }
                     else // sort part must must not be inluded with AND "+"
                     {
-                        return appendWildcards ? $"{t}*" : $"{t}";
+                        return AllowWildcards(appendWildcards, t) ? $"{t}*" : $"{t}";
                     }
                 })
                 .ToArray();
@@ -89,6 +88,20 @@ namespace LuceneServerNET.Client
             }
 
             return _parsers?.Where(p => p.Language == languageParser);
+        }
+
+        private bool AllowWildcards(bool appendWildcards, string term)
+        {
+            if (String.IsNullOrEmpty(term))
+            {
+                return false;
+            };
+            if (term.EndsWith("/"))
+            {
+                return false;
+            }
+
+            return appendWildcards;
         }
 
         #endregion

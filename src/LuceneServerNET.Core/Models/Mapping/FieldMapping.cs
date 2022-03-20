@@ -13,7 +13,7 @@ namespace LuceneServerNET.Core.Models.Mapping
         public FieldMapping(string name, string fieldType = FieldTypes.TextType)
             : this(name, fieldType, false)
         {
-            
+
         }
 
         internal FieldMapping(string name, string fieldType, bool allowInternalNames)
@@ -31,7 +31,7 @@ namespace LuceneServerNET.Core.Models.Mapping
                 throw new ArgumentException($"Unknown field type: { fieldType }");
             }
 
-            if (allowInternalNames==false)
+            if (allowInternalNames == false)
             {
                 if (name.StartsWith("_"))
                 {
@@ -48,10 +48,12 @@ namespace LuceneServerNET.Core.Models.Mapping
         public bool Store { get; set; }
         public bool Index { get; set; }
 
+        public char[] EncodeCharacters { get; set; }
+
         private Type _valueType = null;
         public Type ValueType()
         {
-            switch(FieldType)
+            switch (FieldType)
             {
                 case FieldTypes.Int32Type:
                     return _valueType = typeof(int);
@@ -72,7 +74,9 @@ namespace LuceneServerNET.Core.Models.Mapping
             if (valueType != typeof(string))
             {
                 if (valueType.Equals(value?.GetType()))
+                {
                     return value;
+                }
 
                 try
                 {
