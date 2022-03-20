@@ -4,8 +4,7 @@
     "ArchivePath_": "c:\\temp\\lucene.net\\archive",
     "AutoRestoreOnStartup": true,
     "AutoRestoreOnStartupCount": 0,
-    "AutoRestoreOnStartupSinceSeconds": 86400,
-    "AsciiEndodeCharacters": "./"
+    "AutoRestoreOnStartupSinceSeconds": 86400
   },
   "useSwagger": true,
   "Authorization_": {
