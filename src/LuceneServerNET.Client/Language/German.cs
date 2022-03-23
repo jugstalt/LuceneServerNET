@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace LuceneServerNET.Client.Language
 {
@@ -14,6 +15,14 @@ namespace LuceneServerNET.Client.Language
             { "ae","ä" },
             { "oe","ö" },
             { "ue","ü" },
+
+            { "b", "p" },
+            { "p", "b" },
+            { "d", "t" },
+            { "t", "d" },
+
+            { "z", "tz" },
+            { "tz", "z" }
         };
 
         override public IDictionary<string, string> ReplaceChars()

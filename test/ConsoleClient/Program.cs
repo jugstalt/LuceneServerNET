@@ -67,11 +67,13 @@ namespace ConsoleClient
             //    Console.WriteLine($"{ key }: { dict[key] }");
             //}
 
-            Console.WriteLine(new TermParser().Parse("Körösistrass 10", Languages.German));
-            Console.WriteLine(new TermParser().Parse("Bruck an der Mur", Languages.German));
+            ParseString("Körösistrass 10", Languages.German);
+            ParseString("Bruck an der Mur", Languages.German);
 
-            Console.WriteLine(new TermParser().Parse("60101 214/", Languages.German));
-            Console.WriteLine(new TermParser().Parse("60101 .583", Languages.German));
+            ParseString("60101 214/", Languages.German);
+            ParseString("60101 .583", Languages.German);
+
+            ParseString("Conrat von Hözentorf", Languages.German);
 
             return 0;
         }
@@ -150,6 +152,13 @@ namespace ConsoleClient
         async static Task Group()
         {
             var result = await client.GroupAsync("feed_id");
+        }
+
+        static void ParseString(string term, Languages language)
+        {
+            Console.WriteLine($"{term}:");
+            Console.WriteLine(new TermParser().Parse(term, language));
+            Console.WriteLine();
         }
     }
 }
