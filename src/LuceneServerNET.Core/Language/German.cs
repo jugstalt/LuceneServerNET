@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 
-namespace LuceneServerNET.Client.Language
+namespace LuceneServerNET.Core.Language
 {
     internal class German : Lang
     {
@@ -16,13 +15,13 @@ namespace LuceneServerNET.Client.Language
             { "oe","ö" },
             { "ue","ü" },
 
-            { "b", "p" },
-            { "p", "b" },
-            { "d", "t" },
-            { "t", "d" },
+            //{ "b", "p" },
+            //{ "p", "b" },
+            //{ "d", "t" },
+            //{ "t", "d" },
 
-            { "z", "tz" },
-            { "tz", "z" }
+            //{ "z", "tz" },
+            //{ "tz", "z" }
         };
 
         override public IDictionary<string, string> ReplaceChars()

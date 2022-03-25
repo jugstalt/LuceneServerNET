@@ -355,6 +355,46 @@ namespace LuceneServerNET.Client
             }
         }
 
+        async public Task<LuceneSearchResult> SearchPhoneticAsync(string term,
+                                                                  IEnumerable<string> outFields = null,
+                                                                  int size = 20,
+                                                                  string sortField = "",
+                                                                  bool sortReverse = false)
+        {
+            var mapping = await CurrentIndexMapping();
+
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/searchphonetic/{ _indexName }?outFields={ outFields.ToOutFieldsParameterString() }&sortField={ sortField }&sortReverse={ sortReverse }&size={ size }&q={ WebUtility.UrlEncode(term) }"))
+            {
+                ModifyHttpRequest(requestMessage);
+
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
+
+                    if (apiResult.Success && apiResult.Hits != null)
+                    {
+                        foreach (var hit in apiResult.Hits)
+                        {
+                            foreach (var key in hit.Keys.ToArray())
+                            {
+                                var field = mapping?.GetField(key);
+                                if (field != null)
+                                {
+                                    hit[key] = field.ToValueType(hit[key]);
+                                }
+                                else
+                                {
+                                    hit[key] = hit[key]?.ToString();
+                                }
+                            }
+                        }
+                    }
+
+                    return apiResult;
+                }
+            }
+        }
+
         async public Task<LuceneGroupResult> GroupAsync(string groupField, string query = "")
         {
             using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/group/{ _indexName }?groupField={ groupField }&q={ WebUtility.UrlEncode(query) }"))

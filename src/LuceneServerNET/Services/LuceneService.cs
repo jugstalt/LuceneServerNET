@@ -20,6 +20,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using LuceneServerNET.Core.Phonetics;
 
 namespace LuceneServerNET.Services
 {
@@ -309,7 +310,6 @@ namespace LuceneServerNET.Services
 
                     switch (field.FieldType)
                     {
-
                         case FieldTypes.StringType:
                             if (field.Index)
                             {
@@ -317,6 +317,17 @@ namespace LuceneServerNET.Services
                                     field.Name,
                                     value.ToStringWithAsciiEncode(field, mapping),
                                     field.Store ? Field.Store.YES : Field.Store.NO));
+
+                                if (mapping.PrimaryFieldsPhonetics != Algorithm.None &&
+                                    field.IsPrimaryField(mapping))
+                                {
+                                    doc.Add(new StringField(
+                                        field.ToPhoneticsFieldName(),
+                                        value.ToString()
+                                             .ToPhonetics(mapping.PrimaryFieldsPhonetics)
+                                             .ToStringWithAsciiEncode(field, mapping),
+                                        Field.Store.YES)); // should be NO in production
+                                }
                             }
                             else
                             {
@@ -330,6 +341,17 @@ namespace LuceneServerNET.Services
                                 field.Name,
                                 value.ToStringWithAsciiEncode(field, mapping),
                                 field.Store ? Field.Store.YES : Field.Store.NO));
+
+                                if (mapping.PrimaryFieldsPhonetics != Algorithm.None &&
+                                    field.IsPrimaryField(mapping))
+                                {
+                                    doc.Add(new TextField(
+                                        field.ToPhoneticsFieldName(),
+                                        value.ToString()
+                                             .ToPhonetics(mapping.PrimaryFieldsPhonetics)
+                                             .ToStringWithAsciiEncode(field, mapping),
+                                        Field.Store.YES)); // should be NO in production
+                                }
                             }
                             else
                             {
@@ -467,7 +489,8 @@ namespace LuceneServerNET.Services
                                                                int size = 20,
                                                                string sortFieldName = null,
                                                                bool sortReverse = false,
-                                                               ISpatialFilter spatialFilter = null)
+                                                               ISpatialFilter spatialFilter = null,
+                                                               string[] primarySearchFields = null)
         {
             var searcher = _resources.GetIndexSearcher(indexName);
 
@@ -486,7 +509,7 @@ namespace LuceneServerNET.Services
                 //var parser = new QueryParser(AppLuceneVersion, mapping.PrimaryField, _resources.GetAnalyzer(indexName));
                 var parser = new MultiFieldQueryParser(
                     AppLuceneVersion,
-                    mapping.PrimaryFields.ToArray(),
+                    primarySearchFields ?? mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
 
                 query = parser.Parse(term.ParseSerachTerm(mapping));
@@ -553,6 +576,15 @@ namespace LuceneServerNET.Services
                             doc.Add(fieldName, val);
                         }
 
+                        //if(mapping.PrimaryFieldsPhonetics != Algorithm.None)
+                        //{
+                        //    foreach(var primaryField in mapping.PrimaryFields)
+                        //    {
+                        //        object val = foundDoc.Get($"_phonetics_{primaryField}");
+                        //        doc.Add($"_phonetics_{primaryField}", val);
+                        //    }
+                        //}
+
                         docs.Add(doc);
                     }
                 }
@@ -560,6 +592,35 @@ namespace LuceneServerNET.Services
 
             return docs;
         }
+
+        public IEnumerable<IDictionary<string, object>> SearchPhonetic(string indexName,
+                                                               string term,
+                                                               string outFieldNames = null,
+                                                               int size = 20,
+                                                               string sortFieldName = null,
+                                                               bool sortReverse = false,
+                                                               ISpatialFilter spatialFilter = null)
+        {
+            var mapping = _resources.GetMapping(indexName);
+
+            if (mapping.PrimaryFieldsPhonetics == Algorithm.None)
+                return new IDictionary<string, object>[0];
+
+            term = term.ToPhonetics(mapping.PrimaryFieldsPhonetics);
+
+            var termParser = new Core.TermParser();
+            term = termParser.Parse(term);
+
+            return Search(indexName,
+                          term,
+                          outFieldNames,
+                          size,
+                          sortFieldName,
+                          sortReverse,
+                          spatialFilter,
+                          mapping.PrimaryFields.Select(f => f.ToPhoneticsFieldName()).ToArray());
+        }
+
 
         #endregion
 

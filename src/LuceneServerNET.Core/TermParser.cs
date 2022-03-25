@@ -1,21 +1,25 @@
-﻿using LuceneServerNET.Client.Extensions;
-using LuceneServerNET.Client.Language;
+﻿using LuceneServerNET.Core.Extensions;
+using LuceneServerNET.Core.Language;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace LuceneServerNET.Client
+namespace LuceneServerNET.Core
 {
     public class TermParser
     {
-        public TermParser()
-        {
+        private readonly IEnumerable<Lang> _languages;
 
+        public TermParser(Languages language = Languages.None)
+        {
+            _languages = language != Languages.None ?
+                GetLanguageParser(language) :
+                new Lang[0];
         }
 
-        public string Parse(string term, Languages language = Languages.None)
+        public string Parse(string term)
         {
             term = term
                 .Replace("-", " ")
@@ -26,26 +30,22 @@ namespace LuceneServerNET.Client
                 term = term.Replace("  ", " ");
             }
 
-            var langs = language != Languages.None ?
-                GetLanguageParser(language) :
-                new Lang[0];
-
             var words = term
                 .Split(' ')
                 .Select(t => t.Replace("/", "//"));
 
-            return $"({ Parse(words, langs, false) }) OR ({ Parse(words, langs, true) })";
+            return $"({ Parse(words, false) }) OR ({ Parse(words, true) })";
         }
 
         #region Helper
 
         static private ConcurrentBag<Lang> _parsers = null;
 
-        private string Parse(IEnumerable<string> words, IEnumerable<Lang> langParsers, bool appendWildcards)
+        private string Parse(IEnumerable<string> words, bool appendWildcards)
         {
-            foreach (var langParser in langParsers)
+            foreach (var language in _languages)
             {
-                words = langParser.ParseWords(words, appendWildcards);
+                words = language.ParseWords(words, appendWildcards);
             }
 
             words = words.Select(t =>

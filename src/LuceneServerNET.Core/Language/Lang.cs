@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Text;
 
-namespace LuceneServerNET.Client.Language
+namespace LuceneServerNET.Core.Language
 {
     internal abstract class Lang
     {

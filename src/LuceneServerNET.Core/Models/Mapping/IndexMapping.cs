@@ -17,6 +17,8 @@ namespace LuceneServerNET.Core.Models.Mapping
 
         public char[] PrimaryFieldsEncodeCharacters { get; set; }
 
+        public Phonetics.Algorithm PrimaryFieldsPhonetics { get; set; }
+
         public void AddField(FieldMapping fieldMapping)
         {
             if (_fields == null)

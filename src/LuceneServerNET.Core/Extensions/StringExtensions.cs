@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 
-namespace LuceneServerNET.Client.Extensions
+namespace LuceneServerNET.Core.Extensions
 {
-    static public class StringExtensions
+    static class StringExtensions
     {
         static public bool IsNumeric(this string str)
         {

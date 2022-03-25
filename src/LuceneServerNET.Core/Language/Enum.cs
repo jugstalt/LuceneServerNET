@@ -1,4 +1,4 @@
-﻿namespace LuceneServerNET.Client.Language
+﻿namespace LuceneServerNET.Core.Language
 {
     public enum Languages
     {

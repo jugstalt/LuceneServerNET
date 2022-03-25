@@ -1,8 +1,8 @@
 ﻿using LuceneServerNET.Client;
-using LuceneServerNET.Client.Language;
+using LuceneServerNET.Core;
+using LuceneServerNET.Core.Language;
 using LuceneServerNET.Core.Models.Mapping;
-using LuceneServerNET.Parse;
-using LuceneServerNET.Parse.Lexer;
+using LuceneServerNET.Core.Phonetics;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -74,6 +74,14 @@ namespace ConsoleClient
             ParseString("60101 .583", Languages.German);
 
             ParseString("Conrat von Hözentorf", Languages.German);
+            ParseString("Schlatming", Languages.German);
+
+            ParseString("Bruck Bruk Pruk Prok", Languages.German);
+            ParseString("Schladming Schlatming Sladming Schladminck", Languages.German);
+            ParseString("Kerms Grems Kremmß", Languages.German);
+            ParseString("Donau Tonau Tonnao", Languages.German);
+            ParseString("an der von", Languages.German);
+            ParseString("Hötzendorf Hötzen Hözen", Languages.German);
 
             return 0;
         }
@@ -156,8 +164,18 @@ namespace ConsoleClient
 
         static void ParseString(string term, Languages language)
         {
+            var parser = new TermParser(language);
+
             Console.WriteLine($"{term}:");
-            Console.WriteLine(new TermParser().Parse(term, language));
+            Console.WriteLine(parser.Parse(term));
+
+            Console.WriteLine("Phonex:");
+            foreach (Algorithm alg in Enum.GetValues(typeof(Algorithm)))
+            {
+                Console.Write($"{alg}: ");
+                Console.WriteLine(term.ToPhonetics(alg));
+            }
+
             Console.WriteLine();
         }
     }

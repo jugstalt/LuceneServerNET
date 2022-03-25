@@ -113,6 +113,16 @@ namespace LuceneServerNET.Extensions
             return mapping.PrimaryFields.Contains(field.Name);
         }
 
+        static public string ToPhoneticsFieldName(this FieldMapping field)
+        {
+            return field.Name.ToPhoneticsFieldName();
+        }
+
+        static public string ToPhoneticsFieldName(this string fieldName)
+        {
+            return $"_phonetics_{fieldName}";
+        }
+
         static public string ToAsciiEncoded(this char c)
         {
             string hex = Convert.ToByte(c).ToString("x2");

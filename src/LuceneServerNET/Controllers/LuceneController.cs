@@ -86,6 +86,59 @@ namespace LuceneServerNET.Controllers
         }
 
         [HttpGet]
+        [Route("searchphonetic/{id}")]
+        async public Task<IApiResult> PhoneticSearch(string id,
+                                                     string q,
+                                                     string outFields = null,
+                                                     int size = 20,
+                                                     string sortField = null,
+                                                     bool sortReverse = false,
+                                                     string filter = "",
+                                                     string format = "")
+        {
+            return await SecureMethodHandler(id, (id) =>
+            {
+                ISpatialFilter spatialFilter = null;
+                if (!String.IsNullOrEmpty(filter))
+                {
+                    filter = filter.Trim();
+                    if (filter.StartsWith("bbox(", StringComparison.OrdinalIgnoreCase))
+                    {
+                        spatialFilter = BBoxFilter.Parse(filter.Substring(5, filter.Length - 6));
+                    }
+                    else if (filter.StartsWith("dist_km(", StringComparison.OrdinalIgnoreCase))
+                    {
+                        spatialFilter = DistanceKmFilter.Parse(filter.Substring(8, filter.Length - 9));
+                    }
+                    else if (filter.StartsWith("linedist_km("))
+                    {
+                        spatialFilter = LineStringDistanceKmFilter.Parse(filter.Substring(12, filter.Length - 13));
+                    }
+                }
+
+                var hits = _lucene.SearchPhonetic(id,
+                                                  term: q,
+                                                  outFieldNames: outFields ?? String.Empty,
+                                                  size: size,
+                                                  sortFieldName: sortField,
+                                                  sortReverse: sortReverse,
+                                                  spatialFilter: spatialFilter);
+
+                if (format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Task.FromResult<IApiResult>(new GeoJsonResult(
+                        format.Substring(0, format.IndexOf(":geojson", StringComparison.OrdinalIgnoreCase)),
+                        hits));
+                }
+
+                return Task.FromResult<IApiResult>(new LuceneSearchResult()
+                {
+                    Hits = hits
+                });
+            });
+        }
+
+        [HttpGet]
         [Route("group/{id}")]
         async public Task<IApiResult> Group(string id, string groupField, string q)
         {
