@@ -8,18 +8,18 @@ using System.Reflection;
 
 namespace LuceneServerNET.Core
 {
-    public class TermParser
+    public class QueryBuilder
     {
         private readonly IEnumerable<Lang> _languages;
 
-        public TermParser(Languages language = Languages.None)
+        public QueryBuilder(Languages language = Languages.None)
         {
             _languages = language != Languages.None ?
                 GetLanguageParser(language) :
                 new Lang[0];
         }
 
-        public string Parse(string term)
+        public string ParseTerm(string term)
         {
             term = term
                 .Replace("-", " ")

@@ -100,10 +100,38 @@ Here you can query the *mapping* for this index. The result is again an `IApiRes
     "primaryFields": [
       "title",
       "content"
-    ]
+    ],
+    "primaryFieldsEncodeCharacters":[".","/"], // optional
+    "primaryFieldsPhonetics": 200  // optional
   },
   "success": true,
   "milliSeconds": 12.2342
+}
+```
+
+`primaryFields` are fields in which searches are made default, if no explicit fields are specified in the query.
+
+Additional methods could be used for the primary fields,
+that improve search behavior:
+
+Lucene uses characters such as `.` or `/` as delimiters and they are not included in queries. 
+However, certain data may require you to search for these characters.
+For example, property number in this form is: `.432/12`. 
+To ensure this, a trick can be used in which these characters are replaced before indexing to a (pseudo) ASCII value. Then, Lucene no longer recognizes them as separators.
+This behavior can be controlled through the `primaryFieldsEncodeCharacters` property. The ASCII encoding then takes place automatically in the background when indexing and searching documents.  
+
+If you also want to be able to search "phonetically" in the index, the property `primaryFieldsPhonetics` must be set. The code given here determines: 
+which algorithm to use for phonetic search.
+The algorithm is defined by one of the following values:
+
+```csharp
+public enum Algorithm
+{
+    None = 0,               // default
+    Soundex = 100,          // for english text
+    ColognePhonetics = 200, // ideal for german text
+    ColognePhonetics_with_doubles = 201,
+    ColognePhonetics_clean_zero = 202,  
 }
 ```
 
@@ -111,6 +139,7 @@ Here you can query the *mapping* for this index. The result is again an `IApiRes
 
 An entry in the index is called a document. Documents can be indexed, queried, and deleted using the following interfaces.
 If new documents are added to or deleted to an index, this will only become visible after a refresh (see above).
+
 
 **[POST] /Lucene/index/{index}**
 
@@ -189,6 +218,14 @@ If the results have a *stored* `geo` field (must be mapped as *stored*), the res
 This makes it easier to integrate the results to an  existing GI applications:
 
 ``format={geo-fieldname}:geojson``
+
+**[GET] /Lucene/searchphonetic/{index}?q={term}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
+
+Like **search** with the difference that here a 
+phonetically searched in performed in the primary fields. 
+Here no **query** but the search term is passed.
+No **query syntax** may be passed as with **search**!
+The conversion of the term into a query takes place here under hood.
 
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
 

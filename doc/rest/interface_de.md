@@ -99,10 +99,40 @@ Hier kann das *Mapping* für diesen Index abgefragt werden. Das Ergebnis ist wie
     "primaryFields": [
       "title",
       "content"
-    ]
+    ],
+    "primaryFieldsEncodeCharacters":[".","/"], // optional
+    "primaryFieldsPhonetics": 200  // optional
   },
   "success": true,
   "milliSeconds": 12.2342
+}
+```
+
+`primaryFields` sind Felder in denen standardmäßig gesucht wird, sofern in der 
+Suchabfrage keine Felder spezifiziert werden.
+
+Für die primären Felder könne noch zusätzliche Methoden angewendet werden,
+die das Suchverhalten verbessern:
+
+Lucene verwendet Zeichen wie `.` oder `/` als Trennzeichen und sie werden nicht in Abfragen berücksichtigt. 
+Bestimmte Daten können es allerdings erforderlich machen, dass nach diesen Zeichen gesucht werden soll.
+Bei Beispiels sind Grundstücksnummer in dieser Form: `.432/12`. 
+Um das zu gewährleisten kann ein Trick verwendet werden, bei dem diese Zeichen vor dem 
+Indizieren in ein einen (pseudo) ASCII Wert umgewandelt werden. Lucene erkennt sie damit nicht mehr als Trennzeichen. 
+Dieses Verhalten kann über die Property `primaryFieldsEncodeCharacters` gesteuert werden. Die ASCII Kodierung erfolgt dann beim Indizieren und Suchen von Dokumenten automatisch im Hintergrund.
+
+Möchte man im Index auch "phonetisch" suchen können, muss die Property `primaryFieldsPhonetics` gesetzt werden. Über den hier angegeben Code wird festgelegt, 
+welcher Algorithmus für die phonetische Suche verwendet werden soll.
+Der Algorithmus wird durch einen der folgenden Werte definiert:
+
+```csharp
+public enum Algorithm
+{
+    None = 0,               // default
+    Soundex = 100,          // for english text
+    ColognePhonetics = 200, // ideal for german text
+    ColognePhonetics_with_doubles = 201,
+    ColognePhonetics_clean_zero = 202,  
 }
 ```
 
@@ -133,7 +163,7 @@ Als `term` kann eine Abfrage übergeben werden. Nach den Kriterien aus der Abfra
 
 Der *Default* Wert für `termField` ist `_guid`. Idealweise stellt man im *Mapping* für Dokument ein Field mit den Type `guid` ein. Nur so können einzelne Dokument wieder gezielt gelöscht werden.
 
-**[GET] /Lucene/search/{index}?q={query-term}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
+**[GET] /Lucene/search/{index}?q={query}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
 
 Mit dieser Methode können Dokumente gesucht werden. Das Ergebnis ist vom Typ `IApiResult` mit einem zusätzlichen ``hits`` Attribute:
 
@@ -156,7 +186,7 @@ Beispiel:
 }
 ```
 
-Der *Query-Term* entspricht der *Lucene* Syntax, siehe auch [hier](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
+`Query` entspricht der *Lucene* Syntax, siehe auch [hier](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
 
 Auf die ``oufFields`` können zusätzlich Funktionen angewendet werden, um beispielsweise nur eine bestimmte Anzeil an Zeichen zurück zu liefern. Das man Sinn, wenn sehr große Dokumente Indiziert werden und nicht immer der komplette Inhalt der Dokumente zurückgeben werden soll. Werden *outField-Funktionen* verwendet, muss als Trennzeichen zwischen den einzelnen Werten ein Strichpunkt (``;``) verwendet werden. Wird nur ein Feld übergeben, muss die Anweisung mit einem Strichpunkt abgeschlossen werden:
 
@@ -189,7 +219,12 @@ bestehende GI Anwendungen eingebunden werden:
 
 ``format={geo-fieldname}:geojson``
 
+**[GET] /Lucene/searchphonetic/{index}?q={term}&outFields={optional:fields-for-the-result-comma-separated}&filter={geo-filter}&format={output-format}**
 
+Wie **search** allerdings mit dem Unterschied, dass hier in den primären Feldern
+phonetisch gesucht wird. Hier wird keine **Query** sondern der Suchterm übergeben.
+Es darf kein **Query-Syntax** wie bei **search** übergeben werden!
+Das Umwandeln des Terms in eine Query erfolgt hier automatisch.
 
 **[GET] /Lucene/group/{index}?groupField={field}&q={optional:query-term}**
 

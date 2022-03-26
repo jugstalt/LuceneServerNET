@@ -164,10 +164,10 @@ namespace ConsoleClient
 
         static void ParseString(string term, Languages language)
         {
-            var parser = new TermParser(language);
+            var parser = new QueryBuilder(language);
 
             Console.WriteLine($"{term}:");
-            Console.WriteLine(parser.Parse(term));
+            Console.WriteLine(parser.ParseTerm(term));
 
             Console.WriteLine("Phonex:");
             foreach (Algorithm alg in Enum.GetValues(typeof(Algorithm)))

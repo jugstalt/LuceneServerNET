@@ -326,7 +326,7 @@ namespace LuceneServerNET.Services
                                         value.ToString()
                                              .ToPhonetics(mapping.PrimaryFieldsPhonetics)
                                              .ToStringWithAsciiEncode(field, mapping),
-                                        Field.Store.YES)); // should be NO in production
+                                        Field.Store.NO)); // should be NO in production
                                 }
                             }
                             else
@@ -350,7 +350,7 @@ namespace LuceneServerNET.Services
                                         value.ToString()
                                              .ToPhonetics(mapping.PrimaryFieldsPhonetics)
                                              .ToStringWithAsciiEncode(field, mapping),
-                                        Field.Store.YES)); // should be NO in production
+                                        Field.Store.NO)); // should be NO in production
                                 }
                             }
                             else
@@ -608,8 +608,8 @@ namespace LuceneServerNET.Services
 
             term = term.ToPhonetics(mapping.PrimaryFieldsPhonetics);
 
-            var termParser = new Core.TermParser();
-            term = termParser.Parse(term);
+            var termParser = new Core.QueryBuilder();
+            term = termParser.ParseTerm(term);
 
             return Search(indexName,
                           term,

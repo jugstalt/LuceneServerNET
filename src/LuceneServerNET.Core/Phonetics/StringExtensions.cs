@@ -7,7 +7,7 @@ namespace LuceneServerNET.Core.Phonetics
     {
         static public string ToPhonetics(this string term, Algorithm algorithm)
         {
-            var words = term.TermToLowercaseWords();
+            var words = term.TermToLowercaseWords(new[] { '-' });
 
             StringBuilder sb = new StringBuilder();
 
@@ -77,8 +77,23 @@ namespace LuceneServerNET.Core.Phonetics
             return false;
         }
 
-        static public string[] TermToLowercaseWords(this string term)
+        static public string[] TermToLowercaseWords(this string term, char[] splitCharacters = null)
         {
+            term = term?.Trim();
+
+            if(string.IsNullOrEmpty(term))
+            {
+                return new string[0];
+            }
+
+            if(splitCharacters!=null)
+            {
+                foreach(var splitCharacter in splitCharacters)
+                {
+                    term = term.Replace(splitCharacter.ToString(), " ");
+                }
+            }
+
             while (term.Contains("  "))  // remove double spaces
             {
                 term = term.Replace("  ", " ");

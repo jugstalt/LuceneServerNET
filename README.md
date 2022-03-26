@@ -5,7 +5,11 @@
 ## A REST Server on top of Lucene.NET
 
 LuceneServer provides a REST interface, with the search indexes based on [Apache Lucene. NET](https://github.com/apache/lucenenet).
+
+For better search results it is also an phonetic search (soudex or colonge phonetic) implementet.
+
 The source code is fully implemented in *Dotnet Core* (C#) The REST interface can be addressed via simple GET/POST request.
+
 LuceneServer.NET also provides a client library [LucenceServerNET.Client](https://www.nuget.org/packages/LuceneServerNET.Client/) that can be used to abstract request.
 The source code for the client is also in this repository.
 
