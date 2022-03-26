@@ -114,11 +114,11 @@ Eingabe: `Batm Robi`
 
 Query: `+Batm* +Robi*` => Beide Suchbegriffe müssen vorkommen (+), Suche mit Wildcard => alle Dokumente mit `Batman` und `Robin` werden gefunden    
 
-Für die Umwandlung in diese Syntax kann die `TermParser` Klasse verwendet werden:
+Für die Umwandlung in diese Syntax kann die `QueryBuilder` Klasse verwendet werden:
 
 ```csharp
-var termParser = new TermParser();
-var result = await client.SearchAsync($"{ termParser.Parse(term) }");
+var queryBuilder = new QueryBuilder();
+var result = await client.SearchAsync($"{ queryBuilder.ParseTerm(term) }");
 
 return result.Hits;
 ```

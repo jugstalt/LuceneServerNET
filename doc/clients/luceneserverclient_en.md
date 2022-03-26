@@ -115,11 +115,11 @@ Input: `Batm Robi`
 
 Query: `+Batm* +Robi*` => both search terms must occur (+), search with wildcard => alle Dokumente includes `Batman` and `Robin` will be listet.    
 
-The `TermParser` class can be used to convert to this syntax:
+The `QueryBuilder` class can be used to convert to this syntax:
 
 ```csharp
-var termParser = new TermParser();
-var result = await client.SearchAsync($"{ termParser.Parse(term) }");
+var queryBuilder = new QueryBuilder();
+var result = await client.SearchAsync($"{ queryBuilder.ParseTerm(term) }");
 
 return result.Hits;
 ```
