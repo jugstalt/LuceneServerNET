@@ -2,7 +2,7 @@
 using Lucene.Net.Spatial.Prefix.Tree;
 using Spatial4n.Core.Context;
 
-namespace LuceneServerNET.Models.Spatial
+namespace LuceneServerNET.Engine.Models.Spatial
 {
     public interface ISpatialFilter
     {

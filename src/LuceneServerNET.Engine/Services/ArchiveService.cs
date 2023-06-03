@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace LuceneServerNET.Services
+namespace LuceneServerNET.Engine.Services
 {
     public class ArchiveService
     {

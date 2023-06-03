@@ -7,7 +7,7 @@ using Lucene.Net.Store;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Extensions;
 using LuceneServerNET.Core.Models.Mapping;
-using LuceneServerNET.Extensions;
+using LuceneServerNET.Engine.Extensions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
@@ -15,7 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 
-namespace LuceneServerNET.Services
+namespace LuceneServerNET.Engine.Services
 {
     public class LuceneSharedResourcesService : IDisposable
     {

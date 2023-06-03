@@ -8,8 +8,8 @@ using Lucene.Net.Spatial.Queries;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Spatial;
-using LuceneServerNET.Extensions;
-using LuceneServerNET.Models.Spatial;
+using LuceneServerNET.Engine.Extensions;
+using LuceneServerNET.Engine.Models.Spatial;
 using LuceneServerNET.Parse;
 using Microsoft.Extensions.Options;
 using Spatial4n.Core.Context;
@@ -22,7 +22,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using LuceneServerNET.Core.Phonetics;
 
-namespace LuceneServerNET.Services
+namespace LuceneServerNET.Engine.Services
 {
     public class LuceneService
     {

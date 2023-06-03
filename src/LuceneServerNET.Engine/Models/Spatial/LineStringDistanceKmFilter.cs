@@ -11,7 +11,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace LuceneServerNET.Models.Spatial
+namespace LuceneServerNET.Engine.Models.Spatial
 {
     public class LineStringDistanceKmFilter : ISpatialFilter
     {

@@ -2,7 +2,7 @@
 using System;
 using System.Linq;
 
-namespace LuceneServerNET.Extensions
+namespace LuceneServerNET.Engine.Extensions
 {
     static public class StringValueExtensions
     {

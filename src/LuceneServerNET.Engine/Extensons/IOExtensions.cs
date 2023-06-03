@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace LuceneServerNET.Extensions
+namespace LuceneServerNET.Engine.Extensions
 {
     static public class IOExtensions
     {
