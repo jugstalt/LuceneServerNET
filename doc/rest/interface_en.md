@@ -211,7 +211,7 @@ are specified (minX,minY,maxX,maxY).
 
 ``filter=dist_km({geo-feld-name}:15.01,47.01,0.3)`` Filters results within *x* kilometers (x,y,distance[km])
 
-``filter=linedist_km({geo-feld-name}:linedist_km(geo:15.43682,47.06630,15.44682,47.07830,15.45682,47.06630,0.01))`` (x1,y1,x2,y2,...dist[km])
+``filter=linedist_km({geo-feld-name}:15.43682,47.06630,15.44682,47.07830,15.45682,47.06630,0.01)`` (x1,y1,x2,y2,...dist[km])
 
 An output format can be determined via the *Format*. The output is usually always a *JSON* format. 
 If the results have a *stored* `geo` field (must be mapped as *stored*), the results can also be output as *GeoJSON*. 
