@@ -8,7 +8,6 @@
     <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
     <Authors>Jürgen Gstaltmaier</Authors>
-    <AssemblyVersion>1.0.4.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <Copyright>2022, Jürgen Gstaltmaier</Copyright>
   </PropertyGroup>
