@@ -1,17 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <Version>1.23.1101</Version>
-    <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Authors>Jürgen Gstaltmaier</Authors>
-    <AssemblyVersion>1.0.4.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <Copyright>2022, Jürgen Gstaltmaier</Copyright>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>12</LangVersion>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	
+	<PropertyGroup>
+        <Version>1.23.1101</Version>
+        <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+        <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Authors>Jürgen Gstaltmaier</Authors>
+        <AssemblyVersion>1.0.4.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <Copyright>2023, Jürgen Gstaltmaier</Copyright>
+    </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="7.0.2" />
