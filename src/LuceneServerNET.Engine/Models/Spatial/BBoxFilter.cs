@@ -2,7 +2,7 @@
 using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
 using Lucene.Net.Spatial.Queries;
-using Spatial4n.Core.Context;
+using Spatial4n.Context;
 using System;
 using System.Globalization;
 using System.Linq;

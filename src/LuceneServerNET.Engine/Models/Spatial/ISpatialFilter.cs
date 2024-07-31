@@ -1,6 +1,6 @@
 ﻿using Lucene.Net.Search;
 using Lucene.Net.Spatial.Prefix.Tree;
-using Spatial4n.Core.Context;
+using Spatial4n.Context;
 
 namespace LuceneServerNET.Engine.Models.Spatial
 {

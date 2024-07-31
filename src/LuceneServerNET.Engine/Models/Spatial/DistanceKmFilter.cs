@@ -2,8 +2,8 @@
 using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
 using Lucene.Net.Spatial.Queries;
-using Spatial4n.Core.Context;
-using Spatial4n.Core.Distance;
+using Spatial4n.Context;
+using Spatial4n.Distance;
 using System;
 using System.Globalization;
 using System.Linq;
@@ -34,7 +34,7 @@ namespace LuceneServerNET.Engine.Models.Spatial
             var strategy = new RecursivePrefixTreeStrategy(tree, GeoFieldName);
 
             var spatialArgs = new SpatialArgs(SpatialOperation.Intersects,
-                spatialContext.MakeCircle(X, Y, DistanceUtils.Dist2Degrees(this.Distance, DistanceUtils.EARTH_MEAN_RADIUS_KM)));
+                spatialContext.MakeCircle(X, Y, DistanceUtils.Dist2Degrees(this.Distance, DistanceUtils.EarthMeanRadiusKilometers)));
 
             return strategy.MakeFilter(spatialArgs);
         }

@@ -2,10 +2,9 @@
 using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
 using Lucene.Net.Spatial.Queries;
-using Spatial4n.Core.Context;
-using Spatial4n.Core.Distance;
-using Spatial4n.Core.Shapes;
-using Spatial4n.Core.Shapes.Impl;
+using Spatial4n.Context;
+using Spatial4n.Distance;
+using Spatial4n.Shapes;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -37,7 +36,7 @@ namespace LuceneServerNET.Engine.Models.Spatial
             var spatialArgs = new SpatialArgs(SpatialOperation.Intersects,
                 spatialContext.MakeBufferedLineString(
                     this.Points.Select(p => (IPoint)new Point(p[0], p[1], spatialContext)).ToList(),
-                    DistanceUtils.Dist2Degrees(this.Distance, DistanceUtils.EARTH_MEAN_RADIUS_KM)));
+                    DistanceUtils.Dist2Degrees(this.Distance, DistanceUtils.EarthMeanRadiusKilometers)));
 
             return strategy.MakeFilter(spatialArgs);
         }

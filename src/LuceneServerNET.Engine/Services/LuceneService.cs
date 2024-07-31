@@ -4,15 +4,15 @@ using Lucene.Net.Search;
 using Lucene.Net.Search.Grouping;
 using Lucene.Net.Spatial.Prefix;
 using Lucene.Net.Spatial.Prefix.Tree;
-using Lucene.Net.Spatial.Queries;
 using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Spatial;
+using LuceneServerNET.Core.Phonetics;
 using LuceneServerNET.Engine.Extensions;
 using LuceneServerNET.Engine.Models.Spatial;
 using LuceneServerNET.Parse;
 using Microsoft.Extensions.Options;
-using Spatial4n.Core.Context;
+using Spatial4n.Context;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -20,7 +20,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using LuceneServerNET.Core.Phonetics;
 
 namespace LuceneServerNET.Engine.Services
 {
@@ -173,10 +172,10 @@ namespace LuceneServerNET.Engine.Services
                 name.Contains("/") ||
                 new string[] { "mapping " }.Contains(name))
             {
-                throw new Exception($"Invalid or reserved metadata name '{ name }'.");
+                throw new Exception($"Invalid or reserved metadata name '{name}'.");
             }
 
-            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{ name }.meta");
+            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -202,7 +201,7 @@ namespace LuceneServerNET.Engine.Services
                 return null;
             }
 
-            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{ name }.meta");
+            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -400,7 +399,7 @@ namespace LuceneServerNET.Engine.Services
                         case FieldTypes.DateTimeType:
                             if (field.Index)
                             {
-                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()).ToUniversalTime(), DateTools.Resolution.SECOND);
+                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()).ToUniversalTime(), DateResolution.SECOND);
                                 doc.Add(new StringField(
                                 field.Name,
                                 (string)value,
@@ -516,7 +515,7 @@ namespace LuceneServerNET.Engine.Services
             }
 
             // Spatial Filter
-            if(spatialFilter != null)
+            if (spatialFilter != null)
             {
                 InitSpatial();
                 filter = spatialFilter.ToFilter(_spatialContext, _tree);
@@ -604,7 +603,9 @@ namespace LuceneServerNET.Engine.Services
             var mapping = _resources.GetMapping(indexName);
 
             if (mapping.PrimaryFieldsPhonetics == Algorithm.None)
+            {
                 return new IDictionary<string, object>[0];
+            }
 
             term = term.ToPhonetics(mapping.PrimaryFieldsPhonetics);
 
@@ -626,8 +627,8 @@ namespace LuceneServerNET.Engine.Services
 
         #region Grouping
 
-        public IEnumerable<IDictionary<string, object>> GroupBy(string indexName, 
-                                                                string groupField, 
+        public IEnumerable<IDictionary<string, object>> GroupBy(string indexName,
+                                                                string groupField,
                                                                 string term)
         {
             var groupingSearch = new GroupingSearch(groupField);
@@ -682,14 +683,14 @@ namespace LuceneServerNET.Engine.Services
 
         private string MetaIndexName(string indexName)
         {
-            return $".{ indexName }";
+            return $".{indexName}";
         }
 
         private void InitSpatial()
         {
             if (_spatialContext == null)
             {
-                _spatialContext = SpatialContext.GEO;
+                _spatialContext = SpatialContext.Geo;
 
                 int maxLevels = 11;
                 _tree = new GeohashPrefixTree(_spatialContext, maxLevels);
