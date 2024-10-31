@@ -23,12 +23,12 @@ namespace ImportDbTable
 
                 for (int i = 0; i < args.Length; i++)
                 {
-                    switch (args[i].ToLower())
-                    {
-                        //case "-remove":
-                        //    removeIndex = true;
-                        //    break;
-                    }
+                    //switch (args[i].ToLower())
+                    //{
+                    //    case "-remove":
+                    //        removeIndex = true;
+                    //        break;
+                    //}
                     if (i < args.Length - 1)
                     {
                         switch (args[i].ToLower())

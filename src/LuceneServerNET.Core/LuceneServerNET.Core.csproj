@@ -7,13 +7,13 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Version>2.24.4201</Version>
+		<Version>2.24.4401</Version>
 		<PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<Authors>Jürgen Gstaltmaier</Authors>
-		<Copyright>2023, Jürgen Gstaltmaier</Copyright>
+		<Copyright>2024, Jürgen Gstaltmaier</Copyright>
 	</PropertyGroup>
 
   <ItemGroup>
