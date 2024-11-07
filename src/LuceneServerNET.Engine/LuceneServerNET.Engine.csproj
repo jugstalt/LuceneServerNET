@@ -2,17 +2,17 @@
 
   <PropertyGroup>
       <TargetFramework>netstandard2.1</TargetFramework>
-	  <Version>2.24.4401</Version>
+	  <Version>2.24.4501</Version>
 	  <LangVersion>12</LangVersion>
 	  <Nullable>disable</Nullable>
   </PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Lucene.Net" Version="4.8.0-beta00016" />
-		<PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00016" />
-		<PackageReference Include="Lucene.Net.Grouping" Version="4.8.0-beta00016" />
-		<PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00016" />
-		<PackageReference Include="Lucene.Net.Spatial" Version="4.8.0-beta00016" />
+		<PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
+		<PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
+		<PackageReference Include="Lucene.Net.Grouping" Version="4.8.0-beta00017" />
+		<PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
+		<PackageReference Include="Lucene.Net.Spatial" Version="4.8.0-beta00017" />
 	</ItemGroup>
 
 	<ItemGroup>
