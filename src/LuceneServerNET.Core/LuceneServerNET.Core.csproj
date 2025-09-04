@@ -7,7 +7,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Version>2.24.4501</Version>
+		<Version>2.25.3601</Version>
 		<PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
@@ -17,7 +17,7 @@
 	</PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="System.Text.Json" Version="8.0.5" />
+	  <PackageReference Include="System.Text.Json" Version="9.0.8" />
   </ItemGroup>
 
   <ItemGroup>
