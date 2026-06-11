@@ -2,7 +2,7 @@
 
   <PropertyGroup>
       <TargetFramework>netstandard2.1</TargetFramework>
-	  <Version>2.25.4201</Version>
+	  <Version>2.26.2401</Version>
 	  <LangVersion>12</LangVersion>
 	  <Nullable>disable</Nullable>
   </PropertyGroup>
@@ -21,7 +21,7 @@
 	</ItemGroup>
 	
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
   </ItemGroup>
 
 </Project>
