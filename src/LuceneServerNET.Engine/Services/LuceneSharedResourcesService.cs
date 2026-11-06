@@ -47,7 +47,7 @@ namespace LuceneServerNET.Engine.Services
 
                 CheckForUnloading(indexName);
 
-                var indexPath = Path.Combine(_rootPath, indexName);
+                var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
 
                 RemoveResources(indexName);
 
@@ -219,7 +219,7 @@ namespace LuceneServerNET.Engine.Services
             public LuceneResources(string rootPath, string indexName)
             {
                 _rootPath = rootPath;
-                _indexName = indexName;
+                _indexName = PathGuard.ValidateIndexName(indexName);
 
                 Analyzer = //new Lucene.Net.Analysis.De.GermanAnalyzer(AppLuceneVersion);
                            new StandardAnalyzer(AppLuceneVersion);
@@ -233,7 +233,7 @@ namespace LuceneServerNET.Engine.Services
             private static object _initLocker = new object();
             private void InitResources()
             {
-                var indexPath = Path.Combine(_rootPath, _indexName);
+                var indexPath = PathGuard.Combine(_rootPath, _indexName);
 
                 if (new DirectoryInfo(indexPath).Exists == false)
                     throw new Exception("Index not exists");
@@ -384,7 +384,7 @@ namespace LuceneServerNET.Engine.Services
             public MappingResource(string rootPath, string indexName)
             {
                 _rootPath = rootPath;
-                _indexName = indexName;
+                _indexName = PathGuard.ValidateIndexName(indexName);
 
                 RefreshMapping();
             }
@@ -397,7 +397,7 @@ namespace LuceneServerNET.Engine.Services
 
                 try
                 {
-                    var indexMetaPath = Path.Combine(_rootPath, $".{ _indexName }", "mapping.json");
+                    var indexMetaPath = PathGuard.Combine(_rootPath, $".{ _indexName }", "mapping.json");
 
                     var metaFileInfo = new FileInfo(indexMetaPath);
                     if (metaFileInfo.Exists)
@@ -418,7 +418,7 @@ namespace LuceneServerNET.Engine.Services
 
             public Unloader(string indexName, ConcurrentDictionary<string, bool> unloadedIndices)
             {
-                _indexName = indexName;
+                _indexName = PathGuard.ValidateIndexName(indexName);
                 _unloadedIndices = unloadedIndices;
                 _unloadedIndices[indexName] = true;
             }

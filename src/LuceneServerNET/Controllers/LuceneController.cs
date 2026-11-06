@@ -299,7 +299,7 @@ public class LuceneController : ControllerBase
     [Route("releaseall")]
     async public Task<IApiResult> ReleaseAll()
     {
-        return await SecureMethodHandler("*", (id) =>
+        return await SecureMethodHandler(() =>
         {
             _lucene.ReleaseAll();
             return Task.FromResult<IApiResult>(new ApiResult());
@@ -308,9 +308,12 @@ public class LuceneController : ControllerBase
 
     #region Helper
 
-    private async Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
+    /// <summary>
+    /// For index specific endpoints: normalizes and validates the index id (whitelist) before calling <paramref name="func"/>.
+    /// </summary>
+    private Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
     {
-        try
+        return SecureMethodHandler(() =>
         {
             id = id?.Trim().ToLower();
 
@@ -319,9 +322,25 @@ public class LuceneController : ControllerBase
                 throw new Exception("Index id not specified");
             }
 
+            if (!LuceneServerNET.Engine.Extensions.PathGuard.IsValidName(id))
+            {
+                throw new ArgumentException($"Invalid index id '{id}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
+            }
+
+            return func(id);
+        }, onException);
+    }
+
+    /// <summary>
+    /// For endpoints without index id: error handling and timing only.
+    /// </summary>
+    private async Task<IApiResult> SecureMethodHandler(Func<Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
+    {
+        try
+        {
             var start = DateTime.Now;
 
-            var apiResult = await func(id);
+            var apiResult = await func();
 
             if (apiResult != null)
             {

@@ -45,7 +45,7 @@ namespace LuceneServerNET.Engine.Services
 
         public bool IndexExists(string indexName)
         {
-            var indexPath = Path.Combine(_rootPath, indexName);
+            var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
 
             return new DirectoryInfo(indexPath).Exists;
         }
@@ -68,8 +68,8 @@ namespace LuceneServerNET.Engine.Services
                 throw new Exception("Index is unloaded");
             }
 
-            var indexPath = Path.Combine(_rootPath, indexName);
-            var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
+            var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
+            var indexMetaPath = PathGuard.Combine(_rootPath, MetaIndexName(indexName));
 
             new DirectoryInfo(indexPath).Create();
             new DirectoryInfo(indexMetaPath).Create();
@@ -88,8 +88,8 @@ namespace LuceneServerNET.Engine.Services
                 return true;
             }
 
-            var indexPath = Path.Combine(_rootPath, indexName);
-            var indexMetaPath = Path.Combine(_rootPath, MetaIndexName(indexName));
+            var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
+            var indexMetaPath = PathGuard.Combine(_rootPath, MetaIndexName(indexName));
 
             using (var unloader = _resources.UnloadIndex(indexName))
             {
@@ -128,7 +128,7 @@ namespace LuceneServerNET.Engine.Services
                 throw new ArgumentException("Parameter mapping == null");
             }
 
-            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), "mapping.json");
+            var filePath = PathGuard.Combine(_rootPath, MetaIndexName(indexName), "mapping.json");
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -163,19 +163,14 @@ namespace LuceneServerNET.Engine.Services
                 throw new Exception("Index not exists");
             }
 
-            name = name?.Replace("\\", "/")
-                        .Trim()
-                        .ToLower();
+            name = name?.Trim().ToLower();
 
-            if (String.IsNullOrEmpty(name) ||
-                name.EndsWith(".meta") ||
-                name.Contains("/") ||
-                new string[] { "mapping " }.Contains(name))
+            if (!PathGuard.IsValidName(name) || name == "mapping")
             {
-                throw new Exception($"Invalid or reserved metadata name '{name}'.");
+                throw new Exception($"Invalid or reserved metadata name '{name}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
             }
 
-            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
+            var filePath = PathGuard.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -201,7 +196,9 @@ namespace LuceneServerNET.Engine.Services
                 return null;
             }
 
-            var filePath = Path.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
+            PathGuard.ValidateMetadataName(name);
+
+            var filePath = PathGuard.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Exists)
@@ -217,7 +214,7 @@ namespace LuceneServerNET.Engine.Services
             try
             {
                 Dictionary<string, string> customMetadatas = new Dictionary<string, string>();
-                string path = Path.Combine(_rootPath, MetaIndexName(indexName));
+                string path = PathGuard.Combine(_rootPath, MetaIndexName(indexName));
 
                 foreach (var fileInfo in new DirectoryInfo(path).GetFiles("*.meta"))
                 {
@@ -235,7 +232,7 @@ namespace LuceneServerNET.Engine.Services
             try
             {
                 List<string> customMetadataNames = new List<string>();
-                string path = Path.Combine(_rootPath, MetaIndexName(indexName));
+                string path = PathGuard.Combine(_rootPath, MetaIndexName(indexName));
 
                 foreach (var fileInfo in new DirectoryInfo(path).GetFiles("*.meta"))
                 {
@@ -683,7 +680,7 @@ namespace LuceneServerNET.Engine.Services
 
         private string MetaIndexName(string indexName)
         {
-            return $".{indexName}";
+            return $".{PathGuard.ValidateIndexName(indexName)}";
         }
 
         private void InitSpatial()

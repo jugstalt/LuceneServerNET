@@ -1,4 +1,5 @@
 ﻿using LuceneServerNET.Core.Models.Mapping;
+using LuceneServerNET.Engine.Extensions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -174,7 +175,7 @@ namespace LuceneServerNET.Engine.Services
             {
                 if (ArchiveExists(indexName))
                 {
-                    var filePath = Path.Combine(ArchiveMetaPath(indexName), $"{ name }.meta");
+                    var filePath = PathGuard.Combine(ArchiveMetaPath(indexName), PathGuard.ValidateMetadataName(name) + ".meta");
 
                     var fileInfo = new FileInfo(filePath);
                     if (fileInfo.Exists)
@@ -211,7 +212,7 @@ namespace LuceneServerNET.Engine.Services
                     if (String.IsNullOrEmpty(name))
                         return null;
 
-                    var filePath = Path.Combine(ArchiveMetaPath(indexName), $"{ name }.meta");
+                    var filePath = PathGuard.Combine(ArchiveMetaPath(indexName), PathGuard.ValidateMetadataName(name) + ".meta");
 
                     var fileInfo = new FileInfo(filePath);
                     if (fileInfo.Exists)
@@ -404,12 +405,12 @@ namespace LuceneServerNET.Engine.Services
 
         #region Helper
 
-        private string ArchivePath(string indexName) => String.IsNullOrEmpty(_archivePath) ? null : Path.Combine(_archivePath, indexName);
-        private string ArchiveMetaPath(string indexName)=> String.IsNullOrEmpty(_archivePath) ? null : Path.Combine(_archivePath, MetaIndexName(indexName));
+        private string ArchivePath(string indexName) => String.IsNullOrEmpty(_archivePath) ? null : PathGuard.Combine(_archivePath, PathGuard.ValidateIndexName(indexName));
+        private string ArchiveMetaPath(string indexName)=> String.IsNullOrEmpty(_archivePath) ? null : PathGuard.Combine(_archivePath, MetaIndexName(indexName));
 
         private string MetaIndexName(string indexName)
         {
-            return $".{ indexName }";
+            return $".{ PathGuard.ValidateIndexName(indexName) }";
         }
 
         #endregion
