@@ -46,6 +46,7 @@ plugins:
             Installation: Installation
             Overview: Überblick
             Docker: Docker
+            Operations: Betrieb
             Configuration: Konfiguration
             Settings: Einstellungen
             Authentication: Authentifizierung
@@ -68,6 +69,7 @@ nav:
   - Installation:
       - Overview: installation/index.md
       - Docker: installation/docker.md
+      - Operations: installation/operations.md
   - Configuration:
       - Settings: configuration/index.md
       - Authentication: configuration/authentication.md

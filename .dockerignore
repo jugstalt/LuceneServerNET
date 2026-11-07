@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+.git/
+.github/
+.claude/
+.nuke/temp/
+.venv-docs/
+artifacts/
+docs/
+tests/
+test/
+cmd/
+build/
+src/aspire/LuceneServerNET.AppHost/
+src/LuceneServerNET/_config/luceneserver.json

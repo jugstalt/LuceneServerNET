@@ -1,5 +1,6 @@
 ﻿using LuceneServerNET;
 using LuceneServerNET.Authentication;
+using LuceneServerNET.Diagnostics;
 using LuceneServerNET.Engine.Services;
 using LuceneServerNET.Extensions;
 using LuceneServerNET.Extensions.DependencyInjection;
@@ -75,6 +76,13 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.IISServerOptions>(option
 
 #region Services
 
+// OpenTelemetry (OTLP export when OTEL_EXPORTER_OTLP_ENDPOINT is set), health checks, service discovery
+builder.AddServiceDefaults(LuceneServerMetrics.MeterName);
+builder.Services.AddHealthChecks()
+    .AddCheck<StorageHealthCheck>("storage");
+builder.Services.AddSingleton<LuceneServerMetrics>();
+builder.Services.AddScoped<SearchMetricsFilter>();
+
 builder.Services.AddTransient<IAppVersionService, AppVersionService>();
 
 builder.Services.AddLuceneService(options =>
@@ -92,7 +100,7 @@ builder.Services.AddRestoreService(options =>
 
 builder.Services.AddLuceneServerAuthentication(configuration);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.AddService<SearchMetricsFilter>());
 builder.Services.AddLuceneServerOpenApi(configuration);
 
 #endregion
@@ -124,6 +132,9 @@ if (configuration.IsBasicAuthenticationEnabled())
 app.UseAuthorization();
 
 app.MapControllers();
+
+// /health (ready: storage writable) and /alive, anonymous even with Basic authentication
+app.MapDefaultEndpoints();
 
 // OpenAPI documents + Scalar UI (config "useSwagger" kept for compatibility)
 if (app.Environment.IsDevelopment() ||

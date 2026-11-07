@@ -1,7 +1,8 @@
 # Installation
 
 LuceneServer.NET ist eine ASP.NET-Core-Anwendung (.NET 10). Fertige Binaries gibt es noch nicht,
-der Server wird aus dem Quellcode gebaut.
+der Server wird aus dem Quellcode gebaut, als [Docker-Image](docker.md) oder mit dem NUKE-Build
+(ZIP-Dateien, siehe [Betrieb](operations.md#build-und-deploy-nuke)).
 
 ## Voraussetzungen
 

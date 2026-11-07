@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "src/aspire/LuceneServerNET.AppHost/LuceneServerNET.AppHost.csproj"
+  }
+}

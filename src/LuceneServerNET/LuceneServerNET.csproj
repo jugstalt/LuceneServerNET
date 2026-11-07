@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\aspire\LuceneServerNET.ServiceDefaults\LuceneServerNET.ServiceDefaults.csproj" />
     <ProjectReference Include="..\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
     <ProjectReference Include="..\LuceneServerNET.Engine\LuceneServerNET.Engine.csproj" />
     <ProjectReference Include="..\LuceneServerNET.Parse\LuceneServerNET.Parse.csproj" />
