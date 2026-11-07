@@ -1,5 +1,4 @@
 ﻿using Lucene.Net.Analysis;
-using Lucene.Net.Analysis.Core;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
@@ -21,11 +20,15 @@ namespace LuceneServerNET.Engine.Services
     {
         const LuceneVersion AppLuceneVersion = LuceneVersion.LUCENE_48;
 
+        private static readonly TimeSpan BackgroundInterval = TimeSpan.FromSeconds(20);
+
         private readonly string _rootPath;
         private readonly ConcurrentDictionary<string, LuceneResources> _resources;
         private readonly ConcurrentDictionary<string, MappingResource> _mappings;
 
-        private System.Threading.Timer _timer;
+        private readonly Timer _timer;
+        private int _timerRunning = 0;
+        private int _disposed = 0;
 
         public LuceneSharedResourcesService(IOptionsMonitor<LuceneServiceOptions> options)
         {
@@ -34,112 +37,115 @@ namespace LuceneServerNET.Engine.Services
             _resources = new ConcurrentDictionary<string, LuceneResources>();
             _mappings = new ConcurrentDictionary<string, MappingResource>();
 
-            _timer= new System.Threading.Timer(Timer_Elapsed, null, TimeSpan.Zero, TimeSpan.FromSeconds(20));
+            _timer = new Timer(Timer_Elapsed, null, BackgroundInterval, BackgroundInterval);
         }
 
-        private static object _initResorceLocker = new object();
-        private void InitResources(string indexName, bool ifNoExists = true)
+        private LuceneResources GetResources(string indexName)
         {
-            lock (_initResorceLocker)
+            if (_resources.TryGetValue(indexName, out var existing))
             {
-                if (ifNoExists == true && _resources.ContainsKey(indexName))
-                    return;
-
-                CheckForUnloading(indexName);
-
-                var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
-
-                RemoveResources(indexName);
-
-                var resource = new LuceneResources(_rootPath, indexName);
-                _resources[indexName] = resource;
+                return existing;
             }
+
+            CheckForUnloading(indexName);
+            PathGuard.ValidateIndexName(indexName);
+
+            // LuceneResources opens files lazily => a (possibly discarded) instance from GetOrAdd is cheap
+            return _resources.GetOrAdd(indexName, name => new LuceneResources(_rootPath, name));
         }
 
-        public IndexSearcher GetIndexSearcher(string indexName)
+        /// <summary>
+        /// Acquires a reference counted searcher. The caller MUST dispose the lease (using)
+        /// when the search is finished; until then the underlying reader stays open,
+        /// even if a refresh replaces it in the meantime.
+        /// </summary>
+        public SearcherLease AcquireSearcher(string indexName)
         {
-            if (!_resources.ContainsKey(indexName))
-            {
-                InitResources(indexName);
-            }
-
-            return _resources[indexName].IndexSearcher;
+            return GetResources(indexName).AcquireSearcher();
         }
 
         public Analyzer GetAnalyzer(string indexName)
         {
-            if (!_resources.ContainsKey(indexName))
-            {
-                InitResources(indexName);
-            }
-
-            return _resources[indexName].Analyzer;
+            return GetResources(indexName).Analyzer;
         }
 
         public IndexWriter GetIndexWriter(string indexName)
         {
-            if (!_resources.ContainsKey(indexName))
-            {
-                InitResources(indexName);
-            }
-
-            return _resources[indexName].DirectoryWriter;
+            return GetResources(indexName).DirectoryWriter;
         }
 
         public IndexMapping GetMapping(string indexName)
         {
-            if (!_mappings.ContainsKey(indexName))
+            if (_mappings.TryGetValue(indexName, out var mapping))
             {
-                CheckForUnloading(indexName);
-
-                _mappings[indexName] = new MappingResource(_rootPath, indexName);
+                return mapping.Mapping;
             }
 
-            return _mappings[indexName].Mapping;
+            CheckForUnloading(indexName);
+
+            return _mappings.GetOrAdd(indexName, name => new MappingResource(_rootPath, name)).Mapping;
         }
 
         public void RefreshMapping(string indexName)
         {
-            if (_mappings.ContainsKey(indexName))
+            if (_mappings.TryGetValue(indexName, out var mapping))
             {
                 CheckForUnloading(indexName);
 
-                _mappings[indexName]?.RefreshMapping();
+                mapping.RefreshMapping();
             }
         }
 
+        /// <summary>
+        /// Commits pending changes and makes them visible to new searches (blocking).
+        /// </summary>
         public void RefreshResources(string indexName)
         {
-
-            if (_resources.ContainsKey(indexName))
+            if (_resources.TryGetValue(indexName, out var resource))
             {
-                _resources[indexName].DirectoryWriter.Commit();
-                _resources[indexName].RefreshReaderSearcher();
+                resource.Commit();
+                resource.Refresh(blocking: true);
             }
         }
 
         public void RemoveResources(string indexName)
         {
-            if(_resources.ContainsKey(indexName))
+            if (_resources.TryRemove(indexName, out LuceneResources removed))
             {
-                if (_resources.TryRemove(indexName, out LuceneResources removed))
-                {
-                    removed.Dispose();
-                }
-                else
-                {
-                    throw new Exception("Can't remove lucene resources from dictionary");
-                }
+                removed.Dispose();
             }
         }
 
         #region Timer
 
-        private void Timer_Elapsed(object sender)
+        private void Timer_Elapsed(object state)
         {
-            foreach(var indexName in _resources.Keys)
+            // never run overlapping ticks (a commit on a large index can take longer than the period)
+            if (Interlocked.CompareExchange(ref _timerRunning, 1, 0) != 0)
             {
-                _resources[indexName].RefreshReaderSearcher();
+                return;
+            }
+
+            try
+            {
+                // enumerating a ConcurrentDictionary is safe even if entries are removed concurrently
+                foreach (var kv in _resources)
+                {
+                    try
+                    {
+                        kv.Value.Refresh(blocking: false);
+                        kv.Value.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        // an unhandled exception in a timer callback would terminate the process
+                        Console.Error.WriteLine($"Index {kv.Key}: background refresh/commit failed: {ex.Message}");
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _timerRunning, 0);
             }
         }
 
@@ -147,7 +153,7 @@ namespace LuceneServerNET.Engine.Services
 
         #region Unloading
 
-        private ConcurrentDictionary<string, bool> _unloadedIndices = new ConcurrentDictionary<string, bool>();
+        private readonly ConcurrentDictionary<string, bool> _unloadedIndices = new ConcurrentDictionary<string, bool>();
         public IDisposable UnloadIndex(string indexName)
         {
             var unloader = new Unloader(indexName, _unloadedIndices);
@@ -155,11 +161,7 @@ namespace LuceneServerNET.Engine.Services
             try
             {
                 RemoveResources(indexName);
-
-                if(_mappings.ContainsKey(indexName))
-                {
-                    _mappings.TryRemove(indexName, out MappingResource mapping);
-                }
+                _mappings.TryRemove(indexName, out _);
 
                 return unloader;
             }
@@ -172,8 +174,7 @@ namespace LuceneServerNET.Engine.Services
 
         public bool IsUnloading(string indexName)
         {
-            return _unloadedIndices.ContainsKey(indexName) &&
-                   _unloadedIndices[indexName] == true;
+            return _unloadedIndices.TryGetValue(indexName, out bool unloading) && unloading;
         }
 
         private void CheckForUnloading(string indexName)
@@ -186,142 +187,123 @@ namespace LuceneServerNET.Engine.Services
 
         #endregion
 
+        /// <summary>
+        /// Commits and closes all writers/readers. Indices are reopened lazily on the next request.
+        /// </summary>
         public void ReleaseAllResources()
         {
             foreach (var key in _resources.Keys.ToArray())
             {
-                var resources = _resources[key];
-                if (resources != null)
+                try
                 {
-                    resources.Dispose();
+                    RemoveResources(key);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Index {key}: release failed: {ex.Message}");
                 }
             }
 
-            _resources.Clear();
             _mappings.Clear();
         }
 
         #region IDisposable
 
+        /// <summary>
+        /// Called by the DI container on host shutdown (after the server stopped processing requests):
+        /// commits pending changes and closes the writers, so no write.lock is left behind.
+        /// </summary>
         public void Dispose()
         {
-            
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            using (var waitHandle = new ManualResetEvent(false))
+            {
+                if (_timer.Dispose(waitHandle))
+                {
+                    waitHandle.WaitOne(TimeSpan.FromSeconds(30));  // let a running tick finish
+                }
+            }
+
+            ReleaseAllResources();
         }
 
         #endregion
 
         #region Classes
 
+        public sealed class SearcherLease : IDisposable
+        {
+            private SearcherManager _manager;
+
+            internal SearcherLease(SearcherManager manager)
+            {
+                Searcher = manager.Acquire();
+                _manager = manager;
+            }
+
+            public IndexSearcher Searcher { get; }
+
+            public void Dispose()
+            {
+                var manager = Interlocked.Exchange(ref _manager, null);
+                manager?.Release(Searcher);
+            }
+        }
+
         private class LuceneResources : IDisposable
         {
             private readonly string _rootPath, _indexName;
+            private readonly object _lock = new object();   // per index instance
+
+            private Lucene.Net.Store.Directory _directory;
+            private volatile IndexWriter _directoryWriter;
+            private volatile SearcherManager _searcherManager;
+            private bool _disposed;
 
             public LuceneResources(string rootPath, string indexName)
             {
                 _rootPath = rootPath;
                 _indexName = PathGuard.ValidateIndexName(indexName);
 
-                Analyzer = //new Lucene.Net.Analysis.De.GermanAnalyzer(AppLuceneVersion);
-                           new StandardAnalyzer(AppLuceneVersion);
-                           //new WhitespaceAnalyzer(AppLuceneVersion);
+                Analyzer = new StandardAnalyzer(AppLuceneVersion);
             }
 
-            #region Lucene.NET Resources
+            public Analyzer Analyzer { get; }
 
-            public Analyzer Analyzer { get; private set; }
-
-            private static object _initLocker = new object();
-            private void InitResources()
+            private void EnsureOpen()
             {
-                var indexPath = PathGuard.Combine(_rootPath, _indexName);
-
-                if (new DirectoryInfo(indexPath).Exists == false)
-                    throw new Exception("Index not exists");
-
-                lock (_initLocker)
+                if (_searcherManager != null)
                 {
-                    if (_directory == null)
+                    return;
+                }
+
+                lock (_lock)
+                {
+                    if (_disposed)
                     {
-                        _directory = FSDirectory.Open(indexPath);
-                        //Directory = new RAMDirectory(FSDirectory.Open(indexPath), IOContext.DEFAULT);
-
-                        var indexConfig = new IndexWriterConfig(AppLuceneVersion, this.Analyzer);
-                        _directoryWriter = new IndexWriter(_directory, indexConfig);
-                        _directoryReader = _directoryWriter.GetReader(false);
-                        _indexSearcher = new IndexSearcher(DirectoryReader);
-                    }
-                }
-            }
-
-            private void ReleaseResources()
-            {
-                if (_indexSearcher != null)
-                {
-                    _indexSearcher = null;
-                }
-
-                if (Analyzer != null)
-                {
-                    Analyzer.Dispose();
-                    Analyzer = null;
-                }
-
-                if (_directoryReader != null)
-                {
-                    _directoryReader.Dispose();
-                    _directoryReader = null;
-                }
-
-                if(_directoryWriter!=null)
-                {
-                    _directoryWriter.Dispose();
-                    _directoryWriter = null;
-                }
-
-                if (_directory != null)
-                {
-                    _directory.Dispose();
-                    _directory = null;
-                }
-            }
-
-            private Lucene.Net.Store.Directory _directory = null;
-            private IndexWriter _directoryWriter = null;
-            private DirectoryReader _directoryReader = null;
-            private IndexSearcher _indexSearcher = null;
-
-            public Lucene.Net.Store.Directory Directory
-            {
-                get
-                {
-                    if (_directory == null)
-                    {
-                        InitResources();
+                        throw new ObjectDisposedException($"Index {_indexName} resources");
                     }
 
-                    return _directory;
-                }
-            }
-            public DirectoryReader DirectoryReader { get
-                {
-                    if (_directoryReader == null)
+                    if (_searcherManager != null)
                     {
-                        InitResources();
+                        return;
                     }
 
-                    return _directoryReader;
-                }
-            }
-            public IndexSearcher IndexSearcher
-            {
-                get
-                {
-                    if (_indexSearcher == null)
+                    var indexPath = PathGuard.Combine(_rootPath, _indexName);
+                    if (new DirectoryInfo(indexPath).Exists == false)
                     {
-                        InitResources();
+                        throw new Exception("Index not exists");
                     }
 
-                    return _indexSearcher;
+                    _directory = FSDirectory.Open(indexPath);
+                    _directoryWriter = new IndexWriter(_directory, new IndexWriterConfig(AppLuceneVersion, Analyzer));
+                    // NRT searcher on top of the writer; reference counting keeps a reader
+                    // open as long as a search still uses it
+                    _searcherManager = new SearcherManager(_directoryWriter, applyAllDeletes: true, searcherFactory: null);
                 }
             }
 
@@ -329,56 +311,82 @@ namespace LuceneServerNET.Engine.Services
             {
                 get
                 {
-                    if (_directoryWriter == null)
-                    {
-                        InitResources();
-                    }
-
+                    EnsureOpen();
                     return _directoryWriter;
                 }
             }
 
-            #endregion
-
-            #region Refresh Reader/Searcher
-
-            private static object _refreshReaderLocker = new object();
-            public void RefreshReaderSearcher()
+            public SearcherLease AcquireSearcher()
             {
-                lock (_refreshReaderLocker)
+                EnsureOpen();
+                return new SearcherLease(_searcherManager);
+            }
+
+            public void Refresh(bool blocking)
+            {
+                var manager = _searcherManager;
+                if (manager == null)
                 {
-                    if (_directoryReader == null || _directoryReader.IsCurrent())
-                    {
-                        return;
-                    }
+                    return;  // not opened yet => nothing to refresh
+                }
 
-                    var oldReader = _directoryReader;
-
-                    _directoryReader = _directoryWriter.GetReader(false);
-                    var newSearcher = new IndexSearcher(_directoryReader);
-                    Interlocked.Exchange(ref _indexSearcher, newSearcher);
-
-                    oldReader.Dispose();
-
-                    Console.WriteLine($"Index { _indexName }: Searcher updated");
+                if (blocking)
+                {
+                    manager.MaybeRefreshBlocking();
+                }
+                else
+                {
+                    manager.MaybeRefresh();
                 }
             }
 
-            #endregion
-
-            #region IDisposable
+            public void Commit()
+            {
+                var writer = _directoryWriter;
+                if (writer != null && writer.HasUncommittedChanges())
+                {
+                    writer.Commit();
+                }
+            }
 
             public void Dispose()
             {
-                ReleaseResources();
-            }
+                lock (_lock)
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+                    _disposed = true;
 
-            #endregion
+                    try
+                    {
+                        // searches still holding a lease keep their reader until they release it
+                        _searcherManager?.Dispose();
+                    }
+                    finally
+                    {
+                        _searcherManager = null;
+                        try
+                        {
+                            // IndexWriter.Dispose() commits pending changes and removes write.lock
+                            _directoryWriter?.Dispose();
+                        }
+                        finally
+                        {
+                            _directoryWriter = null;
+                            _directory?.Dispose();
+                            _directory = null;
+                            Analyzer.Dispose();
+                        }
+                    }
+                }
+            }
         }
 
         private class MappingResource
         {
-            private IndexMapping _mapping;
+            private volatile IndexMapping _mapping;
             private readonly string _rootPath, _indexName;
 
             public MappingResource(string rootPath, string indexName)
@@ -405,16 +413,20 @@ namespace LuceneServerNET.Engine.Services
                         mapping = File.ReadAllText(metaFileInfo.FullName).DeserializeJson<IndexMapping>();
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // don't silently fall back to an empty mapping: documents would be indexed/returned wrong
+                    throw new Exception($"Index {_indexName}: can't read mapping.json: {ex.Message}", ex);
+                }
 
-                _mapping = mapping ?? new IndexMapping();  // default (empty) mapping
+                _mapping = mapping ?? new IndexMapping();  // default (empty) mapping, if no mapping exists
             }
         }
 
         private class Unloader : IDisposable
         {
-            private string _indexName;
-            private readonly ConcurrentDictionary<string, bool> _unloadedIndices = new ConcurrentDictionary<string, bool>();
+            private readonly string _indexName;
+            private readonly ConcurrentDictionary<string, bool> _unloadedIndices;
 
             public Unloader(string indexName, ConcurrentDictionary<string, bool> unloadedIndices)
             {
@@ -425,7 +437,7 @@ namespace LuceneServerNET.Engine.Services
 
             public void Dispose()
             {
-                if(!_unloadedIndices.TryRemove(_indexName, out bool locked))
+                if (!_unloadedIndices.TryRemove(_indexName, out bool locked))
                 {
                     _unloadedIndices[_indexName] = false;
                 }

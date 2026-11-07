@@ -250,7 +250,6 @@ namespace LuceneServerNET.Engine.Services
 
         #region Indexing
 
-        private static object _writeLocker = new object();
 
         public bool Index(string indexName, IEnumerable<IDictionary<string, object>> items, bool archive = true)
         {
@@ -432,13 +431,9 @@ namespace LuceneServerNET.Engine.Services
                 docs.Add(doc);
             }
 
-            //lock (_writeLocker)
-            {
-                var writer = _resources.GetIndexWriter(indexName);
-                writer.AddDocuments(docs);
-
-                writer.Flush(triggerMerge: false, applyAllDeletes: false);
-            }
+            // IndexWriter is thread safe; changes become visible on refresh (or the background
+            // timer, ~20s) and durable on commit (refresh, background timer, shutdown)
+            _resources.GetIndexWriter(indexName).AddDocuments(docs);
 
             if (archive)
             {
@@ -459,8 +454,7 @@ namespace LuceneServerNET.Engine.Services
             var query = parser.Parse(term);
 
             var writer = _resources.GetIndexWriter(indexName);
-            writer.DeleteDocuments(query);
-            writer.Commit();
+            writer.DeleteDocuments(query);  // committed by refresh / background timer / shutdown
 
             return true;
         }
@@ -488,7 +482,8 @@ namespace LuceneServerNET.Engine.Services
                                                                ISpatialFilter spatialFilter = null,
                                                                string[] primarySearchFields = null)
         {
-            var searcher = _resources.GetIndexSearcher(indexName);
+            using var searcherLease = _resources.AcquireSearcher(indexName);
+            var searcher = searcherLease.Searcher;
 
             var mapping = _resources.GetMapping(indexName);
 
@@ -632,7 +627,8 @@ namespace LuceneServerNET.Engine.Services
             //groupingSearch.SetGroupSort(groupSort);
             //groupingSearch.SetFillSortFields(fillFields);
 
-            var searcher = _resources.GetIndexSearcher(indexName);
+            using var searcherLease = _resources.AcquireSearcher(indexName);
+            var searcher = searcherLease.Searcher;
 
             var mapping = _resources.GetMapping(indexName);
             var field = mapping?.Fields
@@ -671,7 +667,8 @@ namespace LuceneServerNET.Engine.Services
                                     { "_hits", g.TotalHits },
                                     //{ "_score", g.Score }
                                 };
-                            });
+                            })
+                            .ToList();  // materialize while the searcher lease is held
         }
 
         #endregion
