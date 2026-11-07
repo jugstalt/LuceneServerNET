@@ -1,34 +1,65 @@
-# LuceneServerNET
+# LuceneServer.NET
 
-[German - Deutsch](./doc/README_de.md)
+[![NuGet](https://img.shields.io/nuget/v/LuceneServerNET.Client?label=LuceneServerNET.Client&logo=nuget)](https://www.nuget.org/packages/LuceneServerNET.Client/)
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/github/license/jugstalt/LuceneServerNET)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-docs.gviewonline.com-blue)](https://docs.gviewonline.com/other/luceneserver-net/index.html)
 
-## A REST Server on top of Lucene.NET
+**A REST server on top of [Apache Lucene.NET](https://github.com/apache/lucenenet)** – fast full-text,
+phonetic and geo search for autocomplete fields, product lists, addresses and documents.
 
-LuceneServer provides a REST interface, with the search indexes based on [Apache Lucene. NET](https://github.com/apache/lucenenet).
+- Full-text search with Lucene query syntax, phonetic search (Soundex, Cologne phonetics)
+- Geo filters (bbox, distance) and GeoJSON output
+- Basic authentication with `read` / `write` / `admin` roles
+- .NET client library and import tools for relational databases
 
-For better search results it is also an phonetic search (soudex or colonge phonetic) implementet.
+## Quickstart
 
-The source code is fully implemented in *Dotnet Core* (C#) The REST interface can be addressed via simple GET/POST request.
+```bash
+git clone https://github.com/jugstalt/LuceneServerNET.git
+cd LuceneServerNET
+dotnet publish src/LuceneServerNET -c Release -o ./publish
+cd publish
+ASPNETCORE_URLS=http://localhost:5000 dotnet LuceneServerNET.dll
+```
 
-LuceneServer.NET also provides a client library [LucenceServerNET.Client](https://www.nuget.org/packages/LuceneServerNET.Client/) that can be used to abstract request.
-The source code for the client is also in this repository.
+Create an index, map it, add a document and search:
 
-## Motivation
+```bash
+curl http://localhost:5000/Lucene/createindex/books
+curl -X POST http://localhost:5000/Lucene/map/books -H "Content-Type: application/json" \
+     -d '{"fields":[{"name":"title","fieldType":"text","index":true,"store":true}],"primaryFields":["title"]}'
+curl -X POST http://localhost:5000/Lucene/index/books -H "Content-Type: application/json" \
+     -d '[{"title":"LuceneServerNET rules!"}]'
+curl http://localhost:5000/Lucene/refresh/books
+curl "http://localhost:5000/Lucene/search/books?q=rul*"
+```
 
-The goal is to implement a quick and easy search. The performance should be high enough to search in real-time with *Autocomplete* input fields, even in large amounts of data.
+From .NET:
 
-Examples of a search index include:
+```bash
+dotnet add package LuceneServerNET.Client
+```
 
-* Search in product lists
-* Search in large geo data stocks such as addresses, plots, etc.
-* Indexing documents
+```csharp
+using var client = new LuceneServerClient("http://localhost:5000", "books");
+var result = await client.SearchAsync("rul*");
+```
 
-The search index should be used in the first line for a quick search. The found item can then be linked to the actual data. The search index is primarily not a substitute for a database,
-but only contributes to a performant and operable search. 
+## Documentation
 
-Also in this repository you will find tools (console applications) that can be used to populate an index through existing (rational) databases. This can be done periodically, for example. Database keys can then be used to 
-link to the original database object. 
+📖 **[docs.gviewonline.com](https://docs.gviewonline.com/other/luceneserver-net/index.html)** – English and German
 
-[REST Interface](./doc/rest/interface_en.md)
+[Installation](docs/en/installation/index.md) ·
+[Configuration](docs/en/configuration/index.md) ·
+[Authentication](docs/en/configuration/authentication.md) ·
+[REST API](docs/en/api.md) ·
+[.NET client](docs/en/clients/dotnet-client.md) ·
+[Tools](docs/en/tools.md) ·
+[Changelog](ChangeLog.md)
 
-[LuceneServerClient](./doc/clients/luceneserverclient_en.md)
+Build the docs locally: `./build-docs.ps1 -NoCopy` (output in `artifacts/docs/site`).
+
+## License
+
+See [LICENSE](LICENSE).

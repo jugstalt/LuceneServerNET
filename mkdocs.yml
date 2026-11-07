@@ -1,0 +1,94 @@
+site_name: LuceneServer.NET
+site_description: A REST server on top of Lucene.NET
+site_url: https://docs.gviewonline.com/other/luceneserver-net/
+docs_dir: docs
+site_dir: artifacts/docs/site
+repo_url: https://github.com/jugstalt/LuceneServerNET
+
+# relative links and file names: the site is hosted below docs.gviewonline.com/other/luceneserver-net/
+use_directory_urls: false
+
+theme:
+  name: material
+  # no Google Fonts: keep the site self-contained
+  font: false
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: de
+          name: Deutsch
+          build: true
+          nav_translations:
+            Home: Start
+            Installation: Installation
+            Overview: Überblick
+            Docker: Docker
+            Configuration: Konfiguration
+            Settings: Einstellungen
+            Authentication: Authentifizierung
+            REST API: REST-API
+            Clients: Clients
+            .NET client: .NET-Client
+            Sample applications: Beispielanwendungen
+            Tools: Tools
+            Changelog: Changelog
+
+exclude_docs: |
+  requirements.txt
+
+validation:
+  links:
+    anchors: warn
+
+nav:
+  - Home: index.md
+  - Installation:
+      - Overview: installation/index.md
+      - Docker: installation/docker.md
+  - Configuration:
+      - Settings: configuration/index.md
+      - Authentication: configuration/authentication.md
+  - REST API: api.md
+  - Clients:
+      - .NET client: clients/dotnet-client.md
+      - Sample applications: clients/samples.md
+  - Tools: tools.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
