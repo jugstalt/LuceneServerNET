@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.OpenApi;
 using System;
 using System.Collections.Generic;
 
@@ -85,21 +84,7 @@ builder.Services.AddRestoreService(options =>
 builder.Services.AddLuceneServerAuthentication(configuration);
 
 builder.Services.AddControllers();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "LuceneServer.NET v1 (deprecated)",
-        Version = "v1",
-        Description = "Legacy RPC style API (/lucene/...). Still supported, use v2 for new clients."
-    });
-    c.SwaggerDoc("v2", new OpenApiInfo
-    {
-        Title = "LuceneServer.NET v2",
-        Version = "v2",
-        Description = "Resource oriented API (/api/v2/indices/{id}/...) with paging and total hits."
-    });
-});
+builder.Services.AddLuceneServerOpenApi(configuration);
 
 #endregion
 
@@ -114,17 +99,6 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-if (app.Environment.IsDevelopment() ||
-    "true".Equals(configuration["useSwagger"], StringComparison.OrdinalIgnoreCase))
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("../swagger/v2/swagger.json", "LuceneServer.NET v2");
-        c.SwaggerEndpoint("../swagger/v1/swagger.json", "LuceneServer.NET v1 (deprecated)");
-    });
-}
-
 app.Services.GetRequiredService<RestoreService>().TryRestoreIndices();
 
 app.UseRouting();
@@ -136,6 +110,13 @@ if (configuration.IsBasicAuthenticationEnabled())
 app.UseAuthorization();
 
 app.MapControllers();
+
+// OpenAPI documents + Scalar UI (config "useSwagger" kept for compatibility)
+if (app.Environment.IsDevelopment() ||
+    "true".Equals(configuration["useSwagger"], StringComparison.OrdinalIgnoreCase))
+{
+    app.MapLuceneServerOpenApi();
+}
 
 #endregion
 

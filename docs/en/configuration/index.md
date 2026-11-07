@@ -36,11 +36,11 @@ The file is created on the first start (see [Installation](../installation/index
 | `AutoRestoreOnStartupSinceSeconds` | If `Count` is `0` and this is `> 0`: restore only documents archived within this period (default `86400` = 1 day). If both are `0`, all documents are restored. |
 | `AllowLegacyGetMutations` | Default `true`. Temporarily allows the deprecated **GET** calls of `createindex`, `removeindex`, `remove`, `refresh` and `releaseall` (response carries `Deprecation`/`Warning` headers and a warning is logged). If `false`, these GET calls return `405 Method Not Allowed`; only POST/DELETE are accepted. Will default to `false` in a future version. |
 
-## Swagger
+## API documentation (OpenAPI)
 
 | Key | Description |
 |---|---|
-| `useSwagger` | `true` enables the Swagger UI at `/swagger`. Always on in `Development`. |
+| `useSwagger` | `true` publishes the OpenAPI documents (`/openapi/v1.json`, `/openapi/v2.json`) and the API reference UI ([Scalar](https://scalar.com)) at `/scalar`. Always on in `Development`. The old URLs `/swagger` and `/swagger/{v}/swagger.json` redirect to the new ones. These endpoints are accessible without authentication. |
 
 ## Authentication
 

@@ -33,7 +33,7 @@ database keys stored in the index link back to the original records.
 | | |
 |---|---|
 | [Installation](installation/index.md) | Build, run and host the server |
-| [Configuration](configuration/index.md) | Index paths, restore, Swagger |
+| [Configuration](configuration/index.md) | Index paths, restore, API documentation |
 | [Authentication](configuration/authentication.md) | Clients, secrets and roles |
 | [REST API](api.md) | All endpoints |
 | [.NET client](clients/dotnet-client.md) | Use the server from C# |

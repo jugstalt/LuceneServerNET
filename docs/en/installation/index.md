@@ -95,7 +95,8 @@ recommended.
 
 See [Docker](docker.md).
 
-## Swagger
+## API documentation
 
-With `"useSwagger": true` (or in the `Development` environment) the Swagger UI is available at
-`/swagger`.
+With `"useSwagger": true` (or in the `Development` environment) the API reference UI (Scalar) is
+available at `/scalar`, the OpenAPI documents at `/openapi/v1.json` and `/openapi/v2.json`.
+`/swagger` redirects to `/scalar`.

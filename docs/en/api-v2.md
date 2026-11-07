@@ -5,7 +5,7 @@ API v2 is resource oriented and lives below `/api/v2/indices`. It runs **in para
 keep working unchanged. v1 is considered *deprecated*; new clients should use v2.
 
 Responses, roles, query syntax, `outFields` functions, geo filters and `format` are the same as in
-[v1](api.md#documents). The Swagger UI (`/swagger`) has a separate document for each version.
+[v1](api.md#documents). Each version has its own OpenAPI document (`/openapi/v1.json`, `/openapi/v2.json`); the API reference UI (`/scalar`) shows both.
 
 ## Overview
 

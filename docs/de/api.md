@@ -18,7 +18,7 @@ IApiResult {
 ```
 
 Je nach Endpunkt kommen weitere Attribute hinzu, z. B. `hits[]` bei Abfragen.
-Das vollständige Schema zeigt die Swagger-UI (`/swagger`, falls aktiviert).
+Das vollständige Schema gibt es als OpenAPI-Dokument (`/openapi/v1.json`) und in der API-Referenz-UI (`/scalar`), falls aktiviert.
 
 ## Überblick
 

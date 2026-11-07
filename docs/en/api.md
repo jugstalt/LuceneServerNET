@@ -18,7 +18,7 @@ IApiResult {
 ```
 
 Depending on the endpoint there are additional attributes, e.g. `hits[]` for queries.
-The full schema is available in the Swagger UI (`/swagger`, if enabled).
+The full schema is available as OpenAPI document (`/openapi/v1.json`) and in the API reference UI (`/scalar`), if enabled.
 
 ## Overview
 

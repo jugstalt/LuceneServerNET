@@ -5,7 +5,7 @@ Die API v2 ist ressourcenorientiert und liegt unter `/api/v2/indices`. Sie läuf
 bestehende v1-Clients funktionieren unverändert weiter. v1 gilt als *deprecated*; neue Clients sollten v2 verwenden.
 
 Antworten, Rollen, Query-Syntax, `outFields`-Funktionen, Geo-Filter und `format` sind wie in
-[v1](api.md#dokumente). Die Swagger-UI (`/swagger`) enthält für jede Version ein eigenes Dokument.
+[v1](api.md#dokumente). Jede Version hat ein eigenes OpenAPI-Dokument (`/openapi/v1.json`, `/openapi/v2.json`); die API-Referenz-UI (`/scalar`) zeigt beide.
 
 ## Überblick
 

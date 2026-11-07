@@ -34,7 +34,7 @@ Datenbankschlüssel gelangt man zurück zum Originaldatensatz.
 | | |
 |---|---|
 | [Installation](installation/index.md) | Server bauen, starten und hosten |
-| [Konfiguration](configuration/index.md) | Indexpfade, Wiederherstellung, Swagger |
+| [Konfiguration](configuration/index.md) | Indexpfade, Wiederherstellung, API-Dokumentation |
 | [Authentifizierung](configuration/authentication.md) | Clients, Secrets und Rollen |
 | [REST-API](api.md) | Alle Endpunkte |
 | [.NET-Client](clients/dotnet-client.md) | Server aus C# verwenden |

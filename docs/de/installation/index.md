@@ -95,6 +95,8 @@ Der Server registriert sich nicht selbst als Windows-Dienst. Unter Windows wird 
 
 Siehe [Docker](docker.md).
 
-## Swagger
+## API-Dokumentation
 
-Mit `"useSwagger": true` (oder in der Umgebung `Development`) ist die Swagger-UI unter `/swagger` erreichbar.
+Mit `"useSwagger": true` (oder in der Umgebung `Development`) ist die API-Referenz-UI (Scalar) unter
+`/scalar` erreichbar, die OpenAPI-Dokumente unter `/openapi/v1.json` und `/openapi/v2.json`.
+`/swagger` leitet auf `/scalar` weiter.
