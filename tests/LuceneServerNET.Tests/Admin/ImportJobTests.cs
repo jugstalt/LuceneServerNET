@@ -41,9 +41,15 @@ public class ImportJobTests : IDisposable
 
         var job = await repository.GetImportJobAsync(id);
         Assert.Equal("orte nightly", job!.Name);
+        Assert.True(job.CatchUp);
         job.Enabled = false;
+        job.CatchUp = false;
+        job.Cron = "";
         await repository.UpdateImportJobAsync(job);
-        Assert.False((await repository.GetImportJobsAsync()).Single().Enabled);
+        var saved = (await repository.GetImportJobsAsync()).Single();
+        Assert.False(saved.Enabled);
+        Assert.False(saved.CatchUp);
+        Assert.False(saved.HasSchedule);
 
         var run1 = new ImportJobRunRecord { JobId = id, StartedUtc = DateTime.UtcNow.AddMinutes(-10), Status = ImportJobStatus.Succeeded, TriggeredBy = "job:x" };
         await repository.InsertImportJobRunAsync(run1);
@@ -105,6 +111,34 @@ public class ImportJobTests : IDisposable
         // time zone: 03:00 Vienna (CET, UTC+1 in November) = 02:00 UTC
         var vienna = TimeZoneInfo.GetSystemTimeZones().Any(z => z.Id == "Europe/Vienna") ? "Europe/Vienna" : "W. Europe Standard Time";
         Assert.Equal(day.AddHours(2), ImportJobRunner.NextOccurrences(job.Cron, vienna, day, 1).Single());
+    }
+
+    [Fact]
+    public void ManualJob_HasNoSchedule()
+    {
+        var job = ValidJob().With(j => j.Cron = " ");
+        var day = new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        Assert.False(job.HasSchedule);
+        Assert.Null(ImportJobRunner.Validate(job));
+        Assert.False(ImportJobScheduler.IsDue(job, day, day.AddDays(2)));
+        Assert.False(ImportJobScheduler.IsMissed(job, null, day.AddDays(2)));
+        Assert.Empty(ImportJobRunner.NextOccurrences(job.Cron, null, day, 3));
+    }
+
+    [Fact]
+    public void CatchUp_IsMissed()
+    {
+        var job = ValidJob();   // 03:00 UTC
+        var day = new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Utc);
+
+        Assert.True(ImportJobScheduler.IsMissed(job, day.AddHours(-22), day.AddHours(10)));         // last run yesterday 02:00, 03:00 today missed
+        Assert.False(ImportJobScheduler.IsMissed(job, day.AddHours(3), day.AddHours(10)));          // ran at 03:00
+        Assert.False(ImportJobScheduler.IsMissed(job, day.AddHours(4), day.AddDays(1).AddHours(2))); // next not yet due
+
+        job.ModifiedUtc = day.AddHours(1);                                                           // no runs: since the last change
+        Assert.True(ImportJobScheduler.IsMissed(job, null, day.AddHours(5)));
+        Assert.False(ImportJobScheduler.IsMissed(job, null, day.AddHours(2)));
     }
 
     [Fact]

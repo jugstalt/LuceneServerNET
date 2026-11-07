@@ -170,10 +170,12 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
 | Anhängen | Dokumente werden hinzugefügt. |
 
 - **Zeitplan**: Cron-Ausdruck mit 5 Feldern (`Minute Stunde Tag Monat Wochentag`, z. B. `0 3 * * *`) und Zeitzone
-  (leer = UTC). Die Seite zeigt die nächsten Läufe.
+  (leer = UTC). Die Seite zeigt die nächsten Läufe. Ohne Cron-Ausdruck (*manual*) läuft der Job nur über *Run now*.
 - **Jetzt ausführen**, **Abbrechen** und ein **Lauf-Verlauf** (Status, Dauer, Zahlen, Index, Meldung) pro Job. Jeder Lauf steht im Audit-Log.
-- Läufe finden nur statt, solange die Admin-App läuft; verpasste Läufe werden nicht nachgeholt, Läufe, die bei einem Herunterfahren
-  aktiv waren, werden als *interrupted* markiert. Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
+- Läufe finden nur statt, solange die Admin-App läuft. Mit *Catch up missed runs* (Standard an) läuft ein Job beim Start einmal,
+  wenn ein geplanter Lauf verpasst wurde, während die App nicht lief (nur einmal, egal wie viele verpasst wurden).
+  Läufe, die bei einem Herunterfahren aktiv waren, werden als *interrupted* markiert. Für verlässliche Zeitpläne die Admin-App als
+  Dienst betreiben (siehe *Als Windows-Dienst betreiben*). Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
 
 ## Backup und Restore
 

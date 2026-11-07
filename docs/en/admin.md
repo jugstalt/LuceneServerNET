@@ -170,10 +170,12 @@ can be edited and is saved with the job (the columns of the query must not chang
 | Append | Documents are added. |
 
 - **Schedule**: cron expression with 5 fields (`minute hour day month weekday`, e.g. `0 3 * * *`) and a time zone
-  (empty = UTC). The page shows the next runs.
+  (empty = UTC). The page shows the next runs. Without a cron expression (*manual*) the job only runs with *Run now*.
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
-- Runs only happen while the admin application runs; missed runs are not caught up, runs that were active during a
-  shutdown are marked *interrupted*. Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
+- Runs only happen while the admin application runs. With *Catch up missed runs* (default on) a job runs once at
+  startup if a scheduled run was missed while the application was stopped (only once, however many were missed).
+  Runs that were active during a shutdown are marked *interrupted*. For reliable schedules run the admin application as a
+  service (see *Run as Windows service*). Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
 
 ## Backup and restore
 

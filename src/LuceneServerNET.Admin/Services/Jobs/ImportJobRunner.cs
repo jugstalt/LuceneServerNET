@@ -94,7 +94,7 @@ public class ImportJobRunner
         }
         try
         {
-            CronExpression.Parse(job.Cron);
+            if (job.HasSchedule) CronExpression.Parse(job.Cron.Trim());
             ResolveTimeZone(job.TimeZone);
         }
         catch (Exception ex)
@@ -108,9 +108,10 @@ public class ImportJobRunner
         => String.IsNullOrWhiteSpace(id) ? TimeZoneInfo.Utc : TimeZoneInfo.FindSystemTimeZoneById(id.Trim());
 
     /// <summary>Next occurrences of the schedule after <paramref name="fromUtc"/>.</summary>
-    public static IEnumerable<DateTime> NextOccurrences(string cron, string? timeZone, DateTime fromUtc, int count)
+    public static IEnumerable<DateTime> NextOccurrences(string? cron, string? timeZone, DateTime fromUtc, int count)
     {
-        var expression = CronExpression.Parse(cron);
+        if (String.IsNullOrWhiteSpace(cron)) yield break;
+        var expression = CronExpression.Parse(cron.Trim());
         var zone = ResolveTimeZone(timeZone);
         var current = fromUtc;
         for (int i = 0; i < count; i++)
@@ -284,8 +285,8 @@ public class ImportJobRunner
 }
 
 /// <summary>
-/// Starts enabled jobs when their cron schedule is due (checked every 30 seconds). Runs missed while the
-/// admin application was stopped are not caught up. Disable with Admin:Jobs:Enabled = false
+/// Starts enabled jobs when their cron schedule is due (checked every 30 seconds). At startup, jobs with
+/// CatchUp run once if a scheduled run was missed while the admin application was stopped. Disable with Admin:Jobs:Enabled = false
 /// (e.g. if more than one admin instance runs against the same database).
 /// </summary>
 public class ImportJobScheduler : BackgroundService
@@ -322,6 +323,23 @@ public class ImportJobScheduler : BackgroundService
         }
 
         var lastCheck = DateTime.UtcNow;
+        try
+        {
+            var lastRuns = await _repository.GetLastImportJobRunsAsync(stoppingToken);
+            foreach (var job in (await _repository.GetImportJobsAsync(stoppingToken)).Where(j => j.Enabled && j.CatchUp))
+            {
+                if (IsMissed(job, lastRuns.TryGetValue(job.Id, out var run) ? run.StartedUtc : null, lastCheck) && !_runner.IsRunning(job.Id))
+                {
+                    _logger.LogInformation("Catching up the missed run of import job {Job}", job.Name);
+                    _ = _runner.RunAsync(job.Id, $"job:{job.Name} (catch-up)", stoppingToken);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Catching up import jobs failed");
+        }
+
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -348,9 +366,29 @@ public class ImportJobScheduler : BackgroundService
     /// <summary>True if an occurrence of the schedule lies in (lastCheckUtc, nowUtc].</summary>
     internal static bool IsDue(ImportJobRecord job, DateTime lastCheckUtc, DateTime nowUtc)
     {
+        if (!job.HasSchedule) return false;
         try
         {
-            var next = CronExpression.Parse(job.Cron).GetNextOccurrence(lastCheckUtc, ImportJobRunner.ResolveTimeZone(job.TimeZone));
+            var next = CronExpression.Parse(job.Cron.Trim()).GetNextOccurrence(lastCheckUtc, ImportJobRunner.ResolveTimeZone(job.TimeZone));
+            return next.HasValue && next.Value <= nowUtc;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// True if a scheduled occurrence was missed: one lies after the last run (or, without runs, after the last change
+    /// of the job) and before <paramref name="nowUtc"/>.
+    /// </summary>
+    internal static bool IsMissed(ImportJobRecord job, DateTime? lastRunUtc, DateTime nowUtc)
+    {
+        if (!job.HasSchedule) return false;
+        var since = lastRunUtc ?? job.ModifiedUtc;
+        try
+        {
+            var next = CronExpression.Parse(job.Cron.Trim()).GetNextOccurrence(since, ImportJobRunner.ResolveTimeZone(job.TimeZone));
             return next.HasValue && next.Value <= nowUtc;
         }
         catch

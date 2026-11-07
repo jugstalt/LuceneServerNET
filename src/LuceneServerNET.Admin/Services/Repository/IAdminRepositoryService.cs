@@ -76,8 +76,13 @@ public class ImportJobRecord
     /// <summary>Older index generations kept after switching the alias (mode replace_alias).</summary>
     public int KeepGenerations { get; set; } = 1;
 
-    /// <summary>Cron expression (5 fields: minute hour day month weekday).</summary>
+    /// <summary>Cron expression (5 fields: minute hour day month weekday); empty = manual job (run now only).</summary>
     public string Cron { get; set; } = "0 3 * * *";
+
+    public bool HasSchedule => !String.IsNullOrWhiteSpace(Cron);
+
+    /// <summary>Run once at startup if a scheduled run was missed while the admin application was stopped.</summary>
+    public bool CatchUp { get; set; } = true;
 
     /// <summary>Time zone of the cron expression (IANA/Windows id); null = UTC.</summary>
     public string? TimeZone { get; set; }

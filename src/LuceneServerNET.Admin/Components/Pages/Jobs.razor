@@ -34,7 +34,16 @@
             }
         </MudTd>
         <MudTd><span class="mono">@context.Instance / @context.Target</span> <MudText Typo="Typo.caption">@context.Mode</MudText></MudTd>
-        <MudTd><span class="mono">@context.Cron</span> <MudText Typo="Typo.caption">@(context.TimeZone ?? "UTC")</MudText></MudTd>
+        <MudTd>
+            @if (context.HasSchedule)
+            {
+                <span class="mono">@context.Cron</span> <MudText Typo="Typo.caption">@(context.TimeZone ?? "UTC")</MudText>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">manual</MudChip>
+            }
+        </MudTd>
         <MudTd>
             @if (Runner.IsRunning(context.Id))
             {
@@ -46,7 +55,7 @@
                 <MudText Typo="Typo.caption">@Format.Date(run.StartedUtc)</MudText>
             }
         </MudTd>
-        <MudTd>@(context.Enabled ? NextRun(context) : "–")</MudTd>
+        <MudTd>@(context.Enabled && context.HasSchedule ? NextRun(context) : "–")</MudTd>
         <MudTd Style="text-align:right">
             <MudTooltip Text="Run now">
                 <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" Disabled="Runner.IsRunning(context.Id)" OnClick="() => RunNowAsync(context)" aria-label="Run now" />

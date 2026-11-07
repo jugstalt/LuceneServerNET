@@ -110,8 +110,9 @@ else
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudTextField T="string" Value="_job.Cron" ValueChanged="v => { _job.Cron = v; MarkDirty(); }" Label="Schedule (cron)" Variant="Variant.Outlined" Class="mono"
-                              HelperText="minute hour day month weekday" Immediate="true" />
+                              HelperText="minute hour day month weekday · empty = manual (run now only)" Immediate="true" />
                 <MudStack Row="true" Spacing="1" Class="mt-1" Wrap="Wrap.Wrap">
+                    <MudChip T="string" Size="Size.Small" OnClick="SetManual">manual</MudChip>
                     @foreach (var (label, cron) in CronPresets)
                     {
                         <MudChip T="string" Size="Size.Small" OnClick="() => { _job.Cron = cron; MarkDirty(); }">@label</MudChip>
@@ -124,6 +125,10 @@ else
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudText Typo="Typo.caption">Next runs</MudText>
+                @if (!_job.HasSchedule)
+                {
+                    <MudText Typo="Typo.body2">manual job: run now only</MudText>
+                }
                 @foreach (var next in NextRuns)
                 {
                     <MudText Typo="Typo.body2">@next</MudText>
@@ -134,6 +139,9 @@ else
                     <MudNumericField T="int" Value="_job.BatchSize" ValueChanged="v => { _job.BatchSize = v; MarkDirty(); }" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" />
                     <MudNumericField T="int" Value="_job.MaxErrors" ValueChanged="v => { _job.MaxErrors = v; MarkDirty(); }" Label="Stop after errors (0 = never)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
                     <MudSwitch T="bool" Value="_job.Enabled" ValueChanged="v => { _job.Enabled = v; MarkDirty(); }" Label="Enabled" Color="Color.Primary" />
+                    <MudTooltip Text="Run once at startup if a scheduled run was missed while the admin application was stopped">
+                        <MudSwitch T="bool" Value="_job.CatchUp" ValueChanged="v => { _job.CatchUp = v; MarkDirty(); }" Label="Catch up missed runs" Color="Color.Primary" Disabled="!_job.HasSchedule" />
+                    </MudTooltip>
                     <MudSpacer />
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save</MudButton>
                 </MudStack>
@@ -234,6 +242,14 @@ else
 
     private void MarkDirty() => _dirty = true;
 
+    private void SetManual()
+    {
+        _job.Cron = String.Empty;
+        MarkDirty();
+    }
+
+    private string ScheduleText => _job.HasSchedule ? $"{_job.Cron} {_job.TimeZone}" : "manual";
+
     private async Task PreviewAsync()
     {
         var connection = _connections.FirstOrDefault(c => c.Id == _job.ConnectionId);
@@ -287,7 +303,7 @@ else
             else await Repository.UpdateImportJobAsync(_job);
 
             await Audit.LogAsync(AuditActions.JobSave, _job.Instance, _job.Target,
-                $"job {_job.Name} · {(isNew ? "added" : "changed")} · {_job.Mode} · {_job.Cron} {_job.TimeZone} · {(_job.Enabled ? "enabled" : "disabled")}");
+                $"job {_job.Name} · {(isNew ? "added" : "changed")} · {_job.Mode} · {ScheduleText} · {(_job.Enabled ? "enabled" : "disabled")}");
             Snackbar.Add($"Job {_job.Name} saved", Severity.Success);
             _dirty = false;
             if (isNew) Navigation.NavigateTo($"jobs/{_job.Id}");
