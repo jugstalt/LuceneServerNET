@@ -10,7 +10,7 @@ namespace LuceneServerNET.Core.Models.Spatial
             : this()
         {
             Latitude = latitude;
-            Latitude = latitude;
+            Longidute = longitude;
         }
 
         public override string Type { get; set; }

@@ -1,4 +1,4 @@
-using Lucene.Net.Spatial.Prefix.Tree;
+﻿using Lucene.Net.Spatial.Prefix.Tree;
 using LuceneServerNET.Core.Models.Spatial;
 using LuceneServerNET.Engine.Models.Spatial;
 using Spatial4n.Context;
@@ -75,11 +75,35 @@ public class GeoTypeTests
         Assert.Equal((15.4, 47.1), (point.Longidute, point.Latitude));
     }
 
-    [Fact(Skip = "Bug: GeoType.Parse prüft 'String.IsNullOrEmpty' statt '!String.IsNullOrEmpty' – Koordinaten-Strings werden nie geparst")]
+    [Fact]
     public void Parse_CoordinateString_ReturnsGeoPoint()
         => Assert.IsType<GeoPoint>(GeoType.Parse("15.4 47.1"));
 
-    [Fact(Skip = "Bug: GeoPoint(lat, lon)-Konstruktor setzt zweimal Latitude, Longitude bleibt 0")]
+    [Fact]
     public void GeoPoint_Constructor_SetsLongitude()
         => Assert.Equal(15.4, new GeoPoint(47.1, 15.4).Longidute);
+
+    [Theory]
+    [InlineData("15.4 47.1")]
+    [InlineData("15.4,47.1")]
+    [InlineData("15.4, 47.1")]
+    public void Parse_CoordinateString_IsLonLat(string value)
+    {
+        var point = Assert.IsType<GeoPoint>(GeoType.Parse(value));
+        Assert.Equal((15.4, 47.1), (point.Longidute, point.Latitude));
+    }
+
+    [Fact]
+    public void Parse_CoordinateString_RoundTripsToString()
+    {
+        var point = new GeoPoint(47.1, 15.4);
+        var parsed = Assert.IsType<GeoPoint>(GeoType.Parse(point.ToString()));
+        Assert.Equal((point.Longidute, point.Latitude), (parsed.Longidute, parsed.Latitude));
+    }
+
+    [Theory]
+    [InlineData("abc def")]
+    [InlineData("15.4")]
+    public void Parse_InvalidCoordinateString_ReturnsNull(string value)
+        => Assert.Null(GeoType.Parse(value));
 }

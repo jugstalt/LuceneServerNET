@@ -1,0 +1,6 @@
+<Project>
+  <!-- Shared version for server, engine and NuGet packages (Core, Client). -->
+  <PropertyGroup>
+    <Version>3.0.0</Version>
+  </PropertyGroup>
+</Project>

@@ -2,7 +2,6 @@
 
   <PropertyGroup>
       <TargetFramework>net10.0</TargetFramework>
-	  <LangVersion>12</LangVersion>
 	  <Nullable>disable</Nullable>
       <AssemblyName>LuceneServerNET</AssemblyName>
       <UserSecretsId>749b9899-f020-4ca4-8919-5644711e99b1</UserSecretsId>

@@ -4,7 +4,20 @@ All notable changes to LuceneServerNET are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] – v3
+## [Unreleased] – v3 (3.0.0)
+
+### Migration from 2.x
+
+| Area | What changes | What to do |
+|---|---|---|
+| Index ids / metadata names | Only `a-z`, `0-9`, `_`, `-`, max. 64 chars | Rename index folders that do not match before upgrading |
+| HTTP methods | `createindex`, `refresh`, `releaseall` → POST; `removeindex`, `remove` → DELETE | Update REST clients; old GET routes work while `LuceneServer:AllowLegacyGetMutations` is `true` (default) – set it to `false` once all clients are migrated |
+| NuGet `LuceneServerNET.Client` 3.0.0 | Uses POST/DELETE | Requires a v3 server – upgrade the server first |
+| Authentication | Roles `read`/`write`/`admin`, hashed secrets (`SecretHash`) | Not breaking: clients without `Roles` get `admin`, plain `Secret` still works. Recommended: assign roles and switch to `SecretHash` (`--hash-secret`) |
+| API v2 errors | HTTP 4xx/5xx instead of 200 | Only relevant for new v2 clients; v1 is unchanged |
+| Swagger | Replaced by `/openapi/{v}.json` and `/scalar` | Old `/swagger` URLs redirect |
+| Versions | Server, Engine, Core and Client share one version (`src/Directory.Build.props`) | – |
+
 
 ### Added
 
@@ -71,6 +84,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     match the rule are no longer reachable via the API until renamed.
 
 ### Fixed
+
+- `GeoPoint(latitude, longitude)` constructor set `Latitude` twice; `Longidute` stayed `0`.
+- `GeoType.Parse` never parsed coordinate strings (inverted `IsNullOrEmpty` check). Strings are now
+  read as `"lon lat"` or `"lon,lat"` (same order as `GeoPoint.ToString()`); invalid strings are ignored
+  instead of throwing.
 
 - The reserved metadata name `mapping` is now actually blocked (the old check compared against
   `"mapping "` with a trailing space).

@@ -26,12 +26,15 @@ namespace LuceneServerNET.Core.Models.Spatial
             {
                 geoType = JsonSerializer.Deserialize<GeoPoint>(value.ToString());
             }
-            else if (String.IsNullOrEmpty(stringValue))
+            else if (!String.IsNullOrEmpty(stringValue))
             {
-                var coords = stringValue.Replace(",", " ").Split(' ').Select(c => double.Parse(c, CultureInfo.InvariantCulture)).ToArray();
-                if (coords.Length == 2)
+                // "lon lat" or "lon,lat" (same order as GeoPoint.ToString(), like GeoJSON)
+                var parts = stringValue.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2 &&
+                    double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var lon) &&
+                    double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var lat))
                 {
-                    geoType = new GeoPoint(coords[0], coords[1]);
+                    geoType = new GeoPoint(lat, lon);
                 }
             }
 
