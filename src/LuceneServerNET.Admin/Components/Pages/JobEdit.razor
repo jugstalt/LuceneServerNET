@@ -20,6 +20,10 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h4">@(_job.Id == 0 ? "New import job" : _job.Name)</MudText>
     <MudSpacer />
+    @if (_job.Id == 0)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen" Href="jobs/import-gview">Import gView configuration</MudButton>
+    }
     @if (_job.Id != 0)
     {
         @if (Runner.IsRunning(_job.Id))
