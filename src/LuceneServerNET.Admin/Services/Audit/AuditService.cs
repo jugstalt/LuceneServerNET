@@ -8,7 +8,7 @@ public static class AuditActions
 {
     public const string Login = "login", LoginFailed = "login.failed", Logout = "logout";
     public const string InstanceSave = "instance.save", InstanceDelete = "instance.delete";
-    public const string ConnectionSave = "connection.save", ConnectionDelete = "connection.delete";
+    public const string ConnectionSave = "connection.save", ConnectionDelete = "connection.delete", ConnectionShow = "connection.show", ConnectionTest = "connection.test";
     public const string IndexCreate = "index.create", IndexDelete = "index.delete", IndexClear = "index.clear", IndexRefresh = "index.refresh";
     public const string DocumentsDelete = "documents.delete", MetadataSave = "metadata.save";
     public const string Import = "import", Copy = "copy", Restore = "restore", Export = "export";

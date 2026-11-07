@@ -28,9 +28,14 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12">
-                <MudTextField @bind-Value="_edit.ConnectionString" Label="Connection string" Variant="Variant.Outlined" InputType="InputType.Password"
+                <MudTextField @bind-Value="_edit.ConnectionString" Label="Connection string" Variant="Variant.Outlined"
+                              InputType="@(_edit.Shown ? InputType.Text : InputType.Password)" Class="@(_edit.Shown ? "mono" : "")"
                               Placeholder="@DbProviders.Example(_edit.Provider)"
-                              HelperText="@(_edit.Id is null ? "Stored encrypted" : "Leave empty to keep the stored connection string")" />
+                              HelperText="@ConnectionStringHelp" />
+                @if (_edit.Id is not null && !_edit.Shown)
+                {
+                    <MudButton Class="mt-1" Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Visibility" OnClick="ShowAsync">Show connection string</MudButton>
+                }
             </MudItem>
         </MudGrid>
         @if (_testResult is not null)
@@ -49,12 +54,22 @@
     <HeaderContent>
         <MudTh>Name</MudTh>
         <MudTh>Provider</MudTh>
+        <MudTh>Test</MudTh>
         <MudTh></MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd>@context.Name</MudTd>
         <MudTd>@context.Provider</MudTd>
+        <MudTd>
+            @if (_rowTest.TryGetValue(context.Id, out var test))
+            {
+                <MudText Typo="Typo.caption" Color="@(test.Ok ? Color.Success : Color.Error)">@test.Text</MudText>
+            }
+        </MudTd>
         <MudTd Style="text-align:right">
+            <MudTooltip Text="Test connection">
+                <MudIconButton Icon="@Icons.Material.Filled.NetworkCheck" Size="Size.Small" OnClick="() => TestRowAsync(context)" aria-label="Test connection" />
+            </MudTooltip>
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => Edit(context)" aria-label="Edit" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)" aria-label="Delete" />
         </MudTd>
@@ -71,7 +86,56 @@
         public string Name { get; set; } = "";
         public string Provider { get; set; } = DbProviders.SqlServer;
         public string? ConnectionString { get; set; }
+
+        /// <summary>The stored connection string is shown (masked) for editing.</summary>
+        public bool Shown { get; set; }
     }
+
+    private string ConnectionStringHelp => _edit switch
+    {
+        { Id: null } => "Stored encrypted",
+        { Shown: true } => $"Password shown as {ConnectionStringMask.Mask}: keep it to use the stored password",
+        _ => "Leave empty to keep the stored connection string"
+    };
+
+    /// <summary>Shows the stored connection string with masked password (audit log entry).</summary>
+    private async Task ShowAsync()
+    {
+        if (_edit?.Id is null) return;
+        var stored = _connections.FirstOrDefault(c => c.Id == _edit.Id)?.ConnectionString;
+        if (String.IsNullOrEmpty(stored))
+        {
+            Snackbar.Add("The connection string can not be decrypted (data protection keys changed?): enter it again", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _edit.ConnectionString = ConnectionStringMask.Masked(stored);
+            _edit.Shown = true;
+            await Audit.LogAsync(AuditActions.ConnectionShow, target: _edit.Name, details: "connection string shown (password masked)");
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add($"The connection string can not be parsed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TestRowAsync(DbSourceConnection connection)
+    {
+        try
+        {
+            var version = await DatabaseSource.TestAsync(connection.Provider, connection.ConnectionString);
+            _rowTest[connection.Id] = (true, $"OK · {version}");
+        }
+        catch (Exception ex)
+        {
+            _rowTest[connection.Id] = (false, ex.Message);
+        }
+        await Audit.LogAsync(AuditActions.ConnectionTest, target: connection.Name, details: _rowTest[connection.Id].Text, success: _rowTest[connection.Id].Ok);
+    }
+
+    private readonly Dictionary<long, (bool Ok, string Text)> _rowTest = [];
 
     private IReadOnlyList<DbSourceConnection> _connections = [];
     private EditModel? _edit;
@@ -103,12 +167,12 @@
     {
         if (_edit is null) return;
 
-        var connectionString = String.IsNullOrWhiteSpace(_edit.ConnectionString)
-            ? _connections.FirstOrDefault(c => c.Id == _edit.Id)?.ConnectionString
-            : _edit.ConnectionString;
+        var stored = _connections.FirstOrDefault(c => c.Id == _edit.Id)?.ConnectionString;
+        var connectionString = String.IsNullOrWhiteSpace(_edit.ConnectionString) ? stored : _edit.ConnectionString;
 
         try
         {
+            if (ConnectionStringMask.ContainsMask(connectionString)) connectionString = ConnectionStringMask.Unmask(connectionString!, stored ?? "");
             var version = await DatabaseSource.TestAsync(_edit.Provider, connectionString ?? "");
             (_testOk, _testResult) = (true, $"Connected. Server version {version}");
         }

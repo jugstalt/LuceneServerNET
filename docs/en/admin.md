@@ -13,7 +13,7 @@
 | Indices | List with document count, size on disk and last modification; filter and sort |
 | Search | Autocomplete input (search as you type), search with `size`/`from`/`searchAfter`, sort, spatial filter, phonetic search, group by, results as table or JSON, request as `curl` command |
 | Create index | Mapping editor: fields, types, indexed/stored, primary fields, phonetics |
-| Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test |
+| Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test (also in the list); *Show connection string* shows the stored string with masked password (audit log `connection.show`), a kept `*****` keeps the stored password |
 | Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Import jobs | Recurring imports from a database query (cron schedule): rebuild and switch an alias, clear and refill, or append; run history |

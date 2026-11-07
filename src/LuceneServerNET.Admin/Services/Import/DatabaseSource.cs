@@ -78,6 +78,10 @@ public class DatabaseSource
             var record = await _repository.GetDbConnectionAsync(id.Value, cancellationToken) ?? throw new ArgumentException("Connection not found");
             record.Name = name;
             record.Provider = provider;
+            if (ConnectionStringMask.ContainsMask(connectionString))
+            {
+                connectionString = ConnectionStringMask.Unmask(connectionString!, Unprotect(record.ConnectionStringProtected));
+            }
             if (!String.IsNullOrWhiteSpace(connectionString))
             {
                 record.ConnectionStringProtected = _protector.Protect(connectionString);

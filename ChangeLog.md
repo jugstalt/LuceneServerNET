@@ -57,6 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   PostGIS `geometry` / `geography` columns are read directly (also with `SELECT *`), SQL Server geometry columns give a hint to use `STAsBinary()`.
   Encoded characters of the primary fields (`PrimaryFieldsEncodeCharacters`, e.g. `./`) can be set when creating an index, importing and in import jobs.
   Template fields in the import mapping: a field built from columns (`{PLZ} {ORT} {STR} {HNR}`, empty brackets removed), with text replacements.
+  Database connections: show the stored connection string on request with masked password (audit log), edit it without re-entering the password; connection test in the list.
   Copy an index (mapping, metadata, documents) to another name or another instance. Alias management.
   Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;

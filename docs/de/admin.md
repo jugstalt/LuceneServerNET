@@ -13,7 +13,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Indizes | Liste mit Dokumentanzahl, Größe auf der Platte und letzter Änderung; filtern und sortieren |
 | Suche | Autocomplete-Eingabe (Search as you type), Suche mit `size`/`from`/`searchAfter`, Sortierung, räumlicher Filter, phonetische Suche, Gruppierung, Ergebnis als Tabelle oder JSON, Request als `curl`-Befehl |
 | Index anlegen | Mapping-Editor: Felder, Typen, indiziert/gespeichert, Primärfelder, Phonetik |
-| Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest |
+| Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest (auch in der Liste); *Show connection string* zeigt den gespeicherten String mit maskiertem Passwort (Audit-Log `connection.show`), ein belassenes `*****` behält das gespeicherte Passwort |
 | Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Import-Jobs | Wiederkehrende Importe aus einer Datenbank-Abfrage (Cron-Zeitplan): neu aufbauen und Alias umschalten, leeren und neu befüllen oder anhängen; Lauf-Verlauf |
