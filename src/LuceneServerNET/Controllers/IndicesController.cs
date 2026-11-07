@@ -33,6 +33,9 @@ public class IndicesController : LuceneControllerBase
     {
     }
 
+    /// <summary>v2 returns errors with HTTP status codes (400/404/409/500).</summary>
+    protected override bool UseHttpStatusCodesForErrors => true;
+
     #region Index
 
     /// <summary>Creates an index.</summary>

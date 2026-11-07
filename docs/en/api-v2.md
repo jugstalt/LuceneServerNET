@@ -7,6 +7,22 @@ keep working unchanged. v1 is considered *deprecated*; new clients should use v2
 Responses, roles, query syntax, `outFields` functions, geo filters and `format` are the same as in
 [v1](api.md#documents). Each version has its own OpenAPI document (`/openapi/v1.json`, `/openapi/v2.json`); the API reference UI (`/scalar`) shows both.
 
+## Errors and HTTP status codes
+
+Unlike v1 (always HTTP 200), v2 returns errors with a matching status code. The body is the same in both cases:
+
+```json
+{ "success": false, "message": "Cannot parse 'title:(': ..." }
+```
+
+| Status | Cause |
+|---|---|
+| `400` | Invalid query (Lucene syntax), invalid spatial filter, invalid parameters (e.g. `from + size` > 10000, invalid index name) |
+| `404` | Index does not exist |
+| `409` | Index already exists or is being unloaded |
+| `413` | Request body too large (`LuceneServer:MaxRequestBodySizeBytes`) |
+| `500` | Other errors (outside `Development` the message contains only the error type) |
+
 ## Overview
 
 | Method | Endpoint | Role | v1 equivalent |

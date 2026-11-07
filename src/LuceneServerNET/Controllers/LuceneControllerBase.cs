@@ -1,7 +1,9 @@
 ﻿using LuceneServerNET.Core.Models.Custom;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
+using LuceneServerNET.Engine.Exceptions;
 using LuceneServerNET.Engine.Models.Spatial;
+using Lucene.Net.QueryParsers.Classic;
 using LuceneServerNET.Engine.Services;
 using LuceneServerNET.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Controllers;
@@ -141,7 +144,7 @@ public abstract class LuceneControllerBase : ControllerBase
 
             if (String.IsNullOrEmpty(id))
             {
-                throw new Exception("Index id not specified");
+                throw new ArgumentException("Index id not specified");
             }
 
             if (!LuceneServerNET.Engine.Extensions.PathGuard.IsValidName(id))
@@ -154,19 +157,26 @@ public abstract class LuceneControllerBase : ControllerBase
     }
 
     /// <summary>
+    /// If true, errors are returned with a matching HTTP status code (400, 404, 409, 500)
+    /// instead of HTTP 200. The body is an <see cref="ApiErrorResult"/> in both cases.
+    /// v1 (LuceneController) keeps HTTP 200 for compatibility, v2 (IndicesController) uses status codes.
+    /// </summary>
+    protected virtual bool UseHttpStatusCodesForErrors => false;
+
+    /// <summary>
     /// For endpoints without index id: error handling and timing only.
     /// </summary>
     protected async Task<IApiResult> SecureMethodHandler(Func<Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
     {
         try
         {
-            var start = DateTime.Now;
+            var stopwatch = Stopwatch.StartNew();
 
             var apiResult = await func();
 
             if (apiResult != null)
             {
-                apiResult.MilliSeconds = (DateTime.Now - start).TotalMilliseconds;
+                apiResult.MilliSeconds = stopwatch.Elapsed.TotalMilliseconds;
             }
 
             return apiResult;
@@ -177,26 +187,39 @@ public abstract class LuceneControllerBase : ControllerBase
             {
                 return onException(ex);
             }
-            else
+
+            int statusCode = ToHttpStatusCode(ex);
+
+            if (UseHttpStatusCodesForErrors)
             {
-                if (_env.IsDevelopment())
-                {
-                    return new ApiErrorResult(ex.Message);
-                }
-                else
-                {
-                    Console.WriteLine($"Exception: {DateTime.Now.ToShortDateString()} {DateTime.Now.ToLongTimeString()}");
-                    Console.WriteLine(ex.Message);
-                    Console.WriteLine(ex.StackTrace);
-
-                    _logger.LogError(ex, $"Exception: {DateTime.Now.ToShortDateString()} {DateTime.Now.ToLongTimeString()}");
-
-                    return new ApiErrorResult($"Error of type {ex.GetType().ToString()}");
-                }
-
+                Response.StatusCode = statusCode;
             }
+
+            if (statusCode >= 500)
+            {
+                _logger.LogError(ex, "Error processing {method} {path}", Request?.Method, Request?.Path);
+
+                return new ApiErrorResult(_env.IsDevelopment()
+                    ? ex.Message
+                    : $"Error of type {ex.GetType()}");
+            }
+
+            // client errors: message is safe to return and helps the caller
+            _logger.LogInformation("Invalid request {method} {path}: {message}", Request?.Method, Request?.Path, ex.Message);
+
+            return new ApiErrorResult(ex.Message);
         }
     }
+
+    protected static int ToHttpStatusCode(Exception ex) => ex switch
+    {
+        IndexNotFoundException => StatusCodes.Status404NotFound,
+        IndexConflictException => StatusCodes.Status409Conflict,
+        ParseException => StatusCodes.Status400BadRequest,
+        ArgumentException => StatusCodes.Status400BadRequest,   // incl. ArgumentNullException, ArgumentOutOfRangeException
+        FormatException => StatusCodes.Status400BadRequest,     // e.g. invalid numbers in spatial filters
+        _ => StatusCodes.Status500InternalServerError
+    };
 
     #endregion
 }

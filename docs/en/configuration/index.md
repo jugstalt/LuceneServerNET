@@ -11,7 +11,9 @@ The file is created on the first start (see [Installation](../installation/index
     "ArchivePath": "c:\\data\\lucene\\archive",
     "AutoRestoreOnStartup": true,
     "AutoRestoreOnStartupCount": 0,
-    "AutoRestoreOnStartupSinceSeconds": 86400
+    "AutoRestoreOnStartupSinceSeconds": 86400,
+    "MaxRequestBodySizeBytes": 31457280,
+    "UseHttpsRedirection": false
   },
   "useSwagger": false,
   "Authorization": {
@@ -35,12 +37,14 @@ The file is created on the first start (see [Installation](../installation/index
 | `AutoRestoreOnStartupCount` | If `> 0`: restore only the last *n* archived documents per index. |
 | `AutoRestoreOnStartupSinceSeconds` | If `Count` is `0` and this is `> 0`: restore only documents archived within this period (default `86400` = 1 day). If both are `0`, all documents are restored. |
 | `AllowLegacyGetMutations` | Default `true`. Temporarily allows the deprecated **GET** calls of `createindex`, `removeindex`, `remove`, `refresh` and `releaseall` (response carries `Deprecation`/`Warning` headers and a warning is logged). If `false`, these GET calls return `405 Method Not Allowed`; only POST/DELETE are accepted. Will default to `false` in a future version. |
+| `MaxRequestBodySizeBytes` | Max. request body size in bytes (e.g. when indexing), applies to Kestrel and IIS. Default `31457280` (30 MB). Larger requests are rejected; index large data sets in several calls. |
+| `UseHttpsRedirection` | Default `false`. If `true`, HTTP requests are redirected to HTTPS. Only useful if the server itself serves HTTPS (not behind a TLS terminating proxy). |
 
 ## API documentation (OpenAPI)
 
 | Key | Description |
 |---|---|
-| `useSwagger` | `true` publishes the OpenAPI documents (`/openapi/v1.json`, `/openapi/v2.json`) and the API reference UI ([Scalar](https://scalar.com)) at `/scalar`. Always on in `Development`. The old URLs `/swagger` and `/swagger/{v}/swagger.json` redirect to the new ones. These endpoints are accessible without authentication. |
+| `useSwagger` | `true` publishes the OpenAPI documents (`/openapi/v1.json`, `/openapi/v2.json`) and the API reference UI ([Scalar](https://scalar.com)) at `/scalar`. Always on in `Development`. The old URLs `/swagger` and `/swagger/{v}/swagger.json` redirect to the new ones. These endpoints are accessible without authentication; outside `Development` a warning is logged at startup. |
 
 ## Authentication
 

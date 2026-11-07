@@ -8,6 +8,7 @@ using Lucene.Net.Util;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Spatial;
 using LuceneServerNET.Core.Phonetics;
+using LuceneServerNET.Engine.Exceptions;
 using LuceneServerNET.Engine.Extensions;
 using LuceneServerNET.Engine.Models.Spatial;
 using LuceneServerNET.Parse;
@@ -61,11 +62,11 @@ namespace LuceneServerNET.Engine.Services
         {
             if (IndexExists(indexName))
             {
-                throw new Exception("Index already exists");
+                throw new IndexConflictException("Index already exists");
             }
             if (_resources.IsUnloading(indexName))
             {
-                throw new Exception("Index is unloaded");
+                throw new IndexConflictException("Index is unloaded");
             }
 
             var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
@@ -120,7 +121,7 @@ namespace LuceneServerNET.Engine.Services
         {
             if (!IndexExists(indexName))
             {
-                throw new Exception("Index not exists");
+                throw new IndexNotFoundException();
             }
 
             if (mapping == null)
@@ -160,14 +161,14 @@ namespace LuceneServerNET.Engine.Services
         {
             if (!IndexExists(indexName))
             {
-                throw new Exception("Index not exists");
+                throw new IndexNotFoundException();
             }
 
             name = name?.Trim().ToLower();
 
             if (!PathGuard.IsValidName(name) || name == "mapping")
             {
-                throw new Exception($"Invalid or reserved metadata name '{name}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
+                throw new ArgumentException($"Invalid or reserved metadata name '{name}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
             }
 
             var filePath = PathGuard.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta");
@@ -255,7 +256,7 @@ namespace LuceneServerNET.Engine.Services
         {
             if (!IndexExists(indexName))
             {
-                throw new Exception("Index not exists");
+                throw new IndexNotFoundException();
             }
 
             if (items == null || items.Count() == 0)
@@ -447,7 +448,7 @@ namespace LuceneServerNET.Engine.Services
         {
             if (!IndexExists(indexName))
             {
-                throw new Exception("Index not exists");
+                throw new IndexNotFoundException();
             }
 
             var parser = new QueryParser(AppLuceneVersion, termField, _resources.GetAnalyzer(indexName));
@@ -463,7 +464,7 @@ namespace LuceneServerNET.Engine.Services
         {
             if (!IndexExists(indexName))
             {
-                throw new Exception("Index not exists");
+                throw new IndexNotFoundException();
             }
 
             _resources.RefreshResources(indexName);

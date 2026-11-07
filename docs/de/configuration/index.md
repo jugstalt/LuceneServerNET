@@ -11,7 +11,9 @@ Die Datei wird beim ersten Start erzeugt (siehe [Installation](../installation/i
     "ArchivePath": "c:\\data\\lucene\\archive",
     "AutoRestoreOnStartup": true,
     "AutoRestoreOnStartupCount": 0,
-    "AutoRestoreOnStartupSinceSeconds": 86400
+    "AutoRestoreOnStartupSinceSeconds": 86400,
+    "MaxRequestBodySizeBytes": 31457280,
+    "UseHttpsRedirection": false
   },
   "useSwagger": false,
   "Authorization": {
@@ -35,12 +37,14 @@ Die Datei wird beim ersten Start erzeugt (siehe [Installation](../installation/i
 | `AutoRestoreOnStartupCount` | Wenn `> 0`: nur die letzten *n* archivierten Dokumente je Index wiederherstellen. |
 | `AutoRestoreOnStartupSinceSeconds` | Wenn `Count` `0` ist und dieser Wert `> 0`: nur Dokumente aus diesem Zeitraum wiederherstellen (Standard `86400` = 1 Tag). Sind beide `0`, werden alle Dokumente wiederhergestellt. |
 | `AllowLegacyGetMutations` | Standard `true`. Erlaubt übergangsweise die veralteten **GET**-Aufrufe von `createindex`, `removeindex`, `remove`, `refresh` und `releaseall` (Antwort mit `Deprecation`/`Warning`-Header und Log-Warnung). Bei `false` liefern diese GET-Aufrufe `405 Method Not Allowed`; nur noch POST/DELETE sind erlaubt. Wird in einer künftigen Version standardmäßig `false`. |
+| `MaxRequestBodySizeBytes` | Maximale Größe eines Request-Bodys in Bytes (z. B. beim Indizieren), gilt für Kestrel und IIS. Standard `31457280` (30 MB). Größere Requests werden abgewiesen; große Datenmengen in mehreren Aufrufen indizieren. |
+| `UseHttpsRedirection` | Standard `false`. Bei `true` werden HTTP-Aufrufe auf HTTPS umgeleitet. Nur sinnvoll, wenn der Server selbst HTTPS anbietet (nicht hinter einem TLS-terminierenden Proxy). |
 
 ## API-Dokumentation (OpenAPI)
 
 | Schlüssel | Beschreibung |
 |---|---|
-| `useSwagger` | `true` veröffentlicht die OpenAPI-Dokumente (`/openapi/v1.json`, `/openapi/v2.json`) und die API-Referenz-UI ([Scalar](https://scalar.com)) unter `/scalar`. In `Development` immer aktiv. Die alten URLs `/swagger` und `/swagger/{v}/swagger.json` leiten auf die neuen weiter. Diese Endpunkte sind ohne Anmeldung erreichbar. |
+| `useSwagger` | `true` veröffentlicht die OpenAPI-Dokumente (`/openapi/v1.json`, `/openapi/v2.json`) und die API-Referenz-UI ([Scalar](https://scalar.com)) unter `/scalar`. In `Development` immer aktiv. Die alten URLs `/swagger` und `/swagger/{v}/swagger.json` leiten auf die neuen weiter. Diese Endpunkte sind ohne Anmeldung erreichbar; außerhalb von `Development` wird beim Start eine Warnung geloggt. |
 
 ## Authentifizierung
 

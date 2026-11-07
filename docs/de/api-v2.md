@@ -7,6 +7,22 @@ bestehende v1-Clients funktionieren unverändert weiter. v1 gilt als *deprecated
 Antworten, Rollen, Query-Syntax, `outFields`-Funktionen, Geo-Filter und `format` sind wie in
 [v1](api.md#dokumente). Jede Version hat ein eigenes OpenAPI-Dokument (`/openapi/v1.json`, `/openapi/v2.json`); die API-Referenz-UI (`/scalar`) zeigt beide.
 
+## Fehler und HTTP-Statuscodes
+
+Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der Body ist in beiden Fällen gleich:
+
+```json
+{ "success": false, "message": "Cannot parse 'title:(': ..." }
+```
+
+| Status | Ursache |
+|---|---|
+| `400` | Ungültige Query (Lucene-Syntax), ungültiger Geo-Filter, ungültige Parameter (z. B. `from + size` > 10000, ungültiger Index-Name) |
+| `404` | Index existiert nicht |
+| `409` | Index existiert bereits bzw. wird gerade entladen |
+| `413` | Request-Body zu groß (`LuceneServer:MaxRequestBodySizeBytes`) |
+| `500` | Sonstige Fehler (Meldung außerhalb von `Development` nur mit Fehlertyp) |
+
 ## Überblick
 
 | Methode | Endpunkt | Rolle | Entspricht in v1 |

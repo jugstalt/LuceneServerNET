@@ -64,6 +64,15 @@ if (urls.Count > 0)
 
 #endregion
 
+#region Request limits
+
+// Max. request body size (e.g. for indexing documents). Default: 30 MB (Kestrel/IIS default)
+long maxRequestBodySize = configuration.GetValue<long>("LuceneServer:MaxRequestBodySizeBytes", 30L * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = maxRequestBodySize);
+builder.Services.Configure<Microsoft.AspNetCore.Builder.IISServerOptions>(options => options.MaxRequestBodySize = maxRequestBodySize);
+
+#endregion
+
 #region Services
 
 builder.Services.AddTransient<IAppVersionService, AppVersionService>();
@@ -101,6 +110,11 @@ if (app.Environment.IsDevelopment())
 
 app.Services.GetRequiredService<RestoreService>().TryRestoreIndices();
 
+if (configuration.GetValue("LuceneServer:UseHttpsRedirection", false))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseRouting();
 
 if (configuration.IsBasicAuthenticationEnabled())
@@ -116,6 +130,11 @@ if (app.Environment.IsDevelopment() ||
     "true".Equals(configuration["useSwagger"], StringComparison.OrdinalIgnoreCase))
 {
     app.MapLuceneServerOpenApi();
+
+    if (!app.Environment.IsDevelopment())
+    {
+        app.Logger.LogWarning("OpenAPI/Scalar UI is enabled in a non-development environment (useSwagger=true).");
+    }
 }
 
 #endregion

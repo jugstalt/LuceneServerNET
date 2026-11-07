@@ -14,12 +14,21 @@ namespace LuceneServerNET.Client.Extensions
         async public static Task<T> DeserializeFromSuccessResponse<T>(this HttpResponseMessage httpResponse, bool throwExcpeitonIfNotSucceeded = true)
             where T : IApiResult
         {
+            var resultJson = await httpResponse.Content.ReadAsStringAsync();
+
             if (httpResponse.StatusCode != System.Net.HttpStatusCode.OK)
             {
-                throw new LuceneServerClientException($"API call returns HTTP status code { httpResponse.StatusCode }");
-            }
+                string message = null;
+                try
+                {
+                    message = resultJson.DeserializeJson<ApiErrorResult>()?.Message;
+                }
+                catch { /* body is not an ApiErrorResult */ }
 
-            var resultJson = await httpResponse.Content.ReadAsStringAsync();
+                throw new LuceneServerClientException(String.IsNullOrEmpty(message)
+                    ? $"API call returns HTTP status code { httpResponse.StatusCode }"
+                    : $"API call returns HTTP status code { httpResponse.StatusCode }: { message }");
+            }
 
             var apiResult = resultJson.DeserializeJson<T>(); 
 
