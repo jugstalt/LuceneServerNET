@@ -71,6 +71,16 @@ public class ImportJobTests : IDisposable
         Assert.Equal(42, (await repository.GetImportJobRunsAsync(id))[1].Imported);
         Assert.Equal("webhook 200", (await repository.GetImportJobRunsAsync(id))[1].WebhookResult);
 
+        var run3 = new ImportJobRunRecord { JobId = id, StartedUtc = DateTime.UtcNow, Status = ImportJobStatus.Running, TriggeredBy = "trigger:x", Note = "jenkins #12" };
+        await repository.InsertImportJobRunAsync(run3);
+        Assert.Equal("jenkins #12", (await repository.GetImportJobRunAsync(run3.Id))!.Note);
+        Assert.Null(await repository.GetImportJobRunAsync(9999));
+
+        await repository.SetImportJobTriggerTokenAsync(id, "ABC");
+        Assert.Equal("ABC", (await repository.GetImportJobAsync(id))!.TriggerTokenHash);
+        await repository.SetImportJobTriggerTokenAsync(id, null);
+        Assert.Null((await repository.GetImportJobAsync(id))!.TriggerTokenHash);
+
         await repository.DeleteImportJobAsync(id);
         Assert.Empty(await repository.GetImportJobsAsync());
         Assert.Empty(await repository.GetImportJobRunsAsync(id));
@@ -145,6 +155,23 @@ public class ImportJobTests : IDisposable
         job.ModifiedUtc = day.AddHours(1);                                                           // no runs: since the last change
         Assert.True(ImportJobScheduler.IsMissed(job, null, day.AddHours(5)));
         Assert.False(ImportJobScheduler.IsMissed(job, null, day.AddHours(2)));
+    }
+
+    [Fact]
+    public void TriggerToken()
+    {
+        var token = JobTriggerToken.Create();
+        var other = JobTriggerToken.Create();
+        Assert.StartsWith("ljt_", token);
+        Assert.NotEqual(token, other);
+        Assert.DoesNotContain(token, JobTriggerToken.Hash(token));
+
+        var hash = JobTriggerToken.Hash(token);
+        Assert.True(JobTriggerToken.Verify(token, hash));
+        Assert.True(JobTriggerToken.Verify($" {token} ", hash));
+        Assert.False(JobTriggerToken.Verify(other, hash));
+        Assert.False(JobTriggerToken.Verify(null, hash));
+        Assert.False(JobTriggerToken.Verify(token, null));
     }
 
     [Fact]

@@ -47,7 +47,7 @@
         <MudTd>
             @if (Runner.IsRunning(context.Id))
             {
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Sync">running</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Sync">@(Runner.IsQueued(context.Id) ? "running, 1 queued" : "running")</MudChip>
             }
             else if (_lastRuns.TryGetValue(context.Id, out var run))
             {

@@ -107,6 +107,7 @@ app.MapDefaultEndpoints();
 app.MapStaticAssets().AllowAnonymous();
 app.MapAccountEndpoints();
 app.MapBackupEndpoints();
+app.MapJobTriggerEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

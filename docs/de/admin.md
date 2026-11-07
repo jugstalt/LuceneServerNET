@@ -238,6 +238,8 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
 - **Zeitplan**: Cron-Ausdruck mit 5 Feldern (`Minute Stunde Tag Monat Wochentag`, z. B. `0 3 * * *`) und Zeitzone
   (leer = UTC). Die Seite zeigt die nächsten Läufe. Ohne Cron-Ausdruck (*manual*) läuft der Job nur über *Run now*.
 - **Jetzt ausführen**, **Abbrechen** und ein **Lauf-Verlauf** (Status, Dauer, Zahlen, Index, Meldung) pro Job. Jeder Lauf steht im Audit-Log.
+- **Externer Auslöser**: den Job von außen starten statt (oder zusätzlich zu) einem Zeitplan, z. B. am Ende eines
+  Jenkins-Jobs, der die Datenbank aktualisiert. Siehe [Import-Jobs von außen auslösen](#import-jobs-von-auen-auslosen).
 - **Webhook** (optional): nach einem Lauf wird die URL mit `POST` und einem JSON-Body aufgerufen, entweder nur bei Fehlern
   (failed, cancelled, interrupted; Standard) oder nach jedem Lauf. Ein optionaler Header `Name: Wert` (z. B. `Authorization: Bearer ...`)
   wird verschlüsselt gespeichert. Bis zu 3 Versuche (5 s Abstand, 30 s Timeout); das Ergebnis steht im Lauf-Verlauf, ein fehlschlagender
@@ -260,6 +262,39 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
   wenn ein geplanter Lauf verpasst wurde, während die App nicht lief (nur einmal, egal wie viele verpasst wurden).
   Läufe, die bei einem Herunterfahren aktiv waren, werden als *interrupted* markiert. Für verlässliche Zeitpläne die Admin-App als
   Dienst betreiben (siehe [Als Windows-Dienst betreiben](#als-windows-dienst-betreiben)). Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
+
+### Import-Jobs von außen auslösen
+
+*Create trigger token* auf der Job-Seite erzeugt ein Token für diesen Job. Es wird nur einmal angezeigt (gespeichert als SHA-256-Hash),
+darf nur diesen Job starten und kann erneuert oder widerrufen werden. Jeder Aufruf steht im Audit-Log (`job.trigger`, mit IP-Adresse).
+
+```bash
+# Jenkins (sh), am Ende des Jobs, der die Datenbank aktualisiert
+curl --fail -X POST "https://admin.example.com/api/jobs/7/run" \
+     -H "Authorization: Bearer $LUCENE_JOB_TOKEN" \
+     -H "Content-Type: application/json" -d "{\"note\":\"jenkins #$BUILD_NUMBER\"}"
+```
+
+```bat
+rem Jenkins (bat)
+curl --fail -X POST "https://admin.example.com/api/jobs/7/run" -H "Authorization: Bearer %LUCENE_JOB_TOKEN%" -H "Content-Type: application/json" -d "{\"note\":\"jenkins #%BUILD_NUMBER%\"}"
+```
+
+Das Token in einem Jenkins-Credential (*Secret text*) ablegen, nicht in der Job-Definition.
+
+| Aufruf | Antwort |
+|---|---|
+| `POST /api/jobs/{id}/run` | `202 {"status":"started","runId":12,"statusUrl":"/api/jobs/7/runs/12"}`; läuft der Job gerade: `202 {"status":"queued"}` – er läuft direkt nach dem aktuellen Lauf noch einmal (mehrere Aufrufe während eines Laufs: ein weiterer Lauf) |
+| `GET /api/jobs/{id}/runs/{runId}` | `200` mit `status`, `finished`, `success`, Zeiten, Zahlen, `message`, `note`, `webhook` |
+| Job oder Token ungültig | `401` |
+| Job deaktiviert | `409` |
+
+- Das Token geht als `Authorization: Bearer <token>` mit (oder im Header `X-Job-Token`). Die optionale `note` (JSON-Body oder
+  `?note=`, max. 200 Zeichen) steht im Lauf-Verlauf und wird mit dem Webhook geschickt.
+- Der Aufruf kehrt sofort zurück. Soll der Jenkins-Build bei einem fehlgeschlagenen Import fehlschlagen, die `statusUrl` abfragen, bis
+  `finished` `true` ist, und `success` prüfen; für Benachrichtigungen reicht meist der Webhook des Jobs.
+- Ein Zeitplan kann als Sicherheitsnetz bleiben (z. B. `0 6 * * *`): er läuft unabhängig vom Auslöser.
+- Die Admin-Oberfläche muss von Jenkins aus erreichbar sein (HTTPS, siehe [Als Windows-Dienst betreiben](#als-windows-dienst-betreiben) / [IIS](#iis)).
 
 ## Backup und Restore
 

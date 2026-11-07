@@ -13,7 +13,7 @@ public static class AuditActions
     public const string DocumentsDelete = "documents.delete", MetadataSave = "metadata.save";
     public const string Import = "import", Copy = "copy", Restore = "restore", Export = "export";
     public const string AliasSet = "alias.set", AliasDelete = "alias.delete";
-    public const string JobSave = "job.save", JobDelete = "job.delete", JobRun = "job.run";
+    public const string JobSave = "job.save", JobDelete = "job.delete", JobRun = "job.run", JobTrigger = "job.trigger", JobToken = "job.token";
 }
 
 /// <summary>

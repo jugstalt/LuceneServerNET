@@ -238,6 +238,8 @@ can be edited and is saved with the job (the columns of the query must not chang
 - **Schedule**: cron expression with 5 fields (`minute hour day month weekday`, e.g. `0 3 * * *`) and a time zone
   (empty = UTC). The page shows the next runs. Without a cron expression (*manual*) the job only runs with *Run now*.
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
+- **External trigger**: start the job from outside instead of (or in addition to) a schedule, e.g. at the end of a
+  Jenkins job that updates the database. See [Trigger import jobs from outside](#trigger-import-jobs-from-outside).
 - **Webhook** (optional): after a run, the URL is called with `POST` and a JSON body, either only on failure (failed,
   cancelled, interrupted; default) or after every run. An optional header `Name: value` (e.g. `Authorization: Bearer ...`)
   is stored encrypted. Up to 3 attempts (5 s apart, 30 s timeout); the result is shown in the run history, a failing
@@ -260,6 +262,39 @@ can be edited and is saved with the job (the columns of the query must not chang
   startup if a scheduled run was missed while the application was stopped (only once, however many were missed).
   Runs that were active during a shutdown are marked *interrupted*. For reliable schedules run the admin application as a
   service (see [Run as Windows service](#run-as-windows-service)). Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
+
+### Trigger import jobs from outside
+
+*Create trigger token* on the job page creates a token for this job. It is shown only once (stored as SHA-256 hash), may
+only start this job and can be renewed or revoked. Every call is in the audit log (`job.trigger`, with IP address).
+
+```bash
+# Jenkins (sh), at the end of the job that updates the database
+curl --fail -X POST "https://admin.example.com/api/jobs/7/run" \
+     -H "Authorization: Bearer $LUCENE_JOB_TOKEN" \
+     -H "Content-Type: application/json" -d "{\"note\":\"jenkins #$BUILD_NUMBER\"}"
+```
+
+```bat
+rem Jenkins (bat)
+curl --fail -X POST "https://admin.example.com/api/jobs/7/run" -H "Authorization: Bearer %LUCENE_JOB_TOKEN%" -H "Content-Type: application/json" -d "{\"note\":\"jenkins #%BUILD_NUMBER%\"}"
+```
+
+Keep the token in a Jenkins credential (*Secret text*), not in the job definition.
+
+| Call | Response |
+|---|---|
+| `POST /api/jobs/{id}/run` | `202 {"status":"started","runId":12,"statusUrl":"/api/jobs/7/runs/12"}`; if the job is running: `202 {"status":"queued"}` – it runs once more right after the current run (several triggers during a run: one more run) |
+| `GET /api/jobs/{id}/runs/{runId}` | `200` with `status`, `finished`, `success`, times, counts, `message`, `note`, `webhook` |
+| invalid job or token | `401` |
+| job disabled | `409` |
+
+- The token is sent as `Authorization: Bearer <token>` (or header `X-Job-Token`). The optional `note` (JSON body or
+  `?note=`, max. 200 characters) is shown in the run history and sent with the webhook.
+- The call returns immediately. To fail the Jenkins build on a failed import, poll the `statusUrl` until `finished` is
+  `true` and check `success`; for notifications the job webhook is usually enough.
+- A schedule can stay as a safety net (e.g. `0 6 * * *`): it runs independently of the trigger.
+- The admin UI must be reachable from Jenkins (HTTPS, see [Run as Windows service](#run-as-windows-service) / [IIS](#iis)).
 
 ## Backup and restore
 

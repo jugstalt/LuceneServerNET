@@ -24,6 +24,10 @@
     {
         @if (Runner.IsRunning(_job.Id))
         {
+            @if (Runner.IsQueued(_job.Id))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">one more run queued</MudChip>
+            }
             <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => Runner.Cancel(_job.Id)">Cancel run</MudButton>
         }
         else
@@ -183,6 +187,31 @@ else
 
     @if (_job.Id != 0)
     {
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <MudText Typo="Typo.h6">External trigger</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Start the job from outside, e.g. at the end of a Jenkins job that updates the database. The token may only start this job.
+                While the job runs, a trigger queues one more run. Disabled jobs can not be triggered.
+            </MudText>
+            @if (_newToken is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3">Copy the token now, it is not shown again.</MudAlert>
+                <MudTextField T="string" Value="_newToken" Label="Token" ReadOnly="true" Variant="Variant.Outlined" Class="mono mb-3" />
+            }
+            @if (_job.TriggerTokenHash is not null)
+            {
+                <pre class="mono" style="white-space:pre-wrap;font-size:0.8rem">@TriggerExample</pre>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Autorenew" OnClick="CreateTokenAsync">Renew token</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Block" OnClick="RevokeTokenAsync">Revoke</MudButton>
+                </MudStack>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Key" OnClick="CreateTokenAsync">Create trigger token</MudButton>
+            }
+        </MudPaper>
+
         <MudText Typo="Typo.h6" Class="mb-2">Runs</MudText>
         <MudTable Items="_runs" Dense="true" Hover="true" Outlined="true" Elevation="0">
             <HeaderContent>
@@ -193,7 +222,13 @@ else
                 <MudTd Style="white-space:nowrap">@Format.Date(context.StartedUtc)</MudTd>
                 <MudTd>@(context.FinishedUtc is { } f ? $"{(f - context.StartedUtc).TotalSeconds:0.0} s" : "…")</MudTd>
                 <MudTd><JobStatusChip Status="@context.Status" /></MudTd>
-                <MudTd>@context.TriggeredBy</MudTd>
+                <MudTd>
+                    @context.TriggeredBy
+                    @if (context.Note is not null)
+                    {
+                        <MudText Typo="Typo.caption" Style="display:block">@context.Note</MudText>
+                    }
+                </MudTd>
                 <MudTd Class="mono">@context.IndexName</MudTd>
                 <MudTd Style="text-align:right">@Format.Number(context.ReadCount)</MudTd>
                 <MudTd Style="text-align:right">@Format.Number(context.Imported)</MudTd>
@@ -401,6 +436,44 @@ else
         });
         await Task.Delay(200);
     }
+
+    private string? _newToken;
+
+    private string TriggerExample
+    {
+        get
+        {
+            var url = $"{Navigation.BaseUri.TrimEnd('/')}/api/jobs/{_job.Id}/run";
+            return $"curl -X POST \"{url}\" -H \"Authorization: Bearer {_newToken ?? "<token>"}\" -H \"Content-Type: application/json\" -d \"{{\\\"note\\\":\\\"jenkins #$BUILD_NUMBER\\\"}}\"";
+        }
+    }
+
+    private async Task CreateTokenAsync()
+    {
+        if (_job.TriggerTokenHash is not null &&
+            !await ConfirmAsync("Renew token", "The current token stops working. Update it where the job is triggered."))
+        {
+            return;
+        }
+
+        _newToken = JobTriggerToken.Create();
+        _job.TriggerTokenHash = JobTriggerToken.Hash(_newToken);
+        await Repository.SetImportJobTriggerTokenAsync(_job.Id, _job.TriggerTokenHash);
+        await Audit.LogAsync(AuditActions.JobToken, _job.Instance, _job.Target, $"job {_job.Name} · trigger token created");
+    }
+
+    private async Task RevokeTokenAsync()
+    {
+        if (!await ConfirmAsync("Revoke token", "The job can no longer be triggered from outside.")) return;
+
+        _newToken = null;
+        _job.TriggerTokenHash = null;
+        await Repository.SetImportJobTriggerTokenAsync(_job.Id, null);
+        await Audit.LogAsync(AuditActions.JobToken, _job.Instance, _job.Target, $"job {_job.Name} · trigger token revoked");
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string text)
+        => await DialogService.ShowMessageBoxAsync(title, text, yesText: "OK", cancelText: "Cancel") == true;
 
     private async Task DeleteAsync()
     {

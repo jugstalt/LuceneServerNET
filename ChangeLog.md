@@ -57,6 +57,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;
   run history, run now, cancel; manual jobs without schedule; missed runs are caught up once at startup (per job);
+  external trigger per job (`POST /api/jobs/{id}/run` with a job token, e.g. from Jenkins; a trigger during a run queues
+  one more run; status via `GET /api/jobs/{id}/runs/{runId}`, optional note);
   optional webhook after a run (always or on failure, JSON statistics with a Slack/Mattermost compatible `text`, encrypted header, 3 attempts).
   Admin UI as Windows service: `lucene-admin-service.bat install|uninstall [name] [port]` (virtual service account,
   restart on failure, data and configuration `_config/admin.json` next to the version folders, event log); the win64

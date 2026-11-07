@@ -50,6 +50,7 @@ public class ImportJobRunner
     private readonly JobWebhook _webhook;
     private readonly ILogger<ImportJobRunner> _logger;
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _running = new();
+    private readonly ConcurrentDictionary<long, (string TriggeredBy, string? Note)> _queued = new();
 
     /// <summary>Raised when a run starts or ends (job id).</summary>
     public event Action<long>? RunChanged;
@@ -68,8 +69,42 @@ public class ImportJobRunner
 
     public bool IsRunning(long jobId) => _running.ContainsKey(jobId);
 
+    /// <summary>True if the job runs once more after the current run (triggered while it was running).</summary>
+    public bool IsQueued(long jobId) => _queued.ContainsKey(jobId);
+
+    /// <summary>
+    /// Starts a run, or - if the job is running - queues one more run after the current one (several triggers
+    /// during a run result in one more run).
+    /// </summary>
+    public async Task<JobTriggerResponse> TriggerAsync(long jobId, string triggeredBy, string? note = null)
+    {
+        var started = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = RunAsync(jobId, triggeredBy, note: note, onStarted: id => started.TrySetResult(id));
+        if (run.IsFaulted || run.IsCompleted && !started.Task.IsCompleted)
+        {
+            // already running
+            _queued[jobId] = (triggeredBy, note);
+            if (!IsRunning(jobId) && _queued.TryRemove(jobId, out var queued))
+            {
+                // the run ended in between: start now
+                return await TriggerAsync(jobId, queued.TriggeredBy, queued.Note);
+            }
+            RunChanged?.Invoke(jobId);
+            return new JobTriggerResponse { Status = "queued" };
+        }
+
+        var finished = await Task.WhenAny(started.Task, run);
+        if (finished == started.Task || started.Task.IsCompleted)
+        {
+            return new JobTriggerResponse { Status = "started", RunId = await started.Task };
+        }
+        await run;   // failed before the run was saved: throws
+        throw new InvalidOperationException("The run could not be started");
+    }
+
     public void Cancel(long jobId)
     {
+        _queued.TryRemove(jobId, out _);
         if (_running.TryGetValue(jobId, out var cancellation)) cancellation.Cancel();
     }
 
@@ -127,7 +162,8 @@ public class ImportJobRunner
         }
     }
 
-    public async Task<ImportJobRunRecord> RunAsync(long jobId, string triggeredBy, CancellationToken cancellationToken = default)
+    public async Task<ImportJobRunRecord> RunAsync(long jobId, string triggeredBy, CancellationToken cancellationToken = default,
+                                                   string? note = null, Action<long>? onStarted = null)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!_running.TryAdd(jobId, cancellation))
@@ -135,11 +171,12 @@ public class ImportJobRunner
             throw new InvalidOperationException("The job is already running");
         }
 
-        var run = new ImportJobRunRecord { JobId = jobId, StartedUtc = DateTime.UtcNow, Status = ImportJobStatus.Running, TriggeredBy = triggeredBy };
+        var run = new ImportJobRunRecord { JobId = jobId, StartedUtc = DateTime.UtcNow, Status = ImportJobStatus.Running, TriggeredBy = triggeredBy, Note = note };
         ImportJobRecord? job = null;
         try
         {
             run.Id = await _repository.InsertImportJobRunAsync(run, CancellationToken.None);
+            onStarted?.Invoke(run.Id);
             RunChanged?.Invoke(jobId);
 
             job = await _repository.GetImportJobAsync(jobId, CancellationToken.None) ?? throw new InvalidOperationException("Job not found");
@@ -169,11 +206,18 @@ public class ImportJobRunner
 
             await _audit.LogAsync(triggeredBy, AuditActions.JobRun, job?.Instance, job?.Target,
                 $"job {job?.Name ?? jobId.ToString()} · {run.Status} · index {run.IndexName} · read {run.ReadCount}, imported {run.Imported}, failed {run.Failed}" +
-                (run.Message is null ? "" : $" · {run.Message}"),
+                (run.Message is null ? "" : $" · {run.Message}") + (note is null ? "" : $" · note: {note}"),
                 success: run.Status is ImportJobStatus.Succeeded or ImportJobStatus.Warning);
 
             _running.TryRemove(jobId, out _);
             cancellation.Dispose();
+
+            // triggered while running: once more (right away, the webhook of this run is called in parallel)
+            if (_queued.TryRemove(jobId, out var queued))
+            {
+                _logger.LogInformation("Starting the queued run of import job {JobId}", jobId);
+                _ = RunAsync(jobId, queued.TriggeredBy, CancellationToken.None, queued.Note);
+            }
             RunChanged?.Invoke(jobId);
         }
 

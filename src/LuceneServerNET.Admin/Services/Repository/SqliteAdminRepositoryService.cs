@@ -231,8 +231,8 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
     #region Import jobs
 
-    private const string JobColumns = "id, name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, webhook_url, webhook_on, webhook_header_protected, created_utc, modified_utc";
-    private const string RunColumns = "id, job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message, webhook_result";
+    private const string JobColumns = "id, name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, webhook_url, webhook_on, webhook_header_protected, trigger_token_hash, created_utc, modified_utc";
+    private const string RunColumns = "id, job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message, webhook_result, note";
 
     public async Task<IReadOnlyList<ImportJobRecord>> GetImportJobsAsync(CancellationToken cancellationToken = default)
     {
@@ -284,8 +284,8 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
     {
         await using var connection = await OpenAsync(cancellationToken);
         run.Id = await connection.ExecuteScalarAsync<long>(
-            @"INSERT INTO import_job_runs (job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message)
-              VALUES (@JobId, @StartedUtc, @FinishedUtc, @Status, @TriggeredBy, @IndexName, @ReadCount, @Imported, @Failed, @Message);
+            @"INSERT INTO import_job_runs (job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message, note)
+              VALUES (@JobId, @StartedUtc, @FinishedUtc, @Status, @TriggeredBy, @IndexName, @ReadCount, @Imported, @Failed, @Message, @Note);
               SELECT last_insert_rowid();", run);
         return run.Id;
     }
@@ -297,6 +297,19 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
             @"UPDATE import_job_runs SET finished_utc = @FinishedUtc, status = @Status, index_name = @IndexName,
                      read_count = @ReadCount, imported = @Imported, failed = @Failed, message = @Message, webhook_result = @WebhookResult
               WHERE id = @Id", run);
+    }
+
+    public async Task<ImportJobRunRecord?> GetImportJobRunAsync(long runId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<ImportJobRunRecord>($"SELECT {RunColumns} FROM import_job_runs WHERE id = @runId", new { runId });
+    }
+
+    public async Task SetImportJobTriggerTokenAsync(long jobId, string? tokenHash, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync("UPDATE import_jobs SET trigger_token_hash = @tokenHash, modified_utc = @now WHERE id = @jobId",
+                                      new { jobId, tokenHash, now = DateTime.UtcNow });
     }
 
     public async Task<IReadOnlyList<ImportJobRunRecord>> GetImportJobRunsAsync(long jobId, int limit = 50, CancellationToken cancellationToken = default)

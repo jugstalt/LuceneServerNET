@@ -93,6 +93,9 @@ public class ImportJobRecord
     /// <summary>Optional header "Name: value" (e.g. Authorization), encrypted with DataProtection.</summary>
     public string? WebhookHeaderProtected { get; set; }
 
+    /// <summary>SHA-256 hash of the trigger token (see JobTriggerToken); null = no external trigger.</summary>
+    public string? TriggerTokenHash { get; set; }
+
     /// <summary>Time zone of the cron expression (IANA/Windows id); null = UTC.</summary>
     public string? TimeZone { get; set; }
 
@@ -117,6 +120,9 @@ public class ImportJobRunRecord
     public long Imported { get; set; }
     public long Failed { get; set; }
     public string? Message { get; set; }
+
+    /// <summary>Note of an external trigger (e.g. jenkins build number).</summary>
+    public string? Note { get; set; }
 
     /// <summary>Result of the webhook call (null = no webhook called).</summary>
     public string? WebhookResult { get; set; }
@@ -159,6 +165,11 @@ public interface IAdminRepositoryService
 
     Task<long> InsertImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default);
     Task UpdateImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default);
+    Task<ImportJobRunRecord?> GetImportJobRunAsync(long runId, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets (hash) or removes (null) the trigger token of a job.</summary>
+    Task SetImportJobTriggerTokenAsync(long jobId, string? tokenHash, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ImportJobRunRecord>> GetImportJobRunsAsync(long jobId, int limit = 50, CancellationToken cancellationToken = default);
 
     /// <summary>Last run of every job (job id => run).</summary>

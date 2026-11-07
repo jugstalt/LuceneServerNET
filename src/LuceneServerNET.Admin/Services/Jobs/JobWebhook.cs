@@ -34,6 +34,7 @@ public class JobWebhookPayload
     [JsonPropertyName("imported")] public long Imported { get; set; }
     [JsonPropertyName("failed")] public long Failed { get; set; }
     [JsonPropertyName("message")] public string? Message { get; set; }
+    [JsonPropertyName("note")] public string? Note { get; set; }
 
     /// <summary>Link to the job page (only if Admin:PublicUrl is configured).</summary>
     [JsonPropertyName("url")] public string? Url { get; set; }
@@ -114,7 +115,8 @@ public class JobWebhook
         var text = String.Create(CultureInfo.InvariantCulture,
             $"{(success ? "✅" : "❌")} Import job {job.Name}: {run.Status} · {job.Instance}/{run.IndexName ?? job.Target} · " +
             $"read {run.ReadCount}, imported {run.Imported}, failed {run.Failed} · {duration:0.0} s")
-            + (String.IsNullOrEmpty(run.Message) ? "" : $" · {run.Message}");
+            + (String.IsNullOrEmpty(run.Message) ? "" : $" · {run.Message}")
+            + (String.IsNullOrEmpty(run.Note) ? "" : $" · {run.Note}");
 
         return new JobWebhookPayload
         {
@@ -136,6 +138,7 @@ public class JobWebhook
             Imported = run.Imported,
             Failed = run.Failed,
             Message = run.Message,
+            Note = run.Note,
             Url = _publicUrl is null || job.Id == 0 ? null : $"{_publicUrl}/jobs/{job.Id}"
         };
     }
