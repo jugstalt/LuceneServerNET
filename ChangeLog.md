@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   GeoJSON files (FeatureCollection) and coordinate columns (lat/lon, x/y), converted to WGS84 with Proj4Net
   (source EPSG from the SRID of the value or chosen in the UI). Lines/polygons are indexed as point on surface
   plus a bounding box field (`<field>_bbox`), the original geometry can be stored as GeoJSON (`<field>_geojson`).
+  PostGIS `geometry` / `geography` columns are read directly (also with `SELECT *`), SQL Server geometry columns give a hint to use `STAsBinary()`.
   Copy an index (mapping, metadata, documents) to another name or another instance. Alias management.
   Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;

@@ -206,10 +206,12 @@ Weitere Koordinatenspalten lassen sich im Mapping hinzufügen (*Add point from c
   der Linie bzw. im Polygon, berechnet mit [SpatialNET](https://github.com/jugstalt/spatialNET.Core) im Quellsystem).
   Die Bounding-Box steht in `<feld>_bbox` als `"minx,miny,maxx,maxy"` (WGS84, nicht indiziert); Punkte bekommen keine.
 - **Original-Geometrie** (optional, standardmäßig aus): `<feld>_geojson`, GeoJSON in WGS84 mit 7 Nachkommastellen (RFC 7946).
-- **Datenbanken**: Die Treiber können Geometrie-Typen nicht lesen, daher als WKB abfragen:
+- **Datenbanken**: PostGIS-Spalten `geometry` / `geography` werden direkt gelesen (als EWKB mit SRID, auch bei `SELECT *`).
+  SQL-Server-Geometrietypen als WKB abfragen:
 
 ```sql
--- PostGIS (EWKB behält die SRID)
+-- PostGIS: direkt, oder ausdrücklich als EWKB (behält die SRID)
+SELECT id, name, geom FROM places
 SELECT id, name, ST_AsEWKB(geom) AS geom FROM places
 -- SQL Server geometry / geography (EPSG-Code im Mapping wählen)
 SELECT id, name, geom.STAsBinary() AS geom FROM places

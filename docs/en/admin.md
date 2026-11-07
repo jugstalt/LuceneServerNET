@@ -206,10 +206,12 @@ Further coordinate columns can be added in the mapping (*Add point from columns*
   inside the polygon, computed with [SpatialNET](https://github.com/jugstalt/spatialNET.Core) in the source system).
   The bounding box is stored in `<field>_bbox` as `"minx,miny,maxx,maxy"` (WGS84, not indexed); points get none.
 - **Original geometry** (optional, default off): `<field>_geojson`, GeoJSON in WGS84 with 7 decimals (RFC 7946).
-- **Databases**: the drivers can not read geometry types, select them as WKB:
+- **Databases**: PostGIS `geometry` / `geography` columns are read directly (as EWKB with SRID, also with `SELECT *`).
+  SQL Server geometry types must be selected as WKB:
 
 ```sql
--- PostGIS (EWKB keeps the SRID)
+-- PostGIS: directly, or explicitly as EWKB (keeps the SRID)
+SELECT id, name, geom FROM places
 SELECT id, name, ST_AsEWKB(geom) AS geom FROM places
 -- SQL Server geometry / geography (choose the EPSG code in the mapping)
 SELECT id, name, geom.STAsBinary() AS geom FROM places

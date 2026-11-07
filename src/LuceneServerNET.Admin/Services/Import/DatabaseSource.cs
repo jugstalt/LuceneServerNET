@@ -161,15 +161,34 @@ public class DatabaseSource
             command.Transaction = transaction;
             command.CommandTimeout = commandTimeoutSeconds;
 
+            if (command is Npgsql.NpgsqlCommand npgsqlCommand)
+            {
+                await RequestSpatialColumnsAsTextAsync(npgsqlCommand, cancellationToken);
+            }
+
             await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
             var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
+            var typeNames = Enumerable.Range(0, reader.FieldCount).Select(i => SafeDataTypeName(reader, i)).ToArray();
+            var spatial = typeNames.Select(t => provider == DbProviders.PostgreSql && IsSpatialType(t)).ToArray();
 
             while (await reader.ReadAsync(cancellationToken))
             {
                 var row = new Dictionary<string, object?>(StringComparer.Ordinal);
                 for (int i = 0; i < columns.Length; i++)
                 {
-                    row[UniqueColumn(columns, i)] = ToValue(reader.IsDBNull(i) ? null : reader.GetValue(i));
+                    if (await reader.IsDBNullAsync(i, cancellationToken))
+                    {
+                        row[UniqueColumn(columns, i)] = null;
+                    }
+                    else if (spatial[i])
+                    {
+                        // PostGIS geometry / geography: the driver has no type for it, the text form is hex EWKB (with SRID)
+                        row[UniqueColumn(columns, i)] = Convert.FromHexString(reader.GetFieldValue<string>(i));
+                    }
+                    else
+                    {
+                        row[UniqueColumn(columns, i)] = ToValue(ReadValue(reader, i, columns[i], typeNames[i], provider));
+                    }
                 }
                 yield return row;
             }
@@ -177,6 +196,56 @@ public class DatabaseSource
         finally
         {
             await transaction.RollbackAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Npgsql has no type for PostGIS geometry / geography: request these columns in text format (hex EWKB with SRID).
+    /// The column types are read with a schema only query first.
+    /// </summary>
+    private static async Task RequestSpatialColumnsAsTextAsync(Npgsql.NpgsqlCommand command, CancellationToken cancellationToken)
+    {
+        bool[] spatial;
+        await using (var schema = await command.ExecuteReaderAsync(CommandBehavior.SchemaOnly, cancellationToken))
+        {
+            spatial = Enumerable.Range(0, schema.FieldCount).Select(i => IsSpatialType(SafeDataTypeName(schema, i))).ToArray();
+        }
+        if (spatial.Any(s => s))
+        {
+            command.UnknownResultTypeList = spatial;
+        }
+    }
+
+    private static bool IsSpatialType(string typeName)
+    {
+        var name = typeName.Split('.').Last().Trim('"').ToLowerInvariant();
+        return name is "geometry" or "geography";
+    }
+
+    private static string SafeDataTypeName(DbDataReader reader, int index)
+    {
+        try
+        {
+            return reader.GetDataTypeName(index);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static object ReadValue(DbDataReader reader, int index, string column, string typeName, string provider)
+    {
+        try
+        {
+            return reader.GetValue(index);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidCastException or InvalidOperationException or System.IO.FileNotFoundException)
+        {
+            var hint = provider == DbProviders.SqlServer && IsSpatialType(typeName)
+                ? $"select it as WKB, e.g. {column}.STAsBinary() AS {column}"
+                : "convert it in the query, e.g. to text";
+            throw new NotSupportedException($"Column {column} ({typeName}) can not be read: {hint}", ex);
         }
     }
 
