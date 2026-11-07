@@ -46,6 +46,7 @@ builder.Services.AddSingleton<IAdminRepositoryService>(sp =>
     new SqliteAdminRepositoryService(connectionString, sp.GetRequiredService<ILogger<SqliteAdminRepositoryService>>()));
 builder.Services.AddSingleton<InstanceRegistry>();
 builder.Services.AddSingleton<ImportService>();
+builder.Services.AddSingleton<CopyService>();
 builder.Services.AddSingleton<DatabaseSource>();
 builder.Services.AddSingleton<AuditLogger>();
 builder.Services.AddScoped<AuditService>();

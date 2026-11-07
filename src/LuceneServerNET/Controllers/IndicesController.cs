@@ -11,6 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Controllers;
@@ -145,6 +147,49 @@ public class IndicesController : LuceneControllerBase
     #endregion
 
     #region Documents
+
+    /// <summary>
+    /// Exports all documents (stored fields, without _guid) as NDJSON (one JSON object per line).
+    /// Fields that are not stored can not be exported. Header X-Total-Count: number of documents.
+    /// </summary>
+    [HttpGet("{id}/documents/_export")]
+    [Produces("application/x-ndjson")]
+    public async Task ExportDocuments(string id, CancellationToken cancellationToken)
+    {
+        id = id?.Trim().ToLower();
+        if (String.IsNullOrEmpty(id) || !LuceneServerNET.Engine.Extensions.PathGuard.IsValidName(id))
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new ApiErrorResult($"Invalid index id '{id}'"), cancellationToken);
+            return;
+        }
+        if (!_lucene.IndexExists(id))
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            await Response.WriteAsJsonAsync(new ApiErrorResult("Index not found"), cancellationToken);
+            return;
+        }
+
+        Response.ContentType = "application/x-ndjson; charset=utf-8";
+        Response.Headers["X-Total-Count"] = _lucene.IndexStats(id).DocumentCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var newLine = "\n"u8.ToArray();
+        int count = 0;
+
+        foreach (var document in _lucene.ExportDocuments(id))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await JsonSerializer.SerializeAsync(Response.Body, document, options, cancellationToken);
+            await Response.Body.WriteAsync(newLine, cancellationToken);
+
+            if (++count % 1000 == 0)
+            {
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+    }
 
     /// <summary>Adds documents to the index.</summary>
     [HttpPost("{id}/documents")]

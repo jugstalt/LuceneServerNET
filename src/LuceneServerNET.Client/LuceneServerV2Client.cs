@@ -118,6 +118,48 @@ namespace LuceneServerNET.Client
         public async Task AddDocumentsAsync(string index, IEnumerable<IDictionary<string, object>> documents, CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Post, $"api/v2/indices/{Esc(index)}/documents", documents, cancellationToken);
 
+        /// <summary>Number of documents announced by the export (header X-Total-Count), set when the export starts.</summary>
+        public delegate void ExportStartedHandler(long? totalCount);
+
+        /// <summary>
+        /// Streams all documents of the index (stored fields, without _guid) from GET .../documents/_export (NDJSON).
+        /// Values are <see cref="JsonElement"/>s.
+        /// </summary>
+        public async IAsyncEnumerable<IDictionary<string, object>> ExportDocumentsAsync(string index,
+                                                                                         ExportStartedHandler onStarted = null,
+                                                                                         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            using var request = CreateRequest(HttpMethod.Get, $"api/v2/indices/{Esc(index)}/documents/_export");
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ReadResultAsync<ApiResult>(response).ConfigureAwait(false);   // throws with the error message
+            }
+
+            long? total = null;
+            if (response.Headers.TryGetValues("X-Total-Count", out var values) &&
+                long.TryParse(values.FirstOrDefault(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var t))
+            {
+                total = t;
+            }
+            onStarted?.Invoke(total);
+
+            using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+
+            string line;
+            while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) != null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (String.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+                yield return JsonSerializer.Deserialize<Dictionary<string, object>>(line);
+            }
+        }
+
         /// <summary>Removes all documents matching the term (Lucene query syntax) in field.</summary>
         public async Task RemoveDocumentsAsync(string index, string term, string field = "_guid", CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Delete, $"api/v2/indices/{Esc(index)}/documents?term={Esc(term)}&field={Esc(field)}", cancellationToken: cancellationToken);

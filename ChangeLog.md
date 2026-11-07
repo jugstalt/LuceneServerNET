@@ -47,14 +47,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   GeoJSON files (FeatureCollection) and coordinate columns (lat/lon, x/y), converted to WGS84 with Proj4Net
   (source EPSG from the SRID of the value or chosen in the UI). Lines/polygons are indexed as point on surface
   plus a bounding box field (`<field>_bbox`), the original geometry can be stored as GeoJSON (`<field>_geojson`).
+  Copy an index (mapping, metadata, documents) to another name or another instance.
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),
   `GET /api/v2/indices/{id}/stats` (documents, size on disk, last modification),
   `GET /api/v2/admin/info` (version, uptime, platform; role `admin`) and
-  `GET /api/v2/admin/whoami` (roles of the calling client).
+  `GET /api/v2/admin/whoami` (roles of the calling client) and
+  `GET /api/v2/indices/{id}/documents/_export` (all documents as NDJSON, stored fields; role `read`).
 - `LuceneServerNET.Client`: new `LuceneServerV2Client` for the v2 API (not bound to one index;
-  `LuceneServerClient` is unchanged).
+  `LuceneServerClient` is unchanged), incl. `ExportDocumentsAsync` (streamed).
 
 ### Changed
 

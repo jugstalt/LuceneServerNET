@@ -17,6 +17,7 @@
 | Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
+| Copy | Copy an index (mapping, metadata, documents) to a new name on the same instance or to another instance |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
 
 The UI only offers actions the API client of an instance is allowed to do: it asks the server
@@ -145,3 +146,10 @@ SELECT id, name, geom.STAsBinary() AS geom FROM places
 ```
 
 Search with the spatial filter on the geo field, e.g. `dist_km(geom:15.44,47.07,5)` or `bbox(geom:15.4,47.0,15.5,47.1)`.
+
+## Copy
+
+*Copy* on the index page copies mapping, metadata and all documents to a new index name or another instance
+(the target API client needs the `write` role). Documents are read with `GET /api/v2/indices/{id}/documents/_export`,
+which returns the **stored** fields only: fields with `"store": false` are lost in the copy (the page shows them before
+copying). An existing target is only overwritten with *Replace the target if it exists*.

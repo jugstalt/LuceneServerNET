@@ -45,6 +45,7 @@ Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der B
 | GET | `/api/v2/indices/{index}/groups?field=&q=` | read | `GET /Lucene/group/{index}?groupField=&q=` |
 | GET | `/api/v2/indices` (index names) | read | – |
 | GET | `/api/v2/indices/{index}/stats` | read | – |
+| GET | `/api/v2/indices/{index}/documents/_export` (NDJSON, header `X-Total-Count`) | read | – |
 | GET | `/api/v2/admin/info` | admin | – |
 | GET | `/api/v2/admin/whoami` | read | – |
 

@@ -518,6 +518,51 @@ namespace LuceneServerNET.Engine.Services
             return stats;
         }
 
+        /// <summary>
+        /// All documents of the index (stored fields of the mapping, without _guid) from one consistent
+        /// snapshot. Fields that are not stored can not be exported. The searcher is held until the
+        /// enumeration ends (dispose the enumerator).
+        /// </summary>
+        public IEnumerable<IDictionary<string, object>> ExportDocuments(string indexName)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new IndexNotFoundException();
+            }
+
+            var mapping = _resources.GetMapping(indexName);
+            var fields = mapping.Fields.Where(f => f.Store && f.FieldType != FieldTypes.GuidType).ToArray();
+
+            return Enumerate();
+
+            IEnumerable<IDictionary<string, object>> Enumerate()
+            {
+                using var searcherLease = _resources.AcquireSearcher(indexName);
+                var reader = searcherLease.Searcher.IndexReader;
+                var liveDocs = Lucene.Net.Index.MultiFields.GetLiveDocs(reader);
+
+                for (int i = 0; i < reader.MaxDoc; i++)
+                {
+                    if (liveDocs != null && !liveDocs.Get(i))
+                    {
+                        continue;   // deleted
+                    }
+
+                    var doc = reader.Document(i);
+                    var item = new Dictionary<string, object>();
+                    foreach (var field in fields)
+                    {
+                        var value = field.GetValue(doc);
+                        if (value != null)
+                        {
+                            item[field.Name] = value;
+                        }
+                    }
+                    yield return item;
+                }
+            }
+        }
+
         #endregion
 
         #region Search/Query

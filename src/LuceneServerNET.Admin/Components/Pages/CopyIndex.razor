@@ -1,0 +1,172 @@
+@page "/i/{InstanceName}/index/{IndexName}/copy"
+@inherits InstancePageBase
+@implements IDisposable
+@inject CopyService Copier
+
+<PageTitle>Copy @IndexName · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem(IndexName, $"{InstanceUrl}/index/{Uri.EscapeDataString(IndexName)}"), new BreadcrumbItem("Copy", null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudText Typo="Typo.h4" Class="mb-4">Copy @IndexName</MudText>
+
+    @if (_notStored.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">
+            These fields are not stored and can not be copied (their values are lost in the target): <b>@string.Join(", ", _notStored)</b>.
+            The mapping is copied unchanged. To keep them, re-import the source data into the target instead.
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" Value="_targetInstance" ValueChanged="OnTargetInstanceChanged" Label="Target instance" Variant="Variant.Outlined" Disabled="_running">
+                    @foreach (var target in _targets)
+                    {
+                        <MudSelectItem Value="target.Name">@target.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_targetStatus is { Online: true, CanWrite: false })
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">The API client of the target has no write role.</MudText>
+                }
+                else if (_targetStatus is { Online: false })
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">@_targetStatus.Error</MudText>
+                }
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_targetIndex" Label="Target index" Variant="Variant.Outlined" Immediate="true" Disabled="_running"
+                              Error="@(!CreateIndex.IsValidIndexName(_targetIndex ?? ""))" ErrorText="a-z, 0-9, '_' and '-'" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
+                    <MudNumericField @bind-Value="_options.BatchSize" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" Disabled="_running" />
+                    <MudCheckBox @bind-Value="_options.CopyMetadata" Label="Copy metadata" Disabled="_running" />
+                    <MudCheckBox @bind-Value="_options.ReplaceExisting" Label="Replace the target if it exists" Color="Color.Error" Disabled="_running" />
+                    <MudSpacer />
+                    @if (_running)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => _cancellation?.Cancel()">Cancel</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="StartAsync" Disabled="!CanStart">Copy</MudButton>
+                    }
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+
+        @if (_progress is not null)
+        {
+            @if (_total is > 0)
+            {
+                <MudProgressLinear Class="mt-4" Color="Color.Primary" Value="@(Math.Min(100, _progress.Imported * 100.0 / _total.Value))" />
+            }
+            else
+            {
+                <MudProgressLinear Class="mt-4" Color="Color.Primary" Indeterminate="_running" Value="100" />
+            }
+            <MudText Typo="Typo.body2" Class="mt-2">
+                Read @Format.Number(_progress.Read) @(_total is null ? "" : $"of {Format.Number(_total.Value)}") · written @Format.Number(_progress.Imported) · @_progress.Batches batches
+            </MudText>
+        }
+
+        @if (_report is not null)
+        {
+            <MudAlert Class="mt-3" Severity="@(_report.FatalError is null && !_report.Cancelled ? Severity.Success : _report.Cancelled ? Severity.Warning : Severity.Error)">
+                @Format.Number(_report.Imported) documents copied in @_report.Duration.TotalSeconds.ToString("0.0") s.
+                @if (_report.Cancelled) { <span> Cancelled.</span> }
+                @if (_report.FatalError is not null) { <span> Error: @_report.FatalError</span> }
+            </MudAlert>
+            @if (_report.Imported > 0)
+            {
+                <MudButton Class="mt-2" Variant="Variant.Text" Href="@($"i/{Uri.EscapeDataString(_targetInstance ?? "")}/index/{Uri.EscapeDataString(_targetIndex ?? "")}")">Open target index</MudButton>
+            }
+        }
+    </MudPaper>
+</InstanceGuard>
+
+@code {
+    [Parameter] public string IndexName { get; set; } = "";
+
+    private IReadOnlyList<ServerInstance> _targets = [];
+    private string? _targetInstance, _targetIndex;
+    private InstanceStatus? _targetStatus;
+    private IReadOnlyList<string> _notStored = [];
+
+    private CopyOptions _options = new();
+    private bool _running;
+    private CancellationTokenSource? _cancellation;
+    private ImportProgress? _progress;
+    private ImportReport? _report;
+    private long? _total;
+
+    private bool CanStart => _targetInstance is not null && _targetStatus is { Online: true, CanWrite: true }
+                             && CreateIndex.IsValidIndexName(_targetIndex ?? "")
+                             && !(_targetInstance == InstanceName && _targetIndex == IndexName);
+
+    protected override async Task LoadAsync()
+    {
+        var mapping = await Client!.GetMappingAsync(IndexName);
+        _notStored = mapping is null ? [] : CopyService.NotStoredFields(mapping);
+        _targets = await Registry.GetAllAsync();
+        _targetIndex = $"{IndexName}_copy";
+        await OnTargetInstanceChanged(InstanceName);
+    }
+
+    private async Task OnTargetInstanceChanged(string name)
+    {
+        _targetInstance = name;
+        _targetStatus = null;
+        if (_targets.FirstOrDefault(t => t.Name == name) is { } target)
+        {
+            _targetStatus = await InstanceRegistry.ProbeAsync(Registry.CreateClient(target));
+            if (name != InstanceName && _targetIndex == $"{IndexName}_copy")
+            {
+                _targetIndex = IndexName;
+            }
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        var target = _targets.First(t => t.Name == _targetInstance);
+        var targetIndex = _targetIndex!.Trim().ToLowerInvariant();
+
+        if (_options.ReplaceExisting && !await ConfirmAsync("Replace target", $"If {targetIndex} exists on {target.Name}, its mapping and all documents are replaced.", "Copy"))
+        {
+            return;
+        }
+
+        _running = true;
+        _report = null;
+        _total = null;
+        _progress = new ImportProgress(0, 0, 0, 0);
+        _cancellation = new CancellationTokenSource();
+
+        var progress = new Progress<ImportProgress>(p =>
+        {
+            _progress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            _report = await Copier.CopyAsync(Client!, IndexName, Registry.CreateClient(target), targetIndex, _options,
+                                             progress, total => _total = total, _cancellation.Token);
+
+            await Audit.LogAsync(AuditActions.Copy, InstanceName, IndexName,
+                $"to {target.Name}/{targetIndex} · {_report.Imported} documents" + (_report.Cancelled ? " · cancelled" : "") +
+                (_report.FatalError is null ? "" : $" · {_report.FatalError}"),
+                success: _report.FatalError is null);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    public void Dispose() => _cancellation?.Cancel();
+}

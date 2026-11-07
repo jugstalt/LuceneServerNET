@@ -17,6 +17,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
+| Kopieren | Index (Mapping, Metadaten, Dokumente) unter neuem Namen auf derselben oder auf eine andere Instanz kopieren |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
 
 Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt den Server
@@ -145,3 +146,10 @@ SELECT id, name, geom.STAsBinary() AS geom FROM places
 ```
 
 Gesucht wird mit dem räumlichen Filter auf das Geo-Feld, z. B. `dist_km(geom:15.44,47.07,5)` oder `bbox(geom:15.4,47.0,15.5,47.1)`.
+
+## Kopieren
+
+*Copy* auf der Index-Seite kopiert Mapping, Metadaten und alle Dokumente unter einen neuen Indexnamen oder auf eine andere
+Instanz (der API-Client des Ziels braucht die Rolle `write`). Die Dokumente kommen aus `GET /api/v2/indices/{id}/documents/_export`,
+der nur **gespeicherte** Felder liefert: Felder mit `"store": false` gehen beim Kopieren verloren (die Seite zeigt sie vorher an).
+Ein bestehendes Ziel wird nur mit *Replace the target if it exists* überschrieben.

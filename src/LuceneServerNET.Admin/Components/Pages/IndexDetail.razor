@@ -21,6 +21,7 @@
                 <MudChip T="string" Size="Size.Small">@Format.Bytes(_stats.SizeInBytes)</MudChip>
             }
             <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(IndexName)}/copy")">Copy</MudButton>
             @if (Status.CanWrite)
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upload" Href="@($"{InstanceUrl}/import?index={Uri.EscapeDataString(IndexName)}")">Import</MudButton>
