@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,6 +13,23 @@ namespace LuceneServerNET
     {
         public static void Main(string[] args)
         {
+            #region Hash secret => print and exit
+
+            int hashArg = Array.FindIndex(args, a => "--hash-secret".Equals(a, StringComparison.OrdinalIgnoreCase));
+            if (hashArg >= 0)
+            {
+                if (hashArg + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("Usage: LuceneServerNET --hash-secret <secret>");
+                    Environment.ExitCode = 1;
+                    return;
+                }
+                Console.WriteLine(LuceneServerNET.Authentication.SecretHasher.Hash(args[hashArg + 1]));
+                return;
+            }
+
+            #endregion
+
             #region First Start => init configuration
 
             new Setup().TrySetup(args);

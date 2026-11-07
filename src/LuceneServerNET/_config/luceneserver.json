@@ -11,12 +11,14 @@
     "Type": "Basic",
     "Clients": [
       {
-        "Id": "client1",
-        "Secret": "pas3w0rd1"
+        "Id": "reader",
+        "SecretHash": "<create with: LuceneServerNET --hash-secret <secret>>",
+        "Roles": [ "read" ]
       },
       {
-        "Id": "client2",
-        "Secret": "pas3w0rd2"
+        "Id": "admin",
+        "SecretHash": "<create with: LuceneServerNET --hash-secret <secret>>",
+        "Roles": [ "admin" ]
       }
     ]
   }

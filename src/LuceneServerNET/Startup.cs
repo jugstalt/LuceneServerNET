@@ -1,7 +1,7 @@
 ﻿using LuceneServerNET.Engine.Services;
 using LuceneServerNET.Extensions;
 using LuceneServerNET.Extensions.DependencyInjection;
-using LuceneServerNET.Middleware.Authentication;
+using LuceneServerNET.Authentication;
 using LuceneServerNET.Services;
 using LuceneServerNET.Services.Abstraction;
 using Microsoft.AspNetCore.Builder;
@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi;
 using System;
 
@@ -41,6 +42,8 @@ public class Startup
             options.RestoreOnRestartSince = Configuration.GetIntValue("LuceneServer:AutoRestoreOnStartupSinceSeconds", 86400);
         });
 
+        services.AddLuceneServerAuthentication(Configuration);
+
         services.AddControllers();
         services.AddSwaggerGen(c =>
         {
@@ -51,8 +54,11 @@ public class Startup
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
     public void Configure(IApplicationBuilder app,
                           IWebHostEnvironment env,
-                          RestoreService restore)
+                          RestoreService restore,
+                          ILogger<Startup> logger)
     {
+        Configuration.LogAuthenticationWarnings(logger);
+
         if (env.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -71,14 +77,11 @@ public class Startup
 
         app.UseRouting();
 
-        app.UseAuthorization();
-
-        switch (Configuration["Authorization:Type"]?.ToLower())
+        if (Configuration.IsBasicAuthenticationEnabled())
         {
-            case "basic":
-                app.UseMiddleware<BasicAuthenticationMiddleware>();
-                break;
+            app.UseAuthentication();
         }
+        app.UseAuthorization();
 
         app.UseEndpoints(endpoints =>
         {

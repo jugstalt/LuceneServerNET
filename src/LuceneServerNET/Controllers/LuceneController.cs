@@ -3,6 +3,8 @@ using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
 using LuceneServerNET.Engine.Models.Spatial;
 using LuceneServerNET.Engine.Services;
+using LuceneServerNET.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +17,7 @@ namespace LuceneServerNET.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[Authorize(Policy = ApiRoles.Read)]
 public class LuceneController : ControllerBase
 {
     private readonly LuceneService _lucene;
@@ -153,6 +156,7 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("createindex/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
     async public Task<IApiResult> CreateIndex(string id)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -163,6 +167,7 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("removeindex/{id}")]
+    [Authorize(Policy = ApiRoles.Admin)]
     async public Task<IApiResult> RemoveIndex(string id)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -183,6 +188,7 @@ public class LuceneController : ControllerBase
 
     [HttpPost]
     [Route("map/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
     async public Task<IApiResult> Map(string id, [FromBody] IndexMapping mapping)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -208,6 +214,7 @@ public class LuceneController : ControllerBase
 
     [HttpPost]
     [Route("addmeta/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
     async public Task<IApiResult> AddMeta(string id, string name, [FromBody] CustomMetadata metaData)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -260,6 +267,7 @@ public class LuceneController : ControllerBase
 
     [HttpPost]
     [Route("index/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
     async public Task<IApiResult> Index(string id, [FromBody] IEnumerable<IDictionary<string, object>> items)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -272,6 +280,7 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("remove/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
 
     async public Task<IApiResult> Remove(string id, string term, string termField = "_guid")
     {
@@ -286,6 +295,7 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("refresh/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
     async public Task<IApiResult> Refresh(string id)
     {
         return await SecureMethodHandler(id, (id) =>
@@ -297,6 +307,7 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("releaseall")]
+    [Authorize(Policy = ApiRoles.Admin)]
     async public Task<IApiResult> ReleaseAll()
     {
         return await SecureMethodHandler(() =>
