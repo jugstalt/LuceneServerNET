@@ -14,7 +14,7 @@
     <MudSpacer />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="jobs/new">New job</MudButton>
 </MudStack>
-<MudText Typo="Typo.body2" Class="mb-4">Recurring imports from a database query. Runs missed while the admin application is stopped are not caught up.</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Imports from a database query, on a schedule or manually (run now). Jobs only run while the admin application runs; with "catch up" a missed run is started once at startup.</MudText>
 
 <MudTable Items="_jobs" Hover="true" Dense="true" Loading="_loading">
     <HeaderContent>

@@ -63,6 +63,7 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 {
   "Admin": {
     "DataPath": "_data",            // SQLite database (admin.db) + data protection keys
+    "PublicUrl": "https://admin.example.com",  // optional: links in job webhooks
     "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
     "Audit": { "RetentionDays": 180 },
     "Jobs": { "Enabled": true },    // false: no scheduled runs (e.g. a second admin instance on the same database)
@@ -172,6 +173,24 @@ can be edited and is saved with the job (the columns of the query must not chang
 - **Schedule**: cron expression with 5 fields (`minute hour day month weekday`, e.g. `0 3 * * *`) and a time zone
   (empty = UTC). The page shows the next runs. Without a cron expression (*manual*) the job only runs with *Run now*.
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
+- **Webhook** (optional): after a run, the URL is called with `POST` and a JSON body, either only on failure (failed,
+  cancelled, interrupted; default) or after every run. An optional header `Name: value` (e.g. `Authorization: Bearer ...`)
+  is stored encrypted. Up to 3 attempts (5 s apart, 30 s timeout); the result is shown in the run history, a failing
+  webhook does not change the status of the run. *Test webhook* sends a sample. The field `text` is a one-line summary,
+  so Slack and Mattermost incoming webhooks show it directly:
+
+  ```json
+  {
+    "text": "❌ Import job orte: failed · prod/orte_20261107030000 · read 10, imported 9, failed 1 · 12.5 s · ...",
+    "job": "orte", "jobId": 7, "runId": 3, "instance": "prod", "target": "orte", "mode": "replace_alias",
+    "index": "orte_20261107030000", "status": "failed", "success": false, "triggeredBy": "job:orte",
+    "startedUtc": "2026-11-07T03:00:00Z", "finishedUtc": "2026-11-07T03:00:12.5Z", "durationSeconds": 12.5,
+    "read": 10, "imported": 9, "failed": 1, "message": "...", "url": "https://admin.example.com/jobs/7"
+  }
+  ```
+
+  `status` is `succeeded`, `warning` (rows skipped), `failed`, `cancelled` or `interrupted`; `url` is only set if
+  `Admin:PublicUrl` is configured.
 - Runs only happen while the admin application runs. With *Catch up missed runs* (default on) a job runs once at
   startup if a scheduled run was missed while the application was stopped (only once, however many were missed).
   Runs that were active during a shutdown are marked *interrupted*. For reliable schedules run the admin application as a

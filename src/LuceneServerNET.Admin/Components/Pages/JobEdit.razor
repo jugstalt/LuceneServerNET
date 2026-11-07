@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject IAdminRepositoryService Repository
 @inject ImportJobRunner Runner
+@inject JobWebhook Webhook
 @inject InstanceRegistry Registry
 @inject DatabaseSource DbSource
 @inject AuditService Audit
@@ -134,6 +135,32 @@ else
                     <MudText Typo="Typo.body2">@next</MudText>
                 }
             </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" Value="_job.WebhookUrl" ValueChanged="v => { _job.WebhookUrl = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); MarkDirty(); }"
+                              Label="Webhook URL (optional)" Placeholder="https://..." HelperText="POST with JSON statistics of the run (field text: summary for Slack, Mattermost, ...)"
+                              Variant="Variant.Outlined" Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudSelect T="string" Value="_job.WebhookOn" ValueChanged="v => { _job.WebhookOn = v; MarkDirty(); }" Label="Call webhook" Variant="Variant.Outlined" Disabled="_job.WebhookUrl is null">
+                    <MudSelectItem Value="WebhookTriggers.Failure">on failure</MudSelectItem>
+                    <MudSelectItem Value="WebhookTriggers.Always">after every run</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                @if (_job.WebhookHeaderProtected is not null && _webhookHeader is null)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3">
+                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Lock">header set (encrypted)</MudChip>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => { _job.WebhookHeaderProtected = null; MarkDirty(); }">Remove</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _webhookHeader = String.Empty">Replace</MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudTextField T="string" @bind-Value="_webhookHeader" Label="Webhook header (optional)" Placeholder="Authorization: Bearer ..." InputType="InputType.Password"
+                                  HelperText="Name: value · stored encrypted" Variant="Variant.Outlined" Immediate="true" OnKeyUp="MarkDirty" Disabled="_job.WebhookUrl is null" />
+                }
+            </MudItem>
             <MudItem xs="12">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
                     <MudNumericField T="int" Value="_job.BatchSize" ValueChanged="v => { _job.BatchSize = v; MarkDirty(); }" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" />
@@ -143,6 +170,7 @@ else
                         <MudSwitch T="bool" Value="_job.CatchUp" ValueChanged="v => { _job.CatchUp = v; MarkDirty(); }" Label="Catch up missed runs" Color="Color.Primary" Disabled="!_job.HasSchedule" />
                     </MudTooltip>
                     <MudSpacer />
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Send" OnClick="TestWebhookAsync" Disabled="@(_job.WebhookUrl is null || _testingWebhook)">Test webhook</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save</MudButton>
                 </MudStack>
                 @if (_error is not null)
@@ -170,7 +198,13 @@ else
                 <MudTd Style="text-align:right">@Format.Number(context.ReadCount)</MudTd>
                 <MudTd Style="text-align:right">@Format.Number(context.Imported)</MudTd>
                 <MudTd Style="text-align:right">@Format.Number(context.Failed)</MudTd>
-                <MudTd Style="min-width:320px"><span style="white-space:normal">@context.Message</span></MudTd>
+                <MudTd Style="min-width:320px">
+                    <span style="white-space:normal">@context.Message</span>
+                    @if (context.WebhookResult is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="@(context.WebhookResult.StartsWith("webhook failed") ? Color.Error : Color.Default)" Style="display:block">@context.WebhookResult</MudText>
+                    }
+                </MudTd>
             </RowTemplate>
             <NoRecordsContent><MudText>No runs yet.</MudText></NoRecordsContent>
         </MudTable>
@@ -189,6 +223,8 @@ else
     ];
 
     private ImportJobRecord _job = new();
+    private string? _webhookHeader;
+    private bool _testingWebhook;
     private ImportJobMapping _mapping = new();
     private IReadOnlyList<ServerInstance> _instances = [];
     private IReadOnlyList<DbSourceConnection> _connections = [];
@@ -291,11 +327,15 @@ else
         _job.Target = (_job.Target ?? "").Trim().ToLowerInvariant();
 
         _error = ImportJobRunner.Validate(_job)
+                 ?? JobWebhook.ValidateHeader(_webhookHeader)
                  ?? (_mapping.Mapping.Fields.Count == 0 ? "Detect the mapping with the preview first" : null)
                  ?? CreateIndex.Validate("x", _mapping.Mapping);
         if (_error is not null) return;
 
         _job.MappingJson = _mapping.ToJson();
+        if (_job.WebhookUrl is null) _job.WebhookHeaderProtected = null;
+        else if (!String.IsNullOrWhiteSpace(_webhookHeader)) _job.WebhookHeaderProtected = Webhook.ProtectHeader(_webhookHeader);
+        _webhookHeader = null;
         try
         {
             var isNew = _job.Id == 0;
@@ -311,6 +351,36 @@ else
         catch (Exception ex)
         {
             _error = ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ? $"A job with the name {_job.Name} exists" : ex.Message;
+        }
+    }
+
+    /// <summary>Posts a sample payload to the webhook (with the header as entered or saved).</summary>
+    private async Task TestWebhookAsync()
+    {
+        if ((JobWebhook.ValidateUrl(_job.WebhookUrl) ?? JobWebhook.ValidateHeader(_webhookHeader)) is { } error)
+        {
+            Snackbar.Add(error, Severity.Warning);
+            return;
+        }
+
+        _testingWebhook = true;
+        try
+        {
+            var job = new ImportJobRecord
+            {
+                Id = _job.Id, Name = _job.Name, Instance = _job.Instance, Target = _job.Target, Mode = _job.Mode, WebhookUrl = _job.WebhookUrl,
+                WebhookHeaderProtected = String.IsNullOrWhiteSpace(_webhookHeader) ? _job.WebhookHeaderProtected : Webhook.ProtectHeader(_webhookHeader)
+            };
+            var user = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "";
+            var now = DateTime.UtcNow;
+            var run = new ImportJobRunRecord { JobId = _job.Id, StartedUtc = now.AddSeconds(-12), FinishedUtc = now, Status = ImportJobStatus.Succeeded,
+                                               TriggeredBy = user, IndexName = _job.Target, ReadCount = 100, Imported = 100, Message = "test call from the admin UI" };
+            var result = await Webhook.SendAsync(job, Webhook.CreatePayload(job, run));
+            Snackbar.Add(result, result.StartsWith("webhook failed") ? Severity.Error : Severity.Success);
+        }
+        finally
+        {
+            _testingWebhook = false;
         }
     }
 

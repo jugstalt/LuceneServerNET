@@ -84,6 +84,15 @@ public class ImportJobRecord
     /// <summary>Run once at startup if a scheduled run was missed while the admin application was stopped.</summary>
     public bool CatchUp { get; set; } = true;
 
+    /// <summary>Called with POST after a run (see JobWebhook); null = no webhook.</summary>
+    public string? WebhookUrl { get; set; }
+
+    /// <summary>always, failure (see WebhookTriggers).</summary>
+    public string WebhookOn { get; set; } = "failure";
+
+    /// <summary>Optional header "Name: value" (e.g. Authorization), encrypted with DataProtection.</summary>
+    public string? WebhookHeaderProtected { get; set; }
+
     /// <summary>Time zone of the cron expression (IANA/Windows id); null = UTC.</summary>
     public string? TimeZone { get; set; }
 
@@ -108,6 +117,9 @@ public class ImportJobRunRecord
     public long Imported { get; set; }
     public long Failed { get; set; }
     public string? Message { get; set; }
+
+    /// <summary>Result of the webhook call (null = no webhook called).</summary>
+    public string? WebhookResult { get; set; }
 }
 
 /// <summary>

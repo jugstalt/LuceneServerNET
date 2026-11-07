@@ -52,6 +52,8 @@ builder.Services.AddSingleton<DatabaseSource>();
 builder.Services.AddSingleton<AuditLogger>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddHostedService<AuditCleanupService>();
+builder.Services.AddHttpClient(JobWebhook.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<JobWebhook>();
 builder.Services.AddSingleton<ImportJobRunner>();
 builder.Services.AddHostedService<ImportJobScheduler>();
 

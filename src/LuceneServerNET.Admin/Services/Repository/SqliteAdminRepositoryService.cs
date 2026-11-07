@@ -231,8 +231,8 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
     #region Import jobs
 
-    private const string JobColumns = "id, name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, created_utc, modified_utc";
-    private const string RunColumns = "id, job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message";
+    private const string JobColumns = "id, name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, webhook_url, webhook_on, webhook_header_protected, created_utc, modified_utc";
+    private const string RunColumns = "id, job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message, webhook_result";
 
     public async Task<IReadOnlyList<ImportJobRecord>> GetImportJobsAsync(CancellationToken cancellationToken = default)
     {
@@ -252,8 +252,8 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
         await using var connection = await OpenAsync(cancellationToken);
         job.Id = await connection.ExecuteScalarAsync<long>(
-            @"INSERT INTO import_jobs (name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, created_utc, modified_utc)
-              VALUES (@Name, @Instance, @ConnectionId, @Sql, @Target, @Mode, @MappingJson, @BatchSize, @MaxErrors, @KeepGenerations, @Cron, @TimeZone, @Enabled, @CatchUp, @CreatedUtc, @ModifiedUtc);
+            @"INSERT INTO import_jobs (name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, catch_up, webhook_url, webhook_on, webhook_header_protected, created_utc, modified_utc)
+              VALUES (@Name, @Instance, @ConnectionId, @Sql, @Target, @Mode, @MappingJson, @BatchSize, @MaxErrors, @KeepGenerations, @Cron, @TimeZone, @Enabled, @CatchUp, @WebhookUrl, @WebhookOn, @WebhookHeaderProtected, @CreatedUtc, @ModifiedUtc);
               SELECT last_insert_rowid();", job);
         return job.Id;
     }
@@ -266,7 +266,8 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
         await connection.ExecuteAsync(
             @"UPDATE import_jobs SET name = @Name, instance = @Instance, connection_id = @ConnectionId, sql = @Sql, target = @Target,
                      mode = @Mode, mapping_json = @MappingJson, batch_size = @BatchSize, max_errors = @MaxErrors,
-                     keep_generations = @KeepGenerations, cron = @Cron, time_zone = @TimeZone, enabled = @Enabled, catch_up = @CatchUp, modified_utc = @ModifiedUtc
+                     keep_generations = @KeepGenerations, cron = @Cron, time_zone = @TimeZone, enabled = @Enabled, catch_up = @CatchUp, webhook_url = @WebhookUrl, webhook_on = @WebhookOn,
+                     webhook_header_protected = @WebhookHeaderProtected, modified_utc = @ModifiedUtc
               WHERE id = @Id", job);
     }
 
@@ -294,7 +295,7 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
         await using var connection = await OpenAsync(cancellationToken);
         await connection.ExecuteAsync(
             @"UPDATE import_job_runs SET finished_utc = @FinishedUtc, status = @Status, index_name = @IndexName,
-                     read_count = @ReadCount, imported = @Imported, failed = @Failed, message = @Message
+                     read_count = @ReadCount, imported = @Imported, failed = @Failed, message = @Message, webhook_result = @WebhookResult
               WHERE id = @Id", run);
     }
 

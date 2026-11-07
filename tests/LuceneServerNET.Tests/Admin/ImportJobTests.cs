@@ -45,8 +45,12 @@ public class ImportJobTests : IDisposable
         job.Enabled = false;
         job.CatchUp = false;
         job.Cron = "";
+        job.WebhookUrl = "https://hooks.test/x";
+        job.WebhookOn = WebhookTriggers.Always;
+        job.WebhookHeaderProtected = "encrypted";
         await repository.UpdateImportJobAsync(job);
         var saved = (await repository.GetImportJobsAsync()).Single();
+        Assert.Equal(("https://hooks.test/x", "always", "encrypted"), (saved.WebhookUrl, saved.WebhookOn, saved.WebhookHeaderProtected));
         Assert.False(saved.Enabled);
         Assert.False(saved.CatchUp);
         Assert.False(saved.HasSchedule);
@@ -62,8 +66,10 @@ public class ImportJobTests : IDisposable
 
         run1.Imported = 42;
         run1.FinishedUtc = DateTime.UtcNow;
+        run1.WebhookResult = "webhook 200";
         await repository.UpdateImportJobRunAsync(run1);
         Assert.Equal(42, (await repository.GetImportJobRunsAsync(id))[1].Imported);
+        Assert.Equal("webhook 200", (await repository.GetImportJobRunsAsync(id))[1].WebhookResult);
 
         await repository.DeleteImportJobAsync(id);
         Assert.Empty(await repository.GetImportJobsAsync());

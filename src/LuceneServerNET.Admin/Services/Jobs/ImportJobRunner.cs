@@ -47,6 +47,7 @@ public class ImportJobRunner
     private readonly DatabaseSource _database;
     private readonly ImportService _importer;
     private readonly AuditLogger _audit;
+    private readonly JobWebhook _webhook;
     private readonly ILogger<ImportJobRunner> _logger;
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _running = new();
 
@@ -54,13 +55,14 @@ public class ImportJobRunner
     public event Action<long>? RunChanged;
 
     public ImportJobRunner(IAdminRepositoryService repository, InstanceRegistry registry, DatabaseSource database,
-                           ImportService importer, AuditLogger audit, ILogger<ImportJobRunner> logger)
+                           ImportService importer, AuditLogger audit, JobWebhook webhook, ILogger<ImportJobRunner> logger)
     {
         _repository = repository;
         _registry = registry;
         _database = database;
         _importer = importer;
         _audit = audit;
+        _webhook = webhook;
         _logger = logger;
     }
 
@@ -83,6 +85,8 @@ public class ImportJobRunner
         if (!System.Text.RegularExpressions.Regex.IsMatch(job.Target ?? "", "^[a-z0-9_-]{1,64}$")) return "Invalid target name (a-z, 0-9, '_', '-')";
         if (job.Mode == ImportJobModes.ReplaceAlias && job.Target!.Length > 64 - 15) return "Target name too long for generations (max. 49 characters)";
         if (!ImportJobModes.All.Contains(job.Mode)) return "Unknown mode";
+        if (!WebhookTriggers.All.Contains(job.WebhookOn)) return "Unknown webhook trigger";
+        if (JobWebhook.ValidateUrl(job.WebhookUrl) is { } webhookError) return webhookError;
         if (job.KeepGenerations < 0) return "Keep generations must be >= 0";
         try
         {
@@ -171,6 +175,20 @@ public class ImportJobRunner
             _running.TryRemove(jobId, out _);
             cancellation.Dispose();
             RunChanged?.Invoke(jobId);
+        }
+
+        if (job is not null && JobWebhook.ShouldCall(job, run.Status))
+        {
+            try
+            {
+                run.WebhookResult = await _webhook.SendAsync(job, _webhook.CreatePayload(job, run), CancellationToken.None);
+                await _repository.UpdateImportJobRunAsync(run, CancellationToken.None);
+                RunChanged?.Invoke(jobId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Webhook of import job {JobId} failed", jobId);
+            }
         }
 
         return run;
