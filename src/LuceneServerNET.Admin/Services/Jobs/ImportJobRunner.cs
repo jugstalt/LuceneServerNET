@@ -39,6 +39,49 @@ public class ImportJobMapping
     public static ImportJobMapping FromJson(string json) => JsonSerializer.Deserialize<ImportJobMapping>(json) ?? new();
 }
 
+/// <summary>Live progress of a running job.</summary>
+public class JobRunProgress
+{
+    public DateTime StartedUtc { get; init; } = DateTime.UtcNow;
+
+    /// <summary>Rows read by the last successful run (estimate for the percentage), null = unknown.</summary>
+    public long? Expected { get; init; }
+
+    public long Read { get; set; }
+    public long Imported { get; set; }
+    public long Failed { get; set; }
+
+    /// <summary>Current source (1-based) and number of sources.</summary>
+    public int Source { get; set; } = 1;
+    public int Sources { get; set; } = 1;
+
+    public double? Percent => Expected is > 0 ? Math.Min(99.9, Read * 100.0 / Expected.Value) : null;
+
+    public double RowsPerSecond
+    {
+        get
+        {
+            var seconds = (DateTime.UtcNow - StartedUtc).TotalSeconds;
+            return seconds > 0.5 ? Read / seconds : 0;
+        }
+    }
+
+    public TimeSpan Elapsed => DateTime.UtcNow - StartedUtc;
+
+    /// <summary>"12,400 of ≈27,500 (45 %) · 2,100/s · 0:06"</summary>
+    public string Text
+    {
+        get
+        {
+            var text = Expected is > 0 ? $"{Read:N0} of ≈{Expected:N0} rows ({Percent:0} %)" : $"{Read:N0} rows";
+            if (Failed > 0) text += $" · {Failed:N0} failed";
+            if (Sources > 1) text += $" · source {Source}/{Sources}";
+            if (RowsPerSecond > 0) text += $" · {RowsPerSecond:N0}/s";
+            return text + $" · {(int)Elapsed.TotalMinutes}:{Elapsed.Seconds:00}";
+        }
+    }
+}
+
 /// <summary>Runs import jobs: one run per job at a time.</summary>
 public class ImportJobRunner
 {
@@ -51,9 +94,16 @@ public class ImportJobRunner
     private readonly ILogger<ImportJobRunner> _logger;
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _running = new();
     private readonly ConcurrentDictionary<long, (string TriggeredBy, string? Note)> _queued = new();
+    private readonly ConcurrentDictionary<long, JobRunProgress> _progress = new();
 
     /// <summary>Raised when a run starts or ends (job id).</summary>
     public event Action<long>? RunChanged;
+
+    /// <summary>Raised (at most once per second and job) while a run makes progress (job id).</summary>
+    public event Action<long>? ProgressChanged;
+
+    /// <summary>Progress of the running job, null if it does not run.</summary>
+    public JobRunProgress? GetProgress(long jobId) => _progress.TryGetValue(jobId, out var progress) ? progress : null;
 
     public ImportJobRunner(IAdminRepositoryService repository, InstanceRegistry registry, DatabaseSource database,
                            ImportService importer, AuditLogger audit, JobWebhook webhook, ILogger<ImportJobRunner> logger)
@@ -180,6 +230,7 @@ public class ImportJobRunner
             RunChanged?.Invoke(jobId);
 
             job = await _repository.GetImportJobAsync(jobId, CancellationToken.None) ?? throw new InvalidOperationException("Job not found");
+            _progress[jobId] = new JobRunProgress { StartedUtc = run.StartedUtc, Expected = await ExpectedRowsAsync(jobId) };
             await ExecuteAsync(job, run, cancellation.Token);
         }
         catch (OperationCanceledException)
@@ -210,6 +261,7 @@ public class ImportJobRunner
                 success: run.Status is ImportJobStatus.Succeeded or ImportJobStatus.Warning);
 
             _running.TryRemove(jobId, out _);
+            _progress.TryRemove(jobId, out _);
             cancellation.Dispose();
 
             // triggered while running: once more (right away, the webhook of this run is called in parallel)
@@ -278,7 +330,7 @@ public class ImportJobRunner
         await _repository.UpdateImportJobRunAsync(run, CancellationToken.None);
 
         var report = await _importer.ImportAsync(client, index, _database.ReadAsync(source, job.Sql, cancellationToken),
-                                                 jobMapping.Mapping, options, null, cancellationToken);
+                                                 jobMapping.Mapping, options, ProgressReporter(job.Id), cancellationToken);
         run.ReadCount = report.Read;
         run.Imported = report.Imported;
         run.Failed = report.Errors.Count;
@@ -312,6 +364,46 @@ public class ImportJobRunner
             run.Message = $"{report.Errors.Count} rows skipped, first: row {report.Errors[0].Row}: {report.Errors[0].Message}" +
                           (run.Message is null ? "" : $" · {run.Message}");
         }
+    }
+
+    /// <summary>Rows read by the last successful run (estimate for the progress).</summary>
+    private async Task<long?> ExpectedRowsAsync(long jobId)
+    {
+        try
+        {
+            var last = (await _repository.GetImportJobRunsAsync(jobId, 20, CancellationToken.None))
+                .FirstOrDefault(r => r.Status is ImportJobStatus.Succeeded or ImportJobStatus.Warning);
+            return last?.ReadCount > 0 ? last.ReadCount : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Updates the live progress of the job; ProgressChanged at most once per second.</summary>
+    private IProgress<ImportProgress> ProgressReporter(long jobId, long readBefore = 0, long importedBefore = 0, long failedBefore = 0)
+    {
+        var lastEvent = DateTime.MinValue;
+        return new SynchronousProgress<ImportProgress>(p =>
+        {
+            if (!_progress.TryGetValue(jobId, out var progress)) return;
+            progress.Read = readBefore + p.Read;
+            progress.Imported = importedBefore + p.Imported;
+            progress.Failed = failedBefore + p.Failed;
+
+            if ((DateTime.UtcNow - lastEvent).TotalSeconds >= 1)
+            {
+                lastEvent = DateTime.UtcNow;
+                ProgressChanged?.Invoke(jobId);
+            }
+        });
+    }
+
+    /// <summary>IProgress without SynchronizationContext posting (the import runs in the background).</summary>
+    private sealed class SynchronousProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
     }
 
     /// <summary>Removes generations of the target that are older than the kept ones and not used by any alias.</summary>

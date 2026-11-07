@@ -48,6 +48,14 @@
             @if (Runner.IsRunning(context.Id))
             {
                 <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Sync">@(Runner.IsQueued(context.Id) ? "running, 1 queued" : "running")</MudChip>
+                @if (Runner.GetProgress(context.Id) is { } progress)
+                {
+                    @if (progress.Percent is { } percent)
+                    {
+                        <MudProgressLinear Color="Color.Info" Value="percent" Class="my-1" Style="max-width:220px" />
+                    }
+                    <MudText Typo="Typo.caption" Style="display:block">@progress.Text</MudText>
+                }
             }
             else if (_lastRuns.TryGetValue(context.Id, out var run))
             {
@@ -73,6 +81,7 @@
     protected override async Task OnInitializedAsync()
     {
         Runner.RunChanged += OnRunChanged;
+        Runner.ProgressChanged += OnProgressChanged;
         await LoadAsync();
     }
 
@@ -121,5 +130,11 @@
         StateHasChanged();
     });
 
-    public void Dispose() => Runner.RunChanged -= OnRunChanged;
+    private void OnProgressChanged(long jobId) => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Runner.RunChanged -= OnRunChanged;
+        Runner.ProgressChanged -= OnProgressChanged;
+    }
 }

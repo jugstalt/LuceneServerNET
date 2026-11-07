@@ -239,6 +239,8 @@ can be edited and is saved with the job (the columns of the query must not chang
 
 - **Schedule**: cron expression with 5 fields (`minute hour day month weekday`, e.g. `0 3 * * *`) and a time zone
   (empty = UTC). The page shows the next runs. Without a cron expression (*manual*) the job only runs with *Run now*.
+- **Progress** of a running job (job list and job page): rows read, rate and elapsed time; from the second run a
+  percentage estimated from the rows of the last successful run.
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
 - **External trigger**: start the job from outside instead of (or in addition to) a schedule, e.g. at the end of a
   Jenkins job that updates the database. See [Trigger import jobs from outside](#trigger-import-jobs-from-outside).

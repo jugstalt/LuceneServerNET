@@ -57,7 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Copy an index (mapping, metadata, documents) to another name or another instance. Alias management.
   Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;
-  run history, run now, cancel; manual jobs without schedule; missed runs are caught up once at startup (per job);
+  run history, run now, cancel; live progress of running jobs (rows, rate, estimate from the last run); manual jobs without schedule; missed runs are caught up once at startup (per job);
   external trigger per job (`POST /api/jobs/{id}/run` with a job token, e.g. from Jenkins; a trigger during a run queues
   one more run; status via `GET /api/jobs/{id}/runs/{runId}`, optional note);
   optional webhook after a run (always or on failure, JSON statistics with a Slack/Mattermost compatible `text`, encrypted header, 3 attempts).

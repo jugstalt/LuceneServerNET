@@ -38,6 +38,14 @@
     }
 </MudStack>
 
+@if (_job.Id != 0 && Runner.GetProgress(_job.Id) is { } progress)
+{
+    <MudPaper Class="pa-3 mb-4" Outlined="true">
+        <MudText Typo="Typo.body2" Class="mb-1"><b>Running:</b> @progress.Text</MudText>
+        <MudProgressLinear Color="Color.Info" Value="@(progress.Percent ?? 0)" Indeterminate="@(progress.Percent is null)" />
+    </MudPaper>
+}
+
 @if (_loading)
 {
     <MudProgressLinear Indeterminate="true" />
@@ -287,6 +295,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         Runner.RunChanged += OnRunChanged;
+        Runner.ProgressChanged += OnProgressChanged;
         _instances = await Registry.GetAllAsync();
         _connections = await DbSource.GetConnectionsAsync();
 
@@ -497,5 +506,14 @@ else
         });
     }
 
-    public void Dispose() => Runner.RunChanged -= OnRunChanged;
+    private void OnProgressChanged(long jobId)
+    {
+        if (jobId == _job.Id) InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Runner.RunChanged -= OnRunChanged;
+        Runner.ProgressChanged -= OnProgressChanged;
+    }
 }

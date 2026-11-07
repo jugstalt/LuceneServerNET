@@ -158,6 +158,20 @@ public class ImportJobTests : IDisposable
     }
 
     [Fact]
+    public void Progress()
+    {
+        var progress = new JobRunProgress { StartedUtc = DateTime.UtcNow.AddSeconds(-10), Expected = 200, Read = 50, Failed = 2 };
+        Assert.Equal(25, progress.Percent);
+        Assert.InRange(progress.RowsPerSecond, 4, 6);
+        Assert.Contains("(25 %)", progress.Text);
+        Assert.Contains("2 failed", progress.Text);
+
+        progress.Read = 500;                                       // more rows than the last run
+        Assert.Equal(99.9, progress.Percent);
+        Assert.Null(new JobRunProgress { Read = 10 }.Percent);       // no estimate
+    }
+
+    [Fact]
     public void TriggerToken()
     {
         var token = JobTriggerToken.Create();
