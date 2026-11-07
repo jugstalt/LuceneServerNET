@@ -71,7 +71,9 @@ nav:
   - Configuration:
       - Settings: configuration/index.md
       - Authentication: configuration/authentication.md
-  - REST API: api.md
+  - REST API:
+      - v1: api.md
+      - v2: api-v2.md
   - Clients:
       - .NET client: clients/dotnet-client.md
       - Sample applications: clients/samples.md

@@ -473,6 +473,11 @@ namespace LuceneServerNET.Engine.Services
 
         #region Search/Query
 
+        /// <summary>
+        /// Max. from + size for offset paging. Deeper pages: use searchAfter.
+        /// </summary>
+        public const int MaxResultWindow = 10000;
+
         public IEnumerable<IDictionary<string, object>> Search(string indexName,
                                                                string term,
                                                                string outFieldNames = null,
@@ -481,7 +486,31 @@ namespace LuceneServerNET.Engine.Services
                                                                bool sortReverse = false,
                                                                ISpatialFilter spatialFilter = null,
                                                                string[] primarySearchFields = null)
+            => SearchPage(indexName, term, outFieldNames, size, 0, null,
+                          sortFieldName, sortReverse, spatialFilter, primarySearchFields).Hits;
+
+        /// <summary>
+        /// Paged search. Use either <paramref name="from"/> (offset, limited by <see cref="MaxResultWindow"/>)
+        /// or <paramref name="searchAfter"/> (cursor from a previous page; relevance sort only).
+        /// </summary>
+        public SearchPage SearchPage(string indexName,
+                                     string term,
+                                     string outFieldNames = null,
+                                     int size = 20,
+                                     int from = 0,
+                                     string searchAfter = null,
+                                     string sortFieldName = null,
+                                     bool sortReverse = false,
+                                     ISpatialFilter spatialFilter = null,
+                                     string[] primarySearchFields = null)
         {
+            if (size < 0) throw new ArgumentException("size must be >= 0");
+            if (from < 0) throw new ArgumentException("from must be >= 0");
+            if ((long)from + size > MaxResultWindow)
+            {
+                throw new ArgumentException($"from + size must not exceed {MaxResultWindow}. Use searchAfter for deep paging.");
+            }
+
             using var searcherLease = _resources.AcquireSearcher(indexName);
             var searcher = searcherLease.Searcher;
 
@@ -513,20 +542,38 @@ namespace LuceneServerNET.Engine.Services
                 filter = spatialFilter.ToFilter(_spatialContext, _tree);
             }
 
-            ScoreDoc[] hits = null;
             FieldMapping sortField = String.IsNullOrEmpty(sortFieldName) ?
                 null :
                 mapping.GetField(sortFieldName);
 
-            if (sortField != null)
+            TopDocs topDocs;
+            int skip = 0;
+            if (!String.IsNullOrEmpty(searchAfter))
+            {
+                if (sortField != null)
+                {
+                    throw new ArgumentException("searchAfter is only supported for relevance sorting (without sortField).");
+                }
+                if (from > 0)
+                {
+                    throw new ArgumentException("from and searchAfter can not be combined.");
+                }
+
+                topDocs = searcher.SearchAfter(SearchAfterCursor.Decode(searchAfter), query, filter, Math.Max(size, 1));
+            }
+            else if (sortField != null)
             {
                 Sort sort = new Sort(new SortField(sortFieldName, sortField.GetSortFieldType(), sortReverse));
-                hits = searcher.Search(query, filter, size, sort).ScoreDocs;
+                topDocs = searcher.Search(query, filter, Math.Max(from + size, 1), sort);
+                skip = from;
             }
             else
             {
-                hits = searcher.Search(query, filter, size).ScoreDocs;
+                topDocs = searcher.Search(query, filter, Math.Max(from + size, 1));
+                skip = from;
             }
+
+            ScoreDoc[] hits = topDocs.ScoreDocs.Skip(skip).Take(size).ToArray();
 
             var outFields = new QueryOutFields(outFieldNames);
             var selectOutFields = outFields.SelectOutFields(mapping);
@@ -581,7 +628,13 @@ namespace LuceneServerNET.Engine.Services
                 }
             }
 
-            return docs;
+            string nextSearchAfter = null;
+            if (sortField == null && size > 0 && hits.Length == size)
+            {
+                nextSearchAfter = SearchAfterCursor.Encode(hits[hits.Length - 1]);
+            }
+
+            return new SearchPage(docs, topDocs.TotalHits, nextSearchAfter);
         }
 
         public IEnumerable<IDictionary<string, object>> SearchPhonetic(string indexName,
@@ -612,6 +665,31 @@ namespace LuceneServerNET.Engine.Services
                           sortReverse,
                           spatialFilter,
                           mapping.PrimaryFields.Select(f => f.ToPhoneticsFieldName()).ToArray());
+        }
+
+        public SearchPage SearchPhoneticPage(string indexName,
+                                             string term,
+                                             string outFieldNames = null,
+                                             int size = 20,
+                                             int from = 0,
+                                             string searchAfter = null,
+                                             string sortFieldName = null,
+                                             bool sortReverse = false,
+                                             ISpatialFilter spatialFilter = null)
+        {
+            var mapping = _resources.GetMapping(indexName);
+
+            if (mapping.PrimaryFieldsPhonetics == Algorithm.None)
+            {
+                return new SearchPage(new IDictionary<string, object>[0], 0, null);
+            }
+
+            term = term.ToPhonetics(mapping.PrimaryFieldsPhonetics);
+            term = new Core.QueryBuilder().ParseTerm(term);
+
+            return SearchPage(indexName, term, outFieldNames, size, from, searchAfter,
+                              sortFieldName, sortReverse, spatialFilter,
+                              mapping.PrimaryFields.Select(f => f.ToPhoneticsFieldName()).ToArray());
         }
 
 

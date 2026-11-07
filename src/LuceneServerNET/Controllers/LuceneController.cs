@@ -19,23 +19,16 @@ namespace LuceneServerNET.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[ApiExplorerSettings(GroupName = "v1")]
 [Authorize(Policy = ApiRoles.Read)]
-public class LuceneController : ControllerBase
+public class LuceneController : LuceneControllerBase
 {
-    private readonly LuceneService _lucene;
-    private readonly ILogger<LuceneController> _logger;
-    private readonly IWebHostEnvironment _env;
-    private readonly IConfiguration _config;
-
     public LuceneController(LuceneService lucene,
                             IWebHostEnvironment env,
                             IConfiguration config,
                             ILogger<LuceneController> logger)
+        : base(lucene, env, config, logger)
     {
-        _config = config;
-        _lucene = lucene;
-        _env = env;
-        _logger = logger;
     }
 
     [HttpGet]
@@ -47,19 +40,23 @@ public class LuceneController : ControllerBase
                                    string sortField = null,
                                    bool sortReverse = false,
                                    string filter = "",
-                                   string format = "")
+                                   string format = "",
+                                   int from = 0,
+                                   string searchAfter = null)
     {
         return SecureMethodHandler(id, (id) =>
         {
-            var hits = _lucene.Search(id,
-                                      term: q,
-                                      outFieldNames: outFields ?? String.Empty,
-                                      size: size,
-                                      sortFieldName: sortField,
-                                      sortReverse: sortReverse,
-                                      spatialFilter: ParseSpatialFilter(filter));
+            var page = _lucene.SearchPage(id,
+                                          term: q,
+                                          outFieldNames: outFields ?? String.Empty,
+                                          size: size,
+                                          from: from,
+                                          searchAfter: searchAfter,
+                                          sortFieldName: sortField,
+                                          sortReverse: sortReverse,
+                                          spatialFilter: ParseSpatialFilter(filter));
 
-            return ToSearchResult(hits, format);
+            return ToSearchResult(page, from, size, format);
         });
     }
 
@@ -72,19 +69,23 @@ public class LuceneController : ControllerBase
                                            string sortField = null,
                                            bool sortReverse = false,
                                            string filter = "",
-                                           string format = "")
+                                           string format = "",
+                                           int from = 0,
+                                           string searchAfter = null)
     {
         return SecureMethodHandler(id, (id) =>
         {
-            var hits = _lucene.SearchPhonetic(id,
-                                              term: q,
-                                              outFieldNames: outFields ?? String.Empty,
-                                              size: size,
-                                              sortFieldName: sortField,
-                                              sortReverse: sortReverse,
-                                              spatialFilter: ParseSpatialFilter(filter));
+            var page = _lucene.SearchPhoneticPage(id,
+                                                  term: q,
+                                                  outFieldNames: outFields ?? String.Empty,
+                                                  size: size,
+                                                  from: from,
+                                                  searchAfter: searchAfter,
+                                                  sortFieldName: sortField,
+                                                  sortReverse: sortReverse,
+                                                  spatialFilter: ParseSpatialFilter(filter));
 
-            return ToSearchResult(hits, format);
+            return ToSearchResult(page, from, size, format);
         });
     }
 
@@ -297,162 +298,4 @@ public class LuceneController : ControllerBase
             return new ApiResult();
         });
     }
-
-    #region Helper
-
-    public const string AllowLegacyGetMutationsConfigKey = "LuceneServer:AllowLegacyGetMutations";
-
-    /// <summary>
-    /// Handles deprecated GET calls of state-changing endpoints.
-    /// Allowed only if config LuceneServer:AllowLegacyGetMutations is true (default: true).
-    /// </summary>
-    private async Task<IApiResult> LegacyGet(string successorMethod, Func<Task<IApiResult>> func)
-    {
-        if (!_config.GetValue(AllowLegacyGetMutationsConfigKey, true))
-        {
-            Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
-            Response.Headers["Allow"] = successorMethod;
-            return new ApiErrorResult($"HTTP GET is not allowed for this endpoint. Use {successorMethod}.");
-        }
-
-        _logger.LogWarning("Deprecated HTTP GET call to {path}. Use {method} instead.", Request.Path, successorMethod);
-        Response.Headers["Deprecation"] = "true";
-        Response.Headers["Warning"] = $"299 - \"Deprecated: use HTTP {successorMethod} for this endpoint\"";
-
-        return await func();
-    }
-
-    private ISpatialFilter ParseSpatialFilter(string filter)
-    {
-        if (String.IsNullOrWhiteSpace(filter))
-        {
-            return null;
-        }
-
-        filter = filter.Trim();
-
-        if (TryGetFilterArguments(filter, "bbox", out var args))
-        {
-            return BBoxFilter.Parse(args);
-        }
-        if (TryGetFilterArguments(filter, "dist_km", out args))
-        {
-            return DistanceKmFilter.Parse(args);
-        }
-        if (TryGetFilterArguments(filter, "linedist_km", out args))
-        {
-            return LineStringDistanceKmFilter.Parse(args);
-        }
-
-        _logger.LogWarning("Unknown spatial filter '{filter}' is ignored", filter);
-        return null;
-    }
-
-    private static bool TryGetFilterArguments(string filter, string name, out string arguments)
-    {
-        arguments = null;
-        var prefix = name + "(";
-
-        if (!filter.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-        if (!filter.EndsWith(")"))
-        {
-            throw new ArgumentException($"Invalid filter '{filter}': missing closing parenthesis.");
-        }
-
-        arguments = filter.Substring(prefix.Length, filter.Length - prefix.Length - 1);
-        return true;
-    }
-
-    private static IApiResult ToSearchResult(IEnumerable<IDictionary<string, object>> hits, string format)
-    {
-        int geoJsonIndex = (format ?? String.Empty).IndexOf(":geojson", StringComparison.OrdinalIgnoreCase);
-        if (geoJsonIndex >= 0 && format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
-        {
-            return new GeoJsonResult(format.Substring(0, geoJsonIndex), hits);
-        }
-
-        return new LuceneSearchResult()
-        {
-            Hits = hits
-        };
-    }
-
-    private Task<IApiResult> SecureMethodHandler(string id, Func<string, IApiResult> func, Func<Exception, IApiResult> onException = null)
-        => SecureMethodHandler(id, (id) => Task.FromResult(func(id)), onException);
-
-    private Task<IApiResult> SecureMethodHandler(Func<IApiResult> func, Func<Exception, IApiResult> onException = null)
-        => SecureMethodHandler(() => Task.FromResult(func()), onException);
-
-    /// <summary>
-    /// For index specific endpoints: normalizes and validates the index id (whitelist) before calling <paramref name="func"/>.
-    /// </summary>
-    private Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
-    {
-        return SecureMethodHandler(() =>
-        {
-            id = id?.Trim().ToLower();
-
-            if (String.IsNullOrEmpty(id))
-            {
-                throw new Exception("Index id not specified");
-            }
-
-            if (!LuceneServerNET.Engine.Extensions.PathGuard.IsValidName(id))
-            {
-                throw new ArgumentException($"Invalid index id '{id}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
-            }
-
-            return func(id);
-        }, onException);
-    }
-
-    /// <summary>
-    /// For endpoints without index id: error handling and timing only.
-    /// </summary>
-    private async Task<IApiResult> SecureMethodHandler(Func<Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
-    {
-        try
-        {
-            var start = DateTime.Now;
-
-            var apiResult = await func();
-
-            if (apiResult != null)
-            {
-                apiResult.MilliSeconds = (DateTime.Now - start).TotalMilliseconds;
-            }
-
-            return apiResult;
-        }
-        catch (Exception ex)
-        {
-            if (onException != null)
-            {
-                return onException(ex);
-            }
-            else
-            {
-                if (_env.IsDevelopment())
-                {
-                    return new ApiErrorResult(ex.Message);
-                }
-                else
-                {
-                    Console.WriteLine($"Exception: {DateTime.Now.ToShortDateString()} {DateTime.Now.ToLongTimeString()}");
-                    Console.WriteLine(ex.Message);
-                    Console.WriteLine(ex.StackTrace);
-
-                    _logger.LogError(ex, $"Exception: {DateTime.Now.ToShortDateString()} {DateTime.Now.ToLongTimeString()}");
-
-                    return new ApiErrorResult($"Error of type {ex.GetType().ToString()}");
-                }
-
-            }
-        }
-    }
-
-    #endregion
 }

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] – v3
 
+### Added
+
+- **REST API v2** (`/api/v2/indices/{id}/...`), resource oriented, in parallel to v1 (`/Lucene/...`).
+  v1 stays fully supported (not breaking) but is marked as deprecated in Swagger.
+  Swagger UI now offers separate `v1` and `v2` documents.
+- **Paging and total hit count for search** (v1 and v2, additive):
+  new optional parameters `from` (offset, `from + size` ≤ 10000) and `searchAfter` (cursor);
+  responses contain `totalHits`, `from`, `size` and `nextSearchAfter`.
+- `LuceneServerNET.Client`: `SearchPageAsync` / `SearchPhoneticPageAsync` (existing methods unchanged).
+
 ### Changed (breaking)
 
 - **State-changing endpoints no longer use HTTP GET.** GET requests must be safe; prefetchers,

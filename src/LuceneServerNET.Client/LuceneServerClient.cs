@@ -395,6 +395,74 @@ namespace LuceneServerNET.Client
             }
         }
 
+        /// <summary>
+        /// Paged search. Either use <paramref name="from"/> (from + size max. 10000)
+        /// or <paramref name="searchAfter"/> (NextSearchAfter of the previous page, relevance sort only).
+        /// The result contains TotalHits and NextSearchAfter.
+        /// </summary>
+        public Task<LuceneSearchResult> SearchPageAsync(string query,
+                                                        int from = 0,
+                                                        int size = 20,
+                                                        string searchAfter = null,
+                                                        IEnumerable<string> outFields = null,
+                                                        string sortField = "",
+                                                        bool sortReverse = false)
+            => SearchPageInternalAsync("search", query, from, size, searchAfter, outFields, sortField, sortReverse);
+
+        /// <summary>
+        /// Paged phonetic search (see <see cref="SearchPageAsync"/>).
+        /// </summary>
+        public Task<LuceneSearchResult> SearchPhoneticPageAsync(string term,
+                                                                int from = 0,
+                                                                int size = 20,
+                                                                string searchAfter = null,
+                                                                IEnumerable<string> outFields = null,
+                                                                string sortField = "",
+                                                                bool sortReverse = false)
+            => SearchPageInternalAsync("searchphonetic", term, from, size, searchAfter, outFields, sortField, sortReverse);
+
+        async private Task<LuceneSearchResult> SearchPageInternalAsync(string endpoint,
+                                                                       string query,
+                                                                       int from,
+                                                                       int size,
+                                                                       string searchAfter,
+                                                                       IEnumerable<string> outFields,
+                                                                       string sortField,
+                                                                       bool sortReverse)
+        {
+            var mapping = await CurrentIndexMapping();
+
+            var url = $"{_serverUrl}/lucene/{endpoint}/{_indexName}?outFields={outFields.ToOutFieldsParameterString()}&sortField={sortField}&sortReverse={sortReverse}&from={from}&size={size}&q={WebUtility.UrlEncode(query)}";
+            if (!String.IsNullOrEmpty(searchAfter))
+            {
+                url += $"&searchAfter={WebUtility.UrlEncode(searchAfter)}";
+            }
+
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, url))
+            {
+                ModifyHttpRequest(requestMessage);
+
+                using (var httpResponse = await _httpClient.SendAsync(requestMessage))
+                {
+                    var apiResult = await httpResponse.DeserializeFromSuccessResponse<LuceneSearchResult>();
+
+                    if (apiResult.Success && apiResult.Hits != null)
+                    {
+                        foreach (var hit in apiResult.Hits)
+                        {
+                            foreach (var key in hit.Keys.ToArray())
+                            {
+                                var field = mapping?.GetField(key);
+                                hit[key] = field != null ? field.ToValueType(hit[key]) : hit[key]?.ToString();
+                            }
+                        }
+                    }
+
+                    return apiResult;
+                }
+            }
+        }
+
         async public Task<LuceneGroupResult> GroupAsync(string groupField, string query = "")
         {
             using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/group/{ _indexName }?groupField={ groupField }&q={ WebUtility.UrlEncode(query) }"))

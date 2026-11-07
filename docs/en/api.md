@@ -1,5 +1,9 @@
 # REST API
 
+!!! note "API v2"
+    A resource oriented [API v2](api-v2.md) (`/api/v2/indices/...`) with paging is available in parallel.
+    The v1 endpoints described here remain supported but are deprecated.
+
 All endpoints are below `/Lucene`. `{index}` is always the name of the index
 (`a-z`, `0-9`, `_`, `-`, max. 64 characters). The required [role](configuration/authentication.md#roles)
 only matters if authentication is enabled.
@@ -236,6 +240,10 @@ Example:
   "milliSeconds": 1.8725
 }
 ```
+
+**Paging:** optional parameters `from` (offset, default 0; `from + size` max. 10000), `size` (default 20)
+and `searchAfter` (cursor). The response additionally contains `totalHits`, `from`, `size` and
+`nextSearchAfter`, see [API v2 – Search and paging](api-v2.md#search-and-paging).
 
 The *Query-Term* corresponds to the *Lucene* syntax, see also [here](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) 
 
