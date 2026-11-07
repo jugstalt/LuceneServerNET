@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 | Authentication | Roles `read`/`write`/`admin`, hashed secrets (`SecretHash`) | Not breaking: clients without `Roles` get `admin`, plain `Secret` still works. Recommended: assign roles and switch to `SecretHash` (`--hash-secret`) |
 | API v2 errors | HTTP 4xx/5xx instead of 200 | Only relevant for new v2 clients; v1 is unchanged |
 | Swagger | Replaced by `/openapi/{v}.json` and `/scalar` | Old `/swagger` URLs redirect |
+| Phonetic search | Fixed Cologne phonetics and Soundex codes (see *Fixed*) | **Recommended: re-index indices with `primaryFieldsPhonetics`**, otherwise affected words do not match in `searchphonetic` until re-indexed. Normal search is not affected |
 | Versions | Server, Engine, Core and Client share one version (`src/Directory.Build.props`) | – |
 
 
@@ -84,6 +85,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     match the rule are no longer reachable via the API until renamed.
 
 ### Fixed
+
+- **Cologne phonetics:** a `c` at the end of a word was ignored; it is now encoded as `8`
+  (`Novac` → `638`, before `63`).
+- **Soundex:** the code of the first letter is now used to suppress an identical following code
+  (`Pfister` → `P236`, before `P123`), and vowels now separate identical codes while `h`/`w` do not
+  (`Tymczak` → `T522`, before `T520`).
+- ⚠️ Both fixes change the stored phonetic codes. Existing indices keep the old codes until they are
+  re-indexed: e.g. a misspelled search for `Nowac` no longer finds `Novac` via `searchphonetic`
+  until the index is rebuilt. Only the phonetic fields are affected, not the normal search.
 
 - `GeoPoint(latitude, longitude)` constructor set `Latitude` twice; `Longidute` stayed `0`.
 - `GeoType.Parse` never parsed coordinate strings (inverted `IsNullOrEmpty` check). Strings are now

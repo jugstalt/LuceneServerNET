@@ -12,53 +12,40 @@ namespace LuceneServerNET.Core.Phonetics
 
             if (data != null && data.Length > 0)
             {
-                string previousCode = "", currentCode = "", currentLetter = "";
-
                 result.Append(data.Substring(0, 1));
+
+                // the code of the first letter counts as previous code (Pfister => P236)
+                string previousCode = SoundexCode(char.ToLowerInvariant(data[0]));
 
                 for (int i = 1; i < data.Length; i++)
                 {
-                    currentLetter = data.Substring(i, 1).ToLower();
-                    currentCode = "";
-                    if ("bfpv".IndexOf(currentLetter) > -1)
+                    char currentLetter = char.ToLowerInvariant(data[i]);
+
+                    if ("aeiouy".IndexOf(currentLetter) > -1)
                     {
-                        currentCode = "1";
+                        // vowels separate equal codes (Tymczak => T522)
+                        previousCode = "";
+                        continue;
                     }
-                    else if ("cgjkqsxz".IndexOf(currentLetter) > -1)
+
+                    // h, w and other characters are ignored and do not separate (Ashcraft => A261)
+                    string currentCode = SoundexCode(currentLetter);
+                    if (currentCode == "")
                     {
-                        currentCode = "2";
-                    }
-                    else if ("dt".IndexOf(currentLetter) > -1)
-                    {
-                        currentCode = "3";
-                    }
-                    else if (currentLetter == "l") 
-{
-                        currentCode = "4";
-                    }
-                    else if ("mn".IndexOf(currentLetter) > -1)
-                    {
-                        currentCode = "5";
-                    }
-                    else if (currentLetter == "r")
-                    {
-                        currentCode = "6";
+                        continue;
                     }
 
                     if (currentCode != previousCode)
                     {
                         result.Append(currentCode);
+
+                        if (result.Length == 4)
+                        {
+                            break;
+                        }
                     }
 
-                    if (result.Length == 4)
-                    {
-                        break;
-                    }
-
-                    if (currentCode != "")
-                    {
-                        previousCode = currentCode;
-                    }
+                    previousCode = currentCode;
                 }
             }
             if (result.Length < 4)
@@ -67,6 +54,17 @@ namespace LuceneServerNET.Core.Phonetics
             }
 
             return result.ToString().ToUpper();
+        }
+
+        private static string SoundexCode(char letter)
+        {
+            if ("bfpv".IndexOf(letter) > -1) return "1";
+            if ("cgjkqsxz".IndexOf(letter) > -1) return "2";
+            if ("dt".IndexOf(letter) > -1) return "3";
+            if (letter == 'l') return "4";
+            if ("mn".IndexOf(letter) > -1) return "5";
+            if (letter == 'r') return "6";
+            return "";
         }
 
         public static int Difference(this string data1, string data2)

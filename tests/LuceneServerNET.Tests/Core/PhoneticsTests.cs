@@ -1,4 +1,4 @@
-using LuceneServerNET.Core.Phonetics;
+﻿using LuceneServerNET.Core.Phonetics;
 
 namespace LuceneServerNET.Tests.Core;
 
@@ -11,6 +11,9 @@ public class ColognePhoneticsTests
     [InlineData("Mayer", "67")]
     [InlineData("Philipp", "351")]
     [InlineData("Christoph", "47823")]
+    [InlineData("Novac", "638")]
+    [InlineData("Bloc", "158")]
+    [InlineData("Lusc", "58")]
     public void ToColognePhonetics_CleanZeros_MatchesReference(string input, string expected)
         => Assert.Equal(expected, input.ToColognePhonetics(cleanDoubles: true, cleanZeros: true));
 
@@ -30,7 +33,7 @@ public class ColognePhoneticsTests
     public void ToColognePhonetics_Empty_ReturnsEmpty()
         => Assert.Equal("", "".ToColognePhonetics());
 
-    [Fact(Skip = "Bug: ein 'c' am Wortende wird ignoriert (Kölner Phonetik: 'Mac' => 68)")]
+    [Fact]
     public void ToColognePhonetics_TrailingC_IsEncoded()
         => Assert.Equal("68", "Mac".ToColognePhonetics(cleanDoubles: true, cleanZeros: true));
 }
@@ -43,6 +46,11 @@ public class SoundexTests
     [InlineData("Ashcraft", "A261")]
     [InlineData("Lee", "L000")]
     [InlineData("robert", "R163")]
+    [InlineData("Tymczak", "T522")]
+    [InlineData("Pfister", "P236")]
+    [InlineData("Jackson", "J250")]
+    [InlineData("Schmidt", "S530")]
+    [InlineData("Honeyman", "H555")]
     public void ToSoundex_MatchesReference(string input, string expected)
         => Assert.Equal(expected, input.ToSoundex());
 
@@ -50,11 +58,11 @@ public class SoundexTests
     public void ToSoundex_Empty_IsPadded()
         => Assert.Equal("0000", "".ToSoundex());
 
-    [Fact(Skip = "Bug: Code des ersten Buchstabens wird nicht berücksichtigt (Pfister => P236, liefert P123)")]
+    [Fact]
     public void ToSoundex_FirstLetterCode_IsNotRepeated()
         => Assert.Equal("P236", "Pfister".ToSoundex());
 
-    [Fact(Skip = "Bug: Vokale trennen gleiche Codes nicht (Tymczak => T522, liefert T520)")]
+    [Fact]
     public void ToSoundex_VowelSeparatesSameCodes()
         => Assert.Equal("T522", "Tymczak".ToSoundex());
 

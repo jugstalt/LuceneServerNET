@@ -162,9 +162,13 @@ namespace LuceneServerNET.Core.Phonetics
 
                 if (entry.Equals('c'))
                 {
-                    // is last letter in array
+                    // last letter (not first): no following A,H,K,O,Q,U,X => 8
                     if (i + 1 >= inputChars.Length)
                     {
+                        if (i > 0)
+                        {
+                            sb.Append("8");
+                        }
                         continue;
                     }
 
@@ -184,12 +188,6 @@ namespace LuceneServerNET.Core.Phonetics
                     }
                     else // not an "Anlaut"
                     {
-                        // is last letter in array
-                        if (i + 1 >= inputChars.Length)
-                        {
-                            continue;
-                        }
-
                         char next = inputChars[i + 1];
                         char previous = inputChars[i - 1];
 
