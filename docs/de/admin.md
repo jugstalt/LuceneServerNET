@@ -13,7 +13,8 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Indizes | Liste mit Dokumentanzahl, Größe auf der Platte und letzter Änderung; filtern und sortieren |
 | Suche | Autocomplete-Eingabe (Search as you type), Suche mit `size`/`from`/`searchAfter`, Sortierung, räumlicher Filter, phonetische Suche, Gruppierung, Ergebnis als Tabelle oder JSON, Request als `curl`-Befehl |
 | Index anlegen | Mapping-Editor: Felder, Typen, indiziert/gespeichert, Primärfelder, Phonetik |
-| Import | CSV oder JSON (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
+| Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest |
+| Import | Aus einer Datenbank-Abfrage oder CSV bzw. JSON (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
 
@@ -57,7 +58,7 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 {
   "Admin": {
     "DataPath": "_data",            // SQLite-Datenbank (admin.db) + Data-Protection-Schlüssel
-    "Import": { "MaxFileSizeMB": 500 },
+    "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: kein Login, nur lokale Entwicklung!)
       "Users": [
@@ -93,8 +94,10 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 ## Import
 
 1. Bestehenden Index auswählen oder den Namen eines neuen Index eingeben.
-2. CSV-Datei (Kopfzeile, Trennzeichen `,` `;` Tab oder `|` wird erkannt) oder JSON
+2. **Datei:** CSV-Datei (Kopfzeile, Trennzeichen `,` `;` Tab oder `|` wird erkannt) oder JSON
    (Array von Objekten, `{ "items": [...] }` oder NDJSON) hochladen.
+   **Datenbank:** Verbindung wählen (Menü *Database connections*), SELECT-Abfrage eingeben und *Preview* klicken.
+   Der Indexname wird aus der Tabelle nach `FROM` übernommen.
 3. Vorgeschlagenes Mapping prüfen. Regeln: Ganzzahlen → `int32`, Zahlen → `double`, ISO-Datum → `datetime`,
    kurze Werte ohne Leerzeichen → `string`, alles andere → `text`. Spalten `lat`/`lon` (auch
    `latitude`/`longitude`, `lng`) werden zusätzlich zu einem `geo`-Feld `location` kombiniert.
@@ -102,3 +105,12 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 4. Batchgröße wählen (Dokumente pro Request, Standard 500) und starten. Zeilen, die nicht zum Mapping passen,
    werden übersprungen und im Report aufgelistet; lehnt der Server einen Batch ab, werden dessen Dokumente
    einzeln gesendet, um die fehlerhaften Zeilen zu finden. Am Ende wird der Index einmal refresht.
+
+### Import aus einer Datenbank
+
+- Provider: SQL Server (`Microsoft.Data.SqlClient`), PostgreSQL (`Npgsql`), SQLite (`Microsoft.Data.Sqlite`).
+- Erlaubt ist nur eine einzelne `SELECT`-Anweisung (oder `WITH ... SELECT`). Sie läuft in einer Transaktion, die immer
+  zurückgerollt wird. Das ist ein Sicherheitsnetz, kein Berechtigungskonzept: **einen Datenbank-User mit reinen Leserechten verwenden**.
+- Die Abfrage läuft zweimal: für die Vorschau (erste 200 Zeilen) und für den Import (gestreamt, alle Zeilen).
+  Gleichnamige Spalten bekommen ein Suffix (`id`, `id2`), Binärspalten werden übersprungen, `decimal` wird zu `double`.
+- Timeout pro Abfrage: `Admin:Import:CommandTimeoutSeconds` (Standard 600).

@@ -19,22 +19,32 @@ static public class MappingFieldExtensions
             case FieldTypes.SingleType:
                 // Document.Get() formats numbers with the current culture ("47,0707" on a german server)
                 // => format the stored numeric value culture invariant (stays a string for compatibility)
-                var numeric = doc.GetField(fieldMapping.Name)?.GetNumericValue();
-                if (numeric != null)
+                var field = doc.GetField(fieldMapping.Name);
+                var invariant = field?.NumericType switch
                 {
-                    val = Convert.ToString(numeric, CultureInfo.InvariantCulture);
+                    NumericFieldType.INT32 => field.GetInt32Value()?.ToString(CultureInfo.InvariantCulture),
+                    NumericFieldType.INT64 => field.GetInt64Value()?.ToString(CultureInfo.InvariantCulture),
+                    NumericFieldType.SINGLE => field.GetSingleValue()?.ToString(CultureInfo.InvariantCulture),
+                    NumericFieldType.DOUBLE => field.GetDoubleValue()?.ToString(CultureInfo.InvariantCulture),
+                    _ => null
+                };
+                if (invariant != null)
+                {
+                    val = invariant;
                 }
                 break;
             case FieldTypes.DateTimeType:
                 try
                 {
+                    // indexed: DateTools string (UTC); stored only: ISO 8601 (older indices: server culture format)
+                    // => always returned as UTC ("...Z")
                     if (fieldMapping.Index == true)
                     {
-                        val = val != null ? DateTools.StringToDate(val.ToString()) : null;
+                        val = val != null ? DateTime.SpecifyKind(DateTools.StringToDate(val.ToString()), DateTimeKind.Utc) : null;
                     }
                     else
                     {
-                        val = val != null ? Convert.ToDateTime(val.ToString()) : null;
+                        val = val != null ? ConvertExtensions.StoredStringToUtcDateTime(val.ToString()) ?? val : null;
                     }
                 }
                 catch { }

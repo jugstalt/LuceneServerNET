@@ -93,6 +93,11 @@ public static class MappingInference
             return FieldTypes.DoubleType;
         }
 
+        if (values.All(v => v is DateTime || v is DateTimeOffset))
+        {
+            return FieldTypes.DateTimeType;
+        }
+
         var strings = values.Select(v => v is bool b ? (b ? "true" : "false") : v.ToString() ?? "").ToList();
 
         if (strings.All(s => IsoDateRegex.IsMatch(s) && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _)))

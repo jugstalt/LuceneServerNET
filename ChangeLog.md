@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 | Swagger | Replaced by `/openapi/{v}.json` and `/scalar` | Old `/swagger` URLs redirect |
 | Phonetic search | Fixed Cologne phonetics and Soundex codes (see *Fixed*) | **Recommended: re-index indices with `primaryFieldsPhonetics`**, otherwise affected words do not match in `searchphonetic` until re-indexed. Normal search is not affected |
 | .NET client dispose | Console output replaced by optional `Logger`; `IAsyncDisposable` | Not breaking. Optionally use `await using`; set `Logger` to keep the refresh log lines |
+| `datetime` fields | Values without time zone are taken as **UTC** (before: server local time); results contain `Z` | Only relevant if the server does not run in UTC and clients send dates without time zone: send `Z`/an offset or re-index. Docker (UTC) is not affected |
 | Versions | Server, Engine, Core and Client share one version (`src/Directory.Build.props`) | – |
 
 
@@ -40,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Login: local users (hashed passwords, `--hash-password`) or OpenID Connect.
   Instances from the configuration and added in the UI (secrets encrypted with DataProtection, SQLite/Dapper).
   Docker image: `Dockerfile.admin`; started by the Aspire AppHost.
+  Import from a database (SQL Server, PostgreSQL, SQLite): stored connections (encrypted),
+  a SELECT query with preview, then the same mapping proposal and batch import as for files.
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),
   `GET /api/v2/indices/{id}/stats` (documents, size on disk, last modification),
   `GET /api/v2/admin/info` (version, uptime, platform; role `admin`) and
@@ -123,6 +126,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   parsed with it (`"47.0707"` was indexed as `470707`). Values are now parsed and returned culture invariant
   (`"47.0707"`; still as string, like before). Stored-only numeric fields (`index: false`) also accept JSON values now.
   Indices with numeric strings indexed on a non-english server should be re-indexed.
+- **`datetime` independent of the server time zone**: dates without time zone were interpreted as server
+  local time and shifted to UTC (`1128-01-01` became `1127-12-31T23:00:00` on a server in CET) and were returned
+  without `Z`. Now: values without time zone are UTC, values with `Z`/offset are converted, results are UTC
+  with `Z`. Stored-only date fields are written as ISO 8601 (older culture formatted values are still read).
 - `group`: group values are decoded with `BytesRef.Utf8ToString()` (respects offset/length) instead of
   decoding the whole underlying byte buffer. No visible effect with the current Lucene.NET version
   (it returns exact copies), but no longer relies on that implementation detail.

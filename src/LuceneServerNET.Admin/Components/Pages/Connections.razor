@@ -1,0 +1,145 @@
+@page "/connections"
+@inject DatabaseSource Source
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Database connections · LuceneServer.NET Admin</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h4">Database connections</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="New">Add connection</MudButton>
+</MudStack>
+<MudText Typo="Typo.body2" Class="mb-4">Sources for the import from a database. Use a database user with read permissions only.</MudText>
+
+@if (_edit is not null)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-2">@(_edit.Id is null ? "Add connection" : $"Edit {_edit.Name}")</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_edit.Name" Label="Name" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_edit.Provider" Label="Provider" Variant="Variant.Outlined">
+                    @foreach (var provider in DbProviders.All)
+                    {
+                        <MudSelectItem Value="provider">@provider</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_edit.ConnectionString" Label="Connection string" Variant="Variant.Outlined" InputType="InputType.Password"
+                              Placeholder="@DbProviders.Example(_edit.Provider)"
+                              HelperText="@(_edit.Id is null ? "Stored encrypted" : "Leave empty to keep the stored connection string")" />
+            </MudItem>
+        </MudGrid>
+        @if (_testResult is not null)
+        {
+            <MudAlert Class="mt-3" Severity="@(_testOk ? Severity.Success : Severity.Error)">@_testResult</MudAlert>
+        }
+        <MudStack Row="true" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="TestAsync">Test connection</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="() => _edit = null">Cancel</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudTable Items="_connections" Hover="true" Dense="true" Loading="_loading">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Provider</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.Provider</MudTd>
+        <MudTd Style="text-align:right">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => Edit(context)" aria-label="Edit" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)" aria-label="Delete" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>No database connections yet.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private class EditModel
+    {
+        public long? Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Provider { get; set; } = DbProviders.SqlServer;
+        public string? ConnectionString { get; set; }
+    }
+
+    private IReadOnlyList<DbSourceConnection> _connections = [];
+    private EditModel? _edit;
+    private string? _testResult;
+    private bool _testOk, _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _connections = await Source.GetConnectionsAsync();
+        _loading = false;
+    }
+
+    private void New()
+    {
+        _edit = new EditModel();
+        _testResult = null;
+    }
+
+    private void Edit(DbSourceConnection connection)
+    {
+        _edit = new EditModel { Id = connection.Id, Name = connection.Name, Provider = connection.Provider };
+        _testResult = null;
+    }
+
+    private async Task TestAsync()
+    {
+        if (_edit is null) return;
+
+        var connectionString = String.IsNullOrWhiteSpace(_edit.ConnectionString)
+            ? _connections.FirstOrDefault(c => c.Id == _edit.Id)?.ConnectionString
+            : _edit.ConnectionString;
+
+        try
+        {
+            var version = await DatabaseSource.TestAsync(_edit.Provider, connectionString ?? "");
+            (_testOk, _testResult) = (true, $"Connected. Server version {version}");
+        }
+        catch (Exception ex)
+        {
+            (_testOk, _testResult) = (false, ex.Message);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_edit is null) return;
+        try
+        {
+            await Source.SaveConnectionAsync(_edit.Id, _edit.Name, _edit.Provider, _edit.ConnectionString);
+            Snackbar.Add($"Connection {_edit.Name} saved", Severity.Success);
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(DbSourceConnection connection)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync("Remove connection", $"Remove the connection {connection.Name}?", yesText: "Remove", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        await Source.DeleteConnectionAsync(connection.Id);
+        Snackbar.Add($"Connection {connection.Name} removed", Severity.Success);
+        await LoadAsync();
+    }
+}

@@ -396,7 +396,7 @@ namespace LuceneServerNET.Engine.Services
                         case FieldTypes.DateTimeType:
                             if (field.Index)
                             {
-                                value = DateTools.DateToString(Convert.ToDateTime(value.ToString()).ToUniversalTime(), DateResolution.SECOND);
+                                value = DateTools.DateToString(value.ToUtcDateTime(), DateResolution.SECOND);
                                 doc.Add(new StringField(
                                 field.Name,
                                 (string)value,
@@ -404,7 +404,8 @@ namespace LuceneServerNET.Engine.Services
                             }
                             else
                             {
-                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToString()));
+                                // ISO 8601 UTC ("2024-01-31T12:00:00.0000000Z"), independent of the server culture
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToUtcDateTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture)));
                             }
                             break;
                         case FieldTypes.GeoType:

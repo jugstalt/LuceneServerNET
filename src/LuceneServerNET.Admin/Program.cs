@@ -45,6 +45,7 @@ builder.Services.AddSingleton<IAdminRepositoryService>(sp =>
     new SqliteAdminRepositoryService(connectionString, sp.GetRequiredService<ILogger<SqliteAdminRepositoryService>>()));
 builder.Services.AddSingleton<InstanceRegistry>();
 builder.Services.AddSingleton<ImportService>();
+builder.Services.AddSingleton<DatabaseSource>();
 
 // file uploads (import) are streamed through the SignalR circuit
 builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 1024 * 1024);

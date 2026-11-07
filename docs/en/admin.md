@@ -13,7 +13,8 @@
 | Indices | List with document count, size on disk and last modification; filter and sort |
 | Search | Autocomplete input (search as you type), search with `size`/`from`/`searchAfter`, sort, spatial filter, phonetic search, group by, results as table or JSON, request as `curl` command |
 | Create index | Mapping editor: fields, types, indexed/stored, primary fields, phonetics |
-| Import | Upload CSV or JSON (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
+| Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test |
+| Import | From a database query or upload CSV or JSON (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
 
@@ -57,7 +58,7 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 {
   "Admin": {
     "DataPath": "_data",            // SQLite database (admin.db) + data protection keys
-    "Import": { "MaxFileSizeMB": 500 },
+    "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: no login, local development only!)
       "Users": [
@@ -93,8 +94,10 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 ## Import
 
 1. Select an existing index or enter the name of a new index.
-2. Upload a CSV file (header row, delimiter `,` `;` tab or `|` is detected) or JSON
+2. **File:** upload a CSV file (header row, delimiter `,` `;` tab or `|` is detected) or JSON
    (array of objects, `{ "items": [...] }` or NDJSON).
+   **Database:** choose a connection (menu *Database connections*), enter a SELECT query and click *Preview*.
+   The index name is taken from the table after `FROM`.
 3. Check the proposed mapping. Rules: integers → `int32`, numbers → `double`, ISO dates → `datetime`,
    short values without spaces → `string`, everything else → `text`. Columns `lat`/`lon` (also
    `latitude`/`longitude`, `lng`) are additionally combined into a `geo` field `location`.
@@ -102,3 +105,12 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 4. Choose the batch size (documents per request, default 500) and start. Rows that do not match the
    mapping are skipped and listed in the report; if the server rejects a batch, its documents are sent
    one by one to find the failing rows. The index is refreshed once at the end.
+
+### Database import
+
+- Providers: SQL Server (`Microsoft.Data.SqlClient`), PostgreSQL (`Npgsql`), SQLite (`Microsoft.Data.Sqlite`).
+- Only a single `SELECT` (or `WITH ... SELECT`) statement is accepted. It runs in a transaction that is always
+  rolled back. This is a safety net, not a permission system: **use a database user with read permissions only**.
+- The query is executed twice: for the preview (first 200 rows) and for the import (streamed, all rows).
+  Columns with the same name get a suffix (`id`, `id2`), binary columns are skipped, `decimal` becomes `double`.
+- Timeout per query: `Admin:Import:CommandTimeoutSeconds` (default 600).

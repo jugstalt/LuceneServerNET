@@ -130,6 +130,53 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
     #endregion
 
+    #region Database connections (import sources)
+
+    private const string DbConnectionColumns = "id, name, provider, connection_string_protected, created_utc, modified_utc";
+
+    public async Task<IReadOnlyList<DbConnectionRecord>> GetDbConnectionsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<DbConnectionRecord>($"SELECT {DbConnectionColumns} FROM db_connections ORDER BY name")).ToList();
+    }
+
+    public async Task<DbConnectionRecord?> GetDbConnectionAsync(long id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<DbConnectionRecord>($"SELECT {DbConnectionColumns} FROM db_connections WHERE id = @id", new { id });
+    }
+
+    public async Task<long> InsertDbConnectionAsync(DbConnectionRecord record, CancellationToken cancellationToken = default)
+    {
+        record.CreatedUtc = record.ModifiedUtc = DateTime.UtcNow;
+
+        await using var connection = await OpenAsync(cancellationToken);
+        record.Id = await connection.ExecuteScalarAsync<long>(
+            @"INSERT INTO db_connections (name, provider, connection_string_protected, created_utc, modified_utc)
+              VALUES (@Name, @Provider, @ConnectionStringProtected, @CreatedUtc, @ModifiedUtc);
+              SELECT last_insert_rowid();", record);
+        return record.Id;
+    }
+
+    public async Task UpdateDbConnectionAsync(DbConnectionRecord record, CancellationToken cancellationToken = default)
+    {
+        record.ModifiedUtc = DateTime.UtcNow;
+
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"UPDATE db_connections SET name = @Name, provider = @Provider,
+                     connection_string_protected = @ConnectionStringProtected, modified_utc = @ModifiedUtc
+              WHERE id = @Id", record);
+    }
+
+    public async Task DeleteDbConnectionAsync(long id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync("DELETE FROM db_connections WHERE id = @id", new { id });
+    }
+
+    #endregion
+
     /// <summary>SQLite stores DateTime as ISO 8601 text; write and read it as UTC.</summary>
     private class UtcDateTimeHandler : SqlMapper.TypeHandler<DateTime>
     {

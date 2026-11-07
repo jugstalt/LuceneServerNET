@@ -66,7 +66,8 @@
         </MudSelect>
     </MudItem>
     <MudItem xs="12" md="5">
-        <MudTextField @bind-Value="_request.Filter" Label="Spatial filter" Placeholder="bbox:minx,miny,maxx,maxy or dist:lon,lat,km" Variant="Variant.Outlined" />
+        <MudTextField @bind-Value="_request.Filter" Label="Spatial filter" Placeholder="@SpatialFilterExample" Variant="Variant.Outlined"
+                      HelperText="dist_km(field:lon,lat,km) · bbox(field:minx,miny,maxx,maxy) · linedist_km(...)" />
     </MudItem>
     <MudItem xs="12">
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
@@ -193,6 +194,9 @@
 
     private string? _groupField, _groupQuery;
     private List<IDictionary<string, object>>? _groups;
+
+    private string SpatialFilterExample =>
+        $"dist_km({Mapping?.Fields.FirstOrDefault(f => f.FieldType == FieldTypes.GeoType)?.Name ?? "location"}:15.44,47.07,5)";
 
     private IEnumerable<string> StoredFields => Mapping?.Fields.Where(f => f.Store).Select(f => f.Name) ?? [];
 

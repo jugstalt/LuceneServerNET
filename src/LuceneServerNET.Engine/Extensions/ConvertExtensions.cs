@@ -28,6 +28,60 @@ static public class ConvertExtensions
             _ => throw new Exception($"Can't convert {value?.GetType()} to single")
         };
 
+    /// <summary>
+    /// Converts a document value to UTC. Values with "Z" or an offset are converted to UTC,
+    /// values without time zone ("2024-01-31", "2024-01-31T12:00:00") are taken as UTC
+    /// (independent of the server time zone). Strings are parsed culture invariant.
+    /// </summary>
+    static public DateTime ToUtcDateTime(this object value)
+    {
+        switch (value)
+        {
+            case DateTime dateTime:
+                return dateTime.Kind switch
+                {
+                    DateTimeKind.Utc => dateTime,
+                    DateTimeKind.Local => dateTime.ToUniversalTime(),
+                    _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+                };
+            case DateTimeOffset dateTimeOffset:
+                return dateTimeOffset.UtcDateTime;
+            case JsonElement { ValueKind: JsonValueKind.String } e:
+                return ParseUtc(e.GetString());
+            default:
+                return ParseUtc(value?.ToString());
+        }
+    }
+
+    private static DateTime ParseUtc(string text)
+    {
+        if (String.IsNullOrWhiteSpace(text))
+        {
+            throw new FormatException("Empty date value");
+        }
+
+        return DateTime.Parse(text.Trim(), CultureInfo.InvariantCulture,
+                              DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+    }
+
+    /// <summary>Reads a stored date value: ISO 8601 (current format) or, for older indices, the server culture format.</summary>
+    static public DateTime? StoredStringToUtcDateTime(string stored)
+    {
+        if (String.IsNullOrWhiteSpace(stored))
+        {
+            return null;
+        }
+        if (DateTime.TryParse(stored, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var invariant))
+        {
+            return invariant;
+        }
+        if (DateTime.TryParse(stored, CultureInfo.CurrentCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var legacy))
+        {
+            return legacy;
+        }
+        return null;
+    }
+
     static public int ToInt32(this object value)
         => value switch
         {

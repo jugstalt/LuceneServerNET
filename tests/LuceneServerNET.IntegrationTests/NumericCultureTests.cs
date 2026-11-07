@@ -66,4 +66,31 @@ public class NumericCultureTests : IClassFixture<LuceneServerFactory>
             CultureInfo.DefaultThreadCurrentCulture = null;
         }
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dates_AreUtc_IndependentOfServerTimeZone(bool indexed)
+    {
+        var id = "dat" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        await _client.CreateIndexAsync(id);
+        await _client.PutMappingAsync(id, new IndexMapping
+        {
+            Fields = new List<FieldMapping> { new("title"), new("date", FieldTypes.DateTimeType) { Index = indexed } },
+            PrimaryFields = new List<string> { "title" }
+        });
+
+        await _client.AddDocumentsAsync(id, new List<IDictionary<string, object>>
+        {
+            new Dictionary<string, object> { ["title"] = "a", ["date"] = "1128-01-01" },                  // no time zone => UTC
+            new Dictionary<string, object> { ["title"] = "b", ["date"] = "2024-06-01T12:00:00+02:00" },   // offset => converted
+        });
+        await _client.RefreshIndexAsync(id);
+
+        var hits = (await _client.SearchAsync(id, new SearchRequest { Size = 10, SortField = "title" })).Hits.ToList();
+
+        string Date(string title) => ((JsonElement)hits.Single(h => ((JsonElement)h["title"]).GetString() == title)["date"]).GetString();
+        Assert.Equal("1128-01-01T00:00:00Z", Date("a"));
+        Assert.Equal("2024-06-01T10:00:00Z", Date("b"));
+    }
 }

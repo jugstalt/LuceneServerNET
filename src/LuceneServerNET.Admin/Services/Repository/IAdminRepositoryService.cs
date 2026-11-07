@@ -12,6 +12,17 @@ public class InstanceRecord
     public DateTime ModifiedUtc { get; set; }
 }
 
+/// <summary>A database connection used as import source (the connection string is protected with DataProtection).</summary>
+public class DbConnectionRecord
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Provider { get; set; } = "";
+    public string ConnectionStringProtected { get; set; } = "";
+    public DateTime CreatedUtc { get; set; }
+    public DateTime ModifiedUtc { get; set; }
+}
+
 /// <summary>
 /// All persistence of the admin UI. The implementation owns every SQL statement (Dapper).
 /// </summary>
@@ -25,4 +36,10 @@ public interface IAdminRepositoryService
     Task<long> InsertInstanceAsync(InstanceRecord instance, CancellationToken cancellationToken = default);
     Task UpdateInstanceAsync(InstanceRecord instance, CancellationToken cancellationToken = default);
     Task DeleteInstanceAsync(long id, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DbConnectionRecord>> GetDbConnectionsAsync(CancellationToken cancellationToken = default);
+    Task<DbConnectionRecord?> GetDbConnectionAsync(long id, CancellationToken cancellationToken = default);
+    Task<long> InsertDbConnectionAsync(DbConnectionRecord connection, CancellationToken cancellationToken = default);
+    Task UpdateDbConnectionAsync(DbConnectionRecord connection, CancellationToken cancellationToken = default);
+    Task DeleteDbConnectionAsync(long id, CancellationToken cancellationToken = default);
 }

@@ -3,6 +3,7 @@
 @implements IAsyncDisposable
 @inject ImportService Importer
 @inject IConfiguration Configuration
+@inject DatabaseSource DbSource
 
 <PageTitle>Import · @InstanceName</PageTitle>
 
@@ -44,23 +45,64 @@
                     }
                 </MudItem>
                 <MudItem xs="12">
-                    <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".csv,.txt,.tsv,.json,.ndjson,.jsonl" Disabled="_running" MaximumFileCount="1">
-                        <CustomContent Context="upload">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync" Disabled="_running">Choose CSV / JSON file</MudButton>
-                        </CustomContent>
-                    </MudFileUpload>
-                    @if (_uploading)
-                    {
-                        <MudProgressLinear Color="Color.Primary" Value="_uploadPercent" Class="mt-2" />
-                    }
-                    @if (_fileName is not null)
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-2">
-                            <b>@_fileName</b> (@Format.Bytes(_fileSize), @_format) · columns: @_columns.Count · sample rows: @_sample.Count
-                        </MudText>
-                    }
-                    <MudText Typo="Typo.caption">CSV with header row (delimiter , ; tab or | is detected) · JSON array of objects or NDJSON · max. @Format.Bytes(MaxFileSize)</MudText>
+                    <MudToggleGroup T="bool" Value="_fromDatabase" ValueChanged="OnSourceModeChanged" Outlined="true" Disabled="_running">
+                        <MudToggleItem Value="false" Text="File" />
+                        <MudToggleItem Value="true" Text="Database" />
+                    </MudToggleGroup>
                 </MudItem>
+                @if (_fromDatabase)
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="long?" @bind-Value="_dbConnectionId" Label="Connection" Variant="Variant.Outlined" Disabled="_running">
+                            @foreach (var connection in _dbConnections)
+                            {
+                                <MudSelectItem T="long?" Value="connection.Id">@connection.Name (@connection.Provider)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (_dbConnections.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">No connections yet: <MudLink Href="connections">add one</MudLink>.</MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_sql" Label="SELECT query" Variant="Variant.Outlined" Lines="5" Class="mono" Disabled="_running"
+                                      Placeholder="SELECT id, name, description, lat, lon FROM places WHERE active = 1" />
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="PreviewQueryAsync"
+                                       Disabled="@(_running || _loadingPreview || _dbConnectionId is null || String.IsNullOrWhiteSpace(_sql))">Preview</MudButton>
+                            @if (_loadingPreview)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            }
+                            @if (_sourceDescription is not null && _fromDatabase)
+                            {
+                                <MudText Typo="Typo.body2">@_sourceDescription · columns: @_columns.Count · sample rows: @_sample.Count</MudText>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.caption">Only one SELECT statement (or WITH ... SELECT); it runs in a transaction that is rolled back. Use a read-only database user.</MudText>
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".csv,.txt,.tsv,.json,.ndjson,.jsonl" Disabled="_running" MaximumFileCount="1">
+                            <CustomContent Context="upload">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync" Disabled="_running">Choose CSV / JSON file</MudButton>
+                            </CustomContent>
+                        </MudFileUpload>
+                        @if (_uploading)
+                        {
+                            <MudProgressLinear Color="Color.Primary" Value="_uploadPercent" Class="mt-2" />
+                        }
+                        @if (_fileName is not null)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                <b>@_fileName</b> (@Format.Bytes(_fileSize), @_format) · columns: @_columns.Count · sample rows: @_sample.Count
+                            </MudText>
+                        }
+                        <MudText Typo="Typo.caption">CSV with header row (delimiter , ; tab or | is detected) · JSON array of objects or NDJSON · max. @Format.Bytes(MaxFileSize)</MudText>
+                    </MudItem>
+                }
             </MudGrid>
         </MudPaper>
 
@@ -187,6 +229,14 @@
     private List<string> _columns = [];
     private InferredMapping? _mapping;
 
+    // database source
+    private bool _fromDatabase, _loadingPreview;
+    private IReadOnlyList<DbSourceConnection> _dbConnections = [];
+    private long? _dbConnectionId;
+    private string _sql = "";
+    private (DbSourceConnection Connection, string Sql)? _dbSource;   // query of the last preview = query of the import
+    private string? _sourceDescription;
+
     private ImportOptions _options = new();
     private bool _running;
     private CancellationTokenSource? _cancellation;
@@ -207,6 +257,7 @@
     protected override async Task LoadAsync()
     {
         _indices = (await Client!.GetIndicesAsync()).ToList();
+        _dbConnections = await DbSource.GetConnectionsAsync();
         if (!String.IsNullOrEmpty(PreselectedIndex) && _indices.Contains(PreselectedIndex))
         {
             await OnExistingIndexChanged(PreselectedIndex);
@@ -233,13 +284,83 @@
         await BuildMappingAsync();
     }
 
+    private void ResetSource()
+    {
+        DeleteTempFile();
+        _dbSource = null;
+        _sourceDescription = null;
+        _fileName = null;
+        _sample = [];
+        _columns = [];
+        _mapping = null;
+        _report = null;
+        _progress = null;
+    }
+
+    private void OnSourceModeChanged(bool fromDatabase)
+    {
+        _fromDatabase = fromDatabase;
+        ResetSource();
+    }
+
+    private async Task PreviewQueryAsync()
+    {
+        var connection = _dbConnections.FirstOrDefault(c => c.Id == _dbConnectionId);
+        if (connection is null) return;
+
+        ResetSource();
+        _loadingPreview = true;
+        try
+        {
+            var sql = _sql.Trim();
+            await foreach (var row in DbSource.ReadAsync(connection, sql))
+            {
+                _sample.Add(row);
+                if (_sample.Count >= SampleSize) break;
+            }
+            if (_sample.Count == 0)
+            {
+                throw new InvalidOperationException("The query returns no rows");
+            }
+
+            _columns = _sample.SelectMany(r => r.Keys).Distinct().ToList();
+            _dbSource = (connection, sql);
+            _sourceDescription = connection.Name;
+
+            if (_newIndex && String.IsNullOrWhiteSpace(_indexName))
+            {
+                // "... FROM schema.table ..." => index name
+                var table = System.Text.RegularExpressions.Regex.Match(sql, @"\bfrom\s+([\w\.\[\]""`]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (table.Success)
+                {
+                    _indexName = ToIndexName(table.Groups[1].Value.Split('.').Last().Trim('[', ']', '"', '`'));
+                }
+            }
+
+            await BuildMappingAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            ResetSource();
+        }
+        finally
+        {
+            _loadingPreview = false;
+        }
+    }
+
+    private static string ToIndexName(string name)
+    {
+        var indexName = System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9_-]", "_");
+        return indexName.Length > 64 ? indexName[..64] : indexName;
+    }
+
     private async Task OnFileSelectedAsync(IBrowserFile? file)
     {
         if (file is null) return;
 
-        DeleteTempFile();
-        _report = null;
-        _progress = null;
+        ResetSource();
         _uploading = true;
         _uploadPercent = 0;
 
@@ -292,8 +413,7 @@
 
             if (_newIndex && String.IsNullOrWhiteSpace(_indexName))
             {
-                _indexName = System.Text.RegularExpressions.Regex.Replace(Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant(), "[^a-z0-9_-]", "_");
-                if (_indexName.Length > 64) _indexName = _indexName[..64];
+                _indexName = ToIndexName(Path.GetFileNameWithoutExtension(file.Name));
             }
 
             await BuildMappingAsync();
@@ -330,7 +450,7 @@
 
     private async Task StartAsync()
     {
-        if (_mapping is null || _tempFile is null) return;
+        if (_mapping is null || (_tempFile is null && _dbSource is null)) return;
 
         _indexName = _indexName.Trim().ToLowerInvariant();
         _validationError = _newIndex ? CreateIndex.Validate(_indexName, _mapping) : null;
@@ -365,10 +485,19 @@
 
         try
         {
-            await using var stream = File.OpenRead(_tempFile);
-            _report = await Importer.ImportAsync(Client!, _indexName,
-                                                 DocumentReaders.ReadAsync(stream, _format, _cancellation.Token),
-                                                 _mapping, _options, progress, _cancellation.Token);
+            if (_dbSource is { } db)
+            {
+                _report = await Importer.ImportAsync(Client!, _indexName,
+                                                     DbSource.ReadAsync(db.Connection, db.Sql, _cancellation.Token),
+                                                     _mapping, _options, progress, _cancellation.Token);
+            }
+            else
+            {
+                await using var stream = File.OpenRead(_tempFile!);
+                _report = await Importer.ImportAsync(Client!, _indexName,
+                                                     DocumentReaders.ReadAsync(stream, _format, _cancellation.Token),
+                                                     _mapping, _options, progress, _cancellation.Token);
+            }
         }
         finally
         {
