@@ -1,7 +1,9 @@
-﻿using LuceneServerNET.Client.Extensions;
+using LuceneServerNET.Client.Extensions;
 using LuceneServerNET.Core.Models.Custom;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,12 +12,17 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LuceneServerNET.Client
 {
-    public class LuceneServerClient : IDisposable
+    public class LuceneServerClient : IDisposable, IAsyncDisposable
     {
+        // shared by all instances that do not get an HttpClient from the caller
+        // (one HttpClient per instance can exhaust sockets); authentication is set per request
+        private static readonly HttpClient SharedHttpClient = new HttpClient();
+
         private readonly HttpClient _httpClient;
         private readonly string _serverUrl;
         private readonly string _indexName;
@@ -23,7 +30,22 @@ namespace LuceneServerNET.Client
 
         private readonly string _clientId, _clientSecret;
 
-        private List<string> _refreshIndices = new List<string>();
+        // set after documents were indexed or removed and no refresh followed yet
+        private int _hasUnrefreshedChanges = 0;
+        private int _disposed = 0;
+
+        /// <summary>
+        /// If <c>true</c> (default), <see cref="Dispose"/> / <see cref="DisposeAsync"/> refresh the index
+        /// when documents were indexed or removed since the last <see cref="RefreshIndex"/>, so the
+        /// changes are committed and visible to searches immediately. Without a refresh the server
+        /// does this in the background within about 20 seconds.
+        /// </summary>
+        public bool RefreshChangedIndicesOnDispose { get; set; } = true;
+
+        /// <summary>
+        /// Optional logger (e.g. for the refresh on dispose). Default: no logging.
+        /// </summary>
+        public ILogger Logger { get; set; } = NullLogger.Instance;
 
         public LuceneServerClient(string serverUrl,
                                   string indexName,
@@ -38,7 +60,7 @@ namespace LuceneServerNET.Client
                                   string clientId, string clientSecret,
                                   HttpClient httpClient = null)
         {
-            _httpClient = httpClient ?? new HttpClient();
+            _httpClient = httpClient ?? SharedHttpClient;
             _serverUrl = serverUrl;
             _indexName = indexName;
 
@@ -116,10 +138,7 @@ namespace LuceneServerNET.Client
                 {
                     var apiResult = await httpResponse.DeserializeFromSuccessResponse<ApiResult>();
 
-                    if (_refreshIndices.Contains(_indexName))
-                    {
-                        _refreshIndices.Remove(_indexName);
-                    }
+                    Interlocked.Exchange(ref _hasUnrefreshedChanges, 0);
 
                     return apiResult.Success;
                 }
@@ -274,10 +293,7 @@ namespace LuceneServerNET.Client
 
                     if (apiResult.Success)
                     {
-                        if (!_refreshIndices.Contains(_indexName))
-                        {
-                            _refreshIndices.Add(_indexName);
-                        }
+                        Interlocked.Exchange(ref _hasUnrefreshedChanges, 1);
                     }
 
                     return apiResult.Success;
@@ -304,10 +320,7 @@ namespace LuceneServerNET.Client
 
                     if (apiResult.Success)
                     {
-                        if (!_refreshIndices.Contains(_indexName))
-                        {
-                            _refreshIndices.Add(_indexName);
-                        }
+                        Interlocked.Exchange(ref _hasUnrefreshedChanges, 1);
                     }
 
                     return apiResult.Success;
@@ -497,31 +510,63 @@ namespace LuceneServerNET.Client
             }
         }
 
-        #region IDispose
+        #region IDisposable / IAsyncDisposable
 
+        /// <summary>
+        /// Refreshes the index if it was changed and <see cref="RefreshChangedIndicesOnDispose"/> is set.
+        /// Prefer <c>await using</c> (<see cref="DisposeAsync"/>) in async code.
+        /// </summary>
         public void Dispose()
         {
-            foreach (var refreshIndex in _refreshIndices.Distinct())
+            if (!BeginDispose())
             {
-                Console.WriteLine($"Refresh index { refreshIndex }");
-                try
-                {
-                    using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/refresh/{ refreshIndex }"))
-                    {
-                        ModifyHttpRequest(requestMessage);
-                        
-                        using (var httpResponse = _httpClient.SendAsync(requestMessage).Result)
-                        {
-                            var apiResult = httpResponse.DeserializeFromSuccessResponse<ApiResult>().Result;
+                return;
+            }
 
-                            Console.WriteLine($"Info - Refreshing index { refreshIndex }: succeeded");
-                        }
+            // run on the thread pool: blocking on async code in a synchronization context
+            // (WinForms/WPF, classic ASP.NET) would otherwise dead-lock
+            Task.Run(() => RefreshOnDisposeAsync()).GetAwaiter().GetResult();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (!BeginDispose())
+            {
+                return;
+            }
+
+            await RefreshOnDisposeAsync().ConfigureAwait(false);
+        }
+
+        private bool BeginDispose()
+            => Interlocked.Exchange(ref _disposed, 1) == 0;
+
+        private async Task RefreshOnDisposeAsync()
+        {
+            if (!RefreshChangedIndicesOnDispose ||
+                Interlocked.Exchange(ref _hasUnrefreshedChanges, 0) == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/refresh/{ _indexName }"))
+                {
+                    ModifyHttpRequest(requestMessage);
+
+                    using (var httpResponse = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false))
+                    {
+                        await httpResponse.DeserializeFromSuccessResponse<ApiResult>().ConfigureAwait(false);
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Waring - Refreshing index { refreshIndex }: { ex.Message }");
-                }
+
+                Logger.LogInformation("Refreshed index {IndexName} on dispose", _indexName);
+            }
+            catch (Exception ex)
+            {
+                // never throw from Dispose; the server commits in the background anyway
+                Logger.LogWarning(ex, "Refreshing index {IndexName} on dispose failed: {Message}", _indexName, ex.Message);
             }
         }
 

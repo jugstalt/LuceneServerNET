@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 | API v2 errors | HTTP 4xx/5xx instead of 200 | Only relevant for new v2 clients; v1 is unchanged |
 | Swagger | Replaced by `/openapi/{v}.json` and `/scalar` | Old `/swagger` URLs redirect |
 | Phonetic search | Fixed Cologne phonetics and Soundex codes (see *Fixed*) | **Recommended: re-index indices with `primaryFieldsPhonetics`**, otherwise affected words do not match in `searchphonetic` until re-indexed. Normal search is not affected |
+| .NET client dispose | Console output replaced by optional `Logger`; `IAsyncDisposable` | Not breaking. Optionally use `await using`; set `Logger` to keep the refresh log lines |
 | Versions | Server, Engine, Core and Client share one version (`src/Directory.Build.props`) | – |
 
 
@@ -31,6 +32,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `LuceneServerNET.Client`: `SearchPageAsync` / `SearchPhoneticPageAsync` (existing methods unchanged).
 
 ### Changed
+
+- **`LuceneServerNET.Client`: refresh on dispose made configurable and safer** (not breaking):
+  - New property `RefreshChangedIndicesOnDispose` (default `true` = previous behavior).
+  - Implements `IAsyncDisposable`; use `await using`. `Dispose()` still works and no longer blocks
+    on async code in the caller's synchronization context; it is idempotent and never throws.
+  - No more `Console.WriteLine` output; optional `Logger` property (`ILogger`) instead.
+    `cmd/ImportDbTable` passes a console logger.
+  - Without a passed `HttpClient`, all instances share one internal `HttpClient` instead of creating
+    (and never disposing) one per instance.
+  - New dependencies: `Microsoft.Bcl.AsyncInterfaces`, `Microsoft.Extensions.Logging.Abstractions`.
 
 - Error handling: errors are logged only via `ILogger` (no more `Console.WriteLine`), `milliSeconds` is measured with `Stopwatch`.
 - New config `LuceneServer:MaxRequestBodySizeBytes` (default 30 MB, Kestrel and IIS) limits request bodies, e.g. for indexing.

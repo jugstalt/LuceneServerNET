@@ -1,5 +1,6 @@
-﻿using Dapper;
+using Dapper;
 using LuceneServerNET.Client;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -94,7 +95,12 @@ namespace ImportDbTable
                 var startTime = DateTime.Now;
                 int counter = 0;
 
-                using (var client = new LuceneServerClient(serverUrl, indexName))
+                using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o => o.SingleLine = true));
+
+                await using (var client = new LuceneServerClient(serverUrl, indexName)
+                {
+                    Logger = loggerFactory.CreateLogger<LuceneServerClient>()  // logs the refresh on dispose
+                })
                 {
                     var items = new List<IDictionary<string, object>>();
 

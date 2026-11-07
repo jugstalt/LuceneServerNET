@@ -10,29 +10,61 @@ diesem Repository.
 Ein Client kann folgendermaßen instanziiert werden:
 
 ```csharp
-using(var client = new LuceneServerClient(serverUrl, indexName)) 
+await using (var client = new LuceneServerClient(serverUrl, indexName))
 {
     // client operations
 }
 ```
-
-Der Client sollte in Verbindung mit `using` verwendet werden, wenn innerhalb des Clients Änderungen am Index vorgenommen werden (Dokument erzeugen oder löschen).
-Beim `Dispose()` wird gewährleistet, dass der Index am Server *refreshed* wird und alle Änderungen sichtbar werden. Wird der Client nur zum Abfragen verwendet,
-kann ein `using` auch entfallen.
 
 Ein Client bezieht sich immer auf einen Index. Der entsprechende Index kann über den `indexName` angegeben werden.
 
-Für die Kommunikation mit den LuceneServerNET verwendet der Client eine Instanz von `System.Net.Http.HttpClient`. Bei jeder Instanziierung wird ein neuer `HttpClient` erzeugt.
-Sollte ein bestehender `HttpClient` verwendet werden, kann dieser als zusätzlicher Parameter bei der Instanziierung übergeben werden:
+## Refresh und Dispose
+
+Neu indexierte oder gelöschte Dokumente sind nicht sofort in der Suche sichtbar. Der Server macht sie bei
+einem **Refresh** sichtbar und schreibt sie auf die Platte (*Commit*). Das passiert
+
+* explizit über `await client.RefreshIndex()`,
+* automatisch im Hintergrund am Server **spätestens nach ca. 20 Sekunden**,
+* beim regulären Herunterfahren des Servers.
+
+Wurden mit einem Client Dokumente indexiert oder gelöscht und danach kein `RefreshIndex()` aufgerufen,
+führt der Client beim Dispose einen Refresh durch. Änderungen sind dann direkt nach dem `using`-Block
+sichtbar, z. B. für ein Import-Tool, das danach sofort sucht oder beendet wird. Wird der Client nur zum
+Abfragen verwendet, kann ein `using` entfallen.
+
+* In asynchronem Code `await using` (`DisposeAsync()`) verwenden. Das synchrone `Dispose()` wird weiterhin unterstützt.
+* Fehler bei diesem Refresh werden nicht geworfen (der Server committet ohnehin im Hintergrund), sondern
+  im optionalen `Logger` protokolliert.
+* Der Refresh beim Dispose lässt sich abschalten, z. B. für eine Webanwendung mit vielen kleinen Änderungen,
+  für die die kurze Verzögerung kein Problem ist:
 
 ```csharp
-using(var client = new LuceneServerClient(serverUrl, indexName, myHttpClient)) 
+await using (var client = new LuceneServerClient(serverUrl, indexName)
+{
+    RefreshChangedIndicesOnDispose = false,   // Standard: true
+    Logger = loggerFactory.CreateLogger<LuceneServerClient>()  // optional, Standard: kein Logging
+})
 {
     // client operations
 }
 ```
 
-Damit kann gewährleistet werden, dass beispielsweise am `HttpClient` gesetzte *Authorization-Header* an den Server übergeben werden.
+## HttpClient
+
+Für die Kommunikation mit dem LuceneServerNET verwendet der Client einen `System.Net.Http.HttpClient`.
+Wird keiner übergeben, teilen sich alle Client-Instanzen einen internen `HttpClient` (ein eigener pro
+Instanz kann zur Erschöpfung der Sockets führen). Ein bestehender `HttpClient` (z. B. aus der
+`IHttpClientFactory`) kann als zusätzlicher Parameter übergeben werden:
+
+```csharp
+await using (var client = new LuceneServerClient(serverUrl, indexName, myHttpClient))
+{
+    // client operations
+}
+```
+
+Damit kann gewährleistet werden, dass beispielsweise am `HttpClient` gesetzte *Authorization-Header* an
+den Server übergeben werden. Ein übergebener `HttpClient` wird vom Client nicht disposed.
 
 ## Authentifizierung
 

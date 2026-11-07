@@ -10,30 +10,60 @@ this repository.
 A client can be instantiated as follows:
 
 ```csharp
-using(var client = new LuceneServerClient(serverUrl, indexName)) 
+await using (var client = new LuceneServerClient(serverUrl, indexName))
 {
     // client operations
 }
 ```
 
-The client should be created with 'using' when changes are made to the index within the client (create or delete document).
-`Dispose()` ensures that the index on the server is *refreshed* and that all changes become visible. If the client is used only for querying,
-`using` can also be omitted.
-
 A client always refers to one index. The corresponding index can be specified via the `indexName`.
 
-To communicate with the LuceneServerNET, the client uses an instance of `System.Net.Http.HttpClient`. Each instance creates a new `HttpClient`.
-If an existing `HttpClient` is used, it can be passed as an additional parameter during instantiation:
+## Refresh and Dispose
 
+New or removed documents are not immediately visible to searches. The server makes them visible and
+writes them to disk (*commit*) on a **refresh**. This happens
+
+* explicitly via `await client.RefreshIndex()`,
+* automatically in the background on the server **within about 20 seconds**,
+* when the server shuts down normally.
+
+If documents were indexed or removed with a client and no `RefreshIndex()` followed, the client refreshes
+the index when it is disposed. Changes are then visible immediately after the `using` block, e.g. for
+an import tool that searches right afterwards or exits. If the client is used only for querying,
+`using` can be omitted.
+
+* Use `await using` (`DisposeAsync()`) in async code. The synchronous `Dispose()` is still supported.
+* Errors during this refresh are not thrown (the server commits in the background anyway); they are
+  written to the optional `Logger`.
+* The refresh on dispose can be switched off, e.g. for a web application that makes many small changes
+  and can live with the short delay:
 
 ```csharp
-using(var client = new LuceneServerClient(serverUrl, indexName, myHttpClient)) 
+await using (var client = new LuceneServerClient(serverUrl, indexName)
+{
+    RefreshChangedIndicesOnDispose = false,   // default: true
+    Logger = loggerFactory.CreateLogger<LuceneServerClient>()  // optional, default: no logging
+})
+{
+    // client operations
+}
+```
+
+## HttpClient
+
+To communicate with the LuceneServerNET, the client uses a `System.Net.Http.HttpClient`. If none is passed,
+all client instances share one internal `HttpClient` (creating one per instance can exhaust sockets).
+An existing `HttpClient` (e.g. from `IHttpClientFactory`) can be passed as an additional parameter:
+
+```csharp
+await using (var client = new LuceneServerClient(serverUrl, indexName, myHttpClient))
 {
     // client operations
 }
 ```
 
 This ensures that, for example, *Authorization headers* set on that `HttpClient` are passed to the server.
+A passed `HttpClient` is not disposed by the client.
 
 ## Authentication
 
