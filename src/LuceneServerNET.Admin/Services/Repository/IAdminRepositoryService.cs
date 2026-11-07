@@ -52,6 +52,59 @@ public class AuditQuery
     public int Limit { get; set; } = 50;
 }
 
+/// <summary>A scheduled import from a database query into an index (see ImportJobRunner).</summary>
+public class ImportJobRecord
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Instance { get; set; } = "";
+    public long ConnectionId { get; set; }
+    public string Sql { get; set; } = "";
+
+    /// <summary>Alias (mode replace_alias) or index name.</summary>
+    public string Target { get; set; } = "";
+
+    /// <summary>replace_alias, clear, append (see ImportJobModes).</summary>
+    public string Mode { get; set; } = "replace_alias";
+
+    /// <summary>Serialized InferredMapping + phonetics (fixed when the job is saved).</summary>
+    public string MappingJson { get; set; } = "";
+
+    public int BatchSize { get; set; } = 500;
+    public int MaxErrors { get; set; } = 1000;
+
+    /// <summary>Older index generations kept after switching the alias (mode replace_alias).</summary>
+    public int KeepGenerations { get; set; } = 1;
+
+    /// <summary>Cron expression (5 fields: minute hour day month weekday).</summary>
+    public string Cron { get; set; } = "0 3 * * *";
+
+    /// <summary>Time zone of the cron expression (IANA/Windows id); null = UTC.</summary>
+    public string? TimeZone { get; set; }
+
+    public bool Enabled { get; set; } = true;
+    public DateTime CreatedUtc { get; set; }
+    public DateTime ModifiedUtc { get; set; }
+}
+
+public class ImportJobRunRecord
+{
+    public long Id { get; set; }
+    public long JobId { get; set; }
+    public DateTime StartedUtc { get; set; }
+    public DateTime? FinishedUtc { get; set; }
+
+    /// <summary>running, succeeded, warning (rows failed), failed, cancelled, interrupted.</summary>
+    public string Status { get; set; } = "running";
+
+    public string TriggeredBy { get; set; } = "";
+    public string? IndexName { get; set; }
+    public long ReadCount { get; set; }
+    public long Imported { get; set; }
+    public long Failed { get; set; }
+    public string? Message { get; set; }
+}
+
 /// <summary>
 /// All persistence of the admin UI. The implementation owns every SQL statement (Dapper).
 /// </summary>
@@ -78,4 +131,22 @@ public interface IAdminRepositoryService
 
     /// <summary>Deletes entries older than the given time; returns the number of deleted entries.</summary>
     Task<int> DeleteAuditOlderThanAsync(DateTime utc, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ImportJobRecord>> GetImportJobsAsync(CancellationToken cancellationToken = default);
+    Task<ImportJobRecord?> GetImportJobAsync(long id, CancellationToken cancellationToken = default);
+    Task<long> InsertImportJobAsync(ImportJobRecord job, CancellationToken cancellationToken = default);
+    Task UpdateImportJobAsync(ImportJobRecord job, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the job and its runs.</summary>
+    Task DeleteImportJobAsync(long id, CancellationToken cancellationToken = default);
+
+    Task<long> InsertImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default);
+    Task UpdateImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ImportJobRunRecord>> GetImportJobRunsAsync(long jobId, int limit = 50, CancellationToken cancellationToken = default);
+
+    /// <summary>Last run of every job (job id => run).</summary>
+    Task<IReadOnlyDictionary<long, ImportJobRunRecord>> GetLastImportJobRunsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Marks runs that are still "running" (admin app was stopped) as interrupted; returns the count.</summary>
+    Task<int> MarkRunningImportJobRunsInterruptedAsync(CancellationToken cancellationToken = default);
 }

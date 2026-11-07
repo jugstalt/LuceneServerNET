@@ -1,0 +1,13 @@
+<MudChip T="string" Size="Size.Small" Color="@Color">@Status</MudChip>
+
+@code {
+    [Parameter] public string Status { get; set; } = "";
+
+    private Color Color => Status switch
+    {
+        ImportJobStatus.Succeeded => Color.Success,
+        ImportJobStatus.Warning or ImportJobStatus.Cancelled or ImportJobStatus.Interrupted => Color.Warning,
+        ImportJobStatus.Failed => Color.Error,
+        _ => Color.Info
+    };
+}

@@ -54,6 +54,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (source EPSG from the SRID of the value or chosen in the UI). Lines/polygons are indexed as point on surface
   plus a bounding box field (`<field>_bbox`), the original geometry can be stored as GeoJSON (`<field>_geojson`).
   Copy an index (mapping, metadata, documents) to another name or another instance. Alias management.
+  Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
+  alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;
+  run history, run now, cancel.
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),

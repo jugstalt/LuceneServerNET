@@ -1,0 +1,116 @@
+@page "/jobs"
+@using LuceneServerNET.Admin.Services.Repository
+@implements IDisposable
+@inject IAdminRepositoryService Repository
+@inject ImportJobRunner Runner
+@inject AuditService Audit
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Import jobs · LuceneServer.NET Admin</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h4">Import jobs</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="jobs/new">New job</MudButton>
+</MudStack>
+<MudText Typo="Typo.body2" Class="mb-4">Recurring imports from a database query. Runs missed while the admin application is stopped are not caught up.</MudText>
+
+<MudTable Items="_jobs" Hover="true" Dense="true" Loading="_loading">
+    <HeaderContent>
+        <MudTh>Job</MudTh>
+        <MudTh>Target</MudTh>
+        <MudTh>Schedule</MudTh>
+        <MudTh>Last run</MudTh>
+        <MudTh>Next run</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>
+            <MudLink Href="@($"jobs/{context.Id}")"><b>@context.Name</b></MudLink>
+            @if (!context.Enabled)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">disabled</MudChip>
+            }
+        </MudTd>
+        <MudTd><span class="mono">@context.Instance / @context.Target</span> <MudText Typo="Typo.caption">@context.Mode</MudText></MudTd>
+        <MudTd><span class="mono">@context.Cron</span> <MudText Typo="Typo.caption">@(context.TimeZone ?? "UTC")</MudText></MudTd>
+        <MudTd>
+            @if (Runner.IsRunning(context.Id))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Sync">running</MudChip>
+            }
+            else if (_lastRuns.TryGetValue(context.Id, out var run))
+            {
+                <JobStatusChip Status="@run.Status" />
+                <MudText Typo="Typo.caption">@Format.Date(run.StartedUtc)</MudText>
+            }
+        </MudTd>
+        <MudTd>@(context.Enabled ? NextRun(context) : "–")</MudTd>
+        <MudTd Style="text-align:right">
+            <MudTooltip Text="Run now">
+                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" Disabled="Runner.IsRunning(context.Id)" OnClick="() => RunNowAsync(context)" aria-label="Run now" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No import jobs yet.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<ImportJobRecord> _jobs = [];
+    private IReadOnlyDictionary<long, ImportJobRunRecord> _lastRuns = new Dictionary<long, ImportJobRunRecord>();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Runner.RunChanged += OnRunChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _jobs = await Repository.GetImportJobsAsync();
+        _lastRuns = await Repository.GetLastImportJobRunsAsync();
+        _loading = false;
+    }
+
+    private static string NextRun(ImportJobRecord job)
+    {
+        try
+        {
+            var next = ImportJobRunner.NextOccurrences(job.Cron, job.TimeZone, DateTime.UtcNow, 1).FirstOrDefault();
+            return next == default ? "–" : Format.Date(next);
+        }
+        catch
+        {
+            return "invalid schedule";
+        }
+    }
+
+    private async Task RunNowAsync(ImportJobRecord job)
+    {
+        var user = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "";
+        Snackbar.Add($"Job {job.Name} started", Severity.Info);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var run = await Runner.RunAsync(job.Id, String.IsNullOrEmpty(user) ? "manual" : user);
+                await InvokeAsync(() => Snackbar.Add($"Job {job.Name}: {run.Status}", run.Status is ImportJobStatus.Succeeded ? Severity.Success : Severity.Warning));
+            }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() => Snackbar.Add(ex.Message, Severity.Error));
+            }
+        });
+        await Task.Delay(100);
+    }
+
+    private void OnRunChanged(long jobId) => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Runner.RunChanged -= OnRunChanged;
+}

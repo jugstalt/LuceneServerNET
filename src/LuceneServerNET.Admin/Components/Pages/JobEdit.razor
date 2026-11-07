@@ -1,0 +1,342 @@
+@page "/jobs/new"
+@page "/jobs/{JobId:long}"
+@using LuceneServerNET.Admin.Services.Repository
+@implements IDisposable
+@inject IAdminRepositoryService Repository
+@inject ImportJobRunner Runner
+@inject InstanceRegistry Registry
+@inject DatabaseSource DbSource
+@inject AuditService Audit
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>@(_job.Id == 0 ? "New import job" : _job.Name) · LuceneServer.NET Admin</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Import jobs", "jobs"), new BreadcrumbItem(_job.Id == 0 ? "New" : _job.Name, null, disabled: true)])" Class="px-0 pt-0" />
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">@(_job.Id == 0 ? "New import job" : _job.Name)</MudText>
+    <MudSpacer />
+    @if (_job.Id != 0)
+    {
+        @if (Runner.IsRunning(_job.Id))
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => Runner.Cancel(_job.Id)">Cancel run</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunNowAsync" Disabled="_dirty">Run now</MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync">Delete</MudButton>
+    }
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-2">1. Source</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_job.Name" Label="Job name" Variant="Variant.Outlined" Immediate="true" OnKeyUp="MarkDirty" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="long" Value="_job.ConnectionId" ValueChanged="v => { _job.ConnectionId = v; MarkDirty(); }" Label="Database connection" Variant="Variant.Outlined">
+                    @foreach (var connection in _connections)
+                    {
+                        <MudSelectItem Value="connection.Id">@connection.Name (@connection.Provider)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" Value="_job.Instance" ValueChanged="v => { _job.Instance = v; MarkDirty(); }" Label="Target instance" Variant="Variant.Outlined">
+                    @foreach (var instance in _instances)
+                    {
+                        <MudSelectItem Value="instance.Name">@instance.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_job.Sql" Label="SELECT query" Variant="Variant.Outlined" Lines="5" Class="mono" OnKeyUp="MarkDirty" />
+                <MudButton Class="mt-2" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Preview" OnClick="PreviewAsync" Disabled="_previewing">
+                    @(_mapping.Mapping.Fields.Count == 0 && _mapping.Mapping.GeoFields.Count == 0 ? "Preview and detect mapping" : "Preview and detect mapping again")
+                </MudButton>
+                @if (_sample.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="ml-2">@_sample.Count sample rows, @_columns.Count columns</MudText>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_mapping.Mapping.Fields.Count > 0 || _mapping.Mapping.GeoFields.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">2. Mapping</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">The mapping is saved with the job and used for every run (the columns of the query must not change).</MudText>
+            <MudSelect T="LuceneServerNET.Core.Phonetics.Algorithm" Value="_mapping.Phonetics" ValueChanged="v => { _mapping.Phonetics = v; MarkDirty(); }"
+                       Label="Phonetics of the primary fields" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2">
+                @foreach (var algorithm in Enum.GetValues<LuceneServerNET.Core.Phonetics.Algorithm>())
+                {
+                    <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
+                }
+            </MudSelect>
+            <MappingEditor Mapping="_mapping.Mapping" ShowColumns="true" Columns="_columns" MappingChanged="MarkDirty" />
+        </MudPaper>
+    }
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-2">3. Target and schedule</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" Value="_job.Mode" ValueChanged="v => { _job.Mode = v; MarkDirty(); }" Label="Mode" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@ImportJobModes.ReplaceAlias">Rebuild and switch alias (no downtime)</MudSelectItem>
+                    <MudSelectItem Value="@ImportJobModes.Clear">Clear and refill index</MudSelectItem>
+                    <MudSelectItem Value="@ImportJobModes.Append">Append to index</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_job.Target" Label="@(_job.Mode == ImportJobModes.ReplaceAlias ? "Alias" : "Index")" Variant="Variant.Outlined" Immediate="true" OnKeyUp="MarkDirty"
+                              HelperText="@(_job.Mode == ImportJobModes.ReplaceAlias ? $"generations: {_job.Target}_yyyyMMddHHmmss" : "created with the mapping if it does not exist")" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                @if (_job.Mode == ImportJobModes.ReplaceAlias)
+                {
+                    <MudNumericField T="int" Value="_job.KeepGenerations" ValueChanged="v => { _job.KeepGenerations = v; MarkDirty(); }" Label="Keep older generations" Min="0" Max="20" Variant="Variant.Outlined" />
+                }
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField T="string" Value="_job.Cron" ValueChanged="v => { _job.Cron = v; MarkDirty(); }" Label="Schedule (cron)" Variant="Variant.Outlined" Class="mono"
+                              HelperText="minute hour day month weekday" Immediate="true" />
+                <MudStack Row="true" Spacing="1" Class="mt-1" Wrap="Wrap.Wrap">
+                    @foreach (var (label, cron) in CronPresets)
+                    {
+                        <MudChip T="string" Size="Size.Small" OnClick="() => { _job.Cron = cron; MarkDirty(); }">@label</MudChip>
+                    }
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField T="string" Value="_job.TimeZone" ValueChanged="v => { _job.TimeZone = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); MarkDirty(); }"
+                              Label="Time zone" Placeholder="UTC" HelperText="@($"e.g. {TimeZoneInfo.Local.Id}")" Variant="Variant.Outlined" Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudText Typo="Typo.caption">Next runs</MudText>
+                @foreach (var next in NextRuns)
+                {
+                    <MudText Typo="Typo.body2">@next</MudText>
+                }
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
+                    <MudNumericField T="int" Value="_job.BatchSize" ValueChanged="v => { _job.BatchSize = v; MarkDirty(); }" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" />
+                    <MudNumericField T="int" Value="_job.MaxErrors" ValueChanged="v => { _job.MaxErrors = v; MarkDirty(); }" Label="Stop after errors (0 = never)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
+                    <MudSwitch T="bool" Value="_job.Enabled" ValueChanged="v => { _job.Enabled = v; MarkDirty(); }" Label="Enabled" Color="Color.Primary" />
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save</MudButton>
+                </MudStack>
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_job.Id != 0)
+    {
+        <MudText Typo="Typo.h6" Class="mb-2">Runs</MudText>
+        <MudTable Items="_runs" Dense="true" Hover="true" Outlined="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Started</MudTh><MudTh>Duration</MudTh><MudTh>Status</MudTh><MudTh>By</MudTh><MudTh>Index</MudTh>
+                <MudTh Style="text-align:right">Read</MudTh><MudTh Style="text-align:right">Imported</MudTh><MudTh Style="text-align:right">Failed</MudTh><MudTh>Message</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Style="white-space:nowrap">@Format.Date(context.StartedUtc)</MudTd>
+                <MudTd>@(context.FinishedUtc is { } f ? $"{(f - context.StartedUtc).TotalSeconds:0.0} s" : "…")</MudTd>
+                <MudTd><JobStatusChip Status="@context.Status" /></MudTd>
+                <MudTd>@context.TriggeredBy</MudTd>
+                <MudTd Class="mono">@context.IndexName</MudTd>
+                <MudTd Style="text-align:right">@Format.Number(context.ReadCount)</MudTd>
+                <MudTd Style="text-align:right">@Format.Number(context.Imported)</MudTd>
+                <MudTd Style="text-align:right">@Format.Number(context.Failed)</MudTd>
+                <MudTd Style="min-width:320px"><span style="white-space:normal">@context.Message</span></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No runs yet.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+}
+
+@code {
+    [Parameter] public long? JobId { get; set; }
+
+    private static readonly (string Label, string Cron)[] CronPresets =
+    [
+        ("hourly", "0 * * * *"),
+        ("daily 03:00", "0 3 * * *"),
+        ("Mon–Fri 06:00", "0 6 * * 1-5"),
+        ("weekly Sun 02:00", "0 2 * * 0"),
+    ];
+
+    private ImportJobRecord _job = new();
+    private ImportJobMapping _mapping = new();
+    private IReadOnlyList<ServerInstance> _instances = [];
+    private IReadOnlyList<DbSourceConnection> _connections = [];
+    private IReadOnlyList<ImportJobRunRecord> _runs = [];
+    private List<IDictionary<string, object?>> _sample = [];
+    private List<string> _columns = [];
+    private bool _loading = true, _previewing, _dirty;
+    private string? _error;
+
+    private IEnumerable<string> NextRuns
+    {
+        get
+        {
+            try
+            {
+                return ImportJobRunner.NextOccurrences(_job.Cron, _job.TimeZone, DateTime.UtcNow, 3).Select(d => Format.Date(d)).ToList();
+            }
+            catch (Exception ex)
+            {
+                return [$"invalid: {ex.Message}"];
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Runner.RunChanged += OnRunChanged;
+        _instances = await Registry.GetAllAsync();
+        _connections = await DbSource.GetConnectionsAsync();
+
+        if (JobId is { } id)
+        {
+            _job = await Repository.GetImportJobAsync(id) ?? new ImportJobRecord();
+            _mapping = ImportJobMapping.FromJson(_job.MappingJson);
+            _columns = _mapping.Mapping.Fields.Select(f => f.Column)
+                .Concat(_mapping.Mapping.GeoFields.SelectMany(g => new[] { g.XColumn, g.YColumn, g.GeometryColumn }).Where(c => c != null).Select(c => c!))
+                .Distinct().ToList();
+            _runs = await Repository.GetImportJobRunsAsync(id);
+        }
+        else
+        {
+            _job = new ImportJobRecord
+            {
+                Instance = _instances.FirstOrDefault()?.Name ?? "",
+                ConnectionId = _connections.FirstOrDefault()?.Id ?? 0,
+                TimeZone = TimeZoneInfo.Local.Id
+            };
+        }
+        _loading = false;
+    }
+
+    private void MarkDirty() => _dirty = true;
+
+    private async Task PreviewAsync()
+    {
+        var connection = _connections.FirstOrDefault(c => c.Id == _job.ConnectionId);
+        if (connection is null)
+        {
+            Snackbar.Add("Choose a database connection", Severity.Warning);
+            return;
+        }
+
+        _previewing = true;
+        try
+        {
+            var sample = new List<IDictionary<string, object?>>();
+            await foreach (var row in DbSource.ReadAsync(connection, _job.Sql))
+            {
+                sample.Add(row);
+                if (sample.Count >= 200) break;
+            }
+            if (sample.Count == 0) throw new InvalidOperationException("The query returns no rows");
+
+            _sample = sample;
+            _columns = sample.SelectMany(r => r.Keys).Distinct().ToList();
+            _mapping.Mapping = MappingInference.Infer(sample);
+            MarkDirty();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _previewing = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _job.Name = _job.Name.Trim();
+        _job.Target = (_job.Target ?? "").Trim().ToLowerInvariant();
+
+        _error = ImportJobRunner.Validate(_job)
+                 ?? (_mapping.Mapping.Fields.Count == 0 ? "Detect the mapping with the preview first" : null)
+                 ?? CreateIndex.Validate("x", _mapping.Mapping);
+        if (_error is not null) return;
+
+        _job.MappingJson = _mapping.ToJson();
+        try
+        {
+            var isNew = _job.Id == 0;
+            if (isNew) await Repository.InsertImportJobAsync(_job);
+            else await Repository.UpdateImportJobAsync(_job);
+
+            await Audit.LogAsync(AuditActions.JobSave, _job.Instance, _job.Target,
+                $"job {_job.Name} · {(isNew ? "added" : "changed")} · {_job.Mode} · {_job.Cron} {_job.TimeZone} · {(_job.Enabled ? "enabled" : "disabled")}");
+            Snackbar.Add($"Job {_job.Name} saved", Severity.Success);
+            _dirty = false;
+            if (isNew) Navigation.NavigateTo($"jobs/{_job.Id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ? $"A job with the name {_job.Name} exists" : ex.Message;
+        }
+    }
+
+    private async Task RunNowAsync()
+    {
+        var user = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "";
+        var jobId = _job.Id;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Runner.RunAsync(jobId, String.IsNullOrEmpty(user) ? "manual" : user);
+            }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() => Snackbar.Add(ex.Message, Severity.Error));
+            }
+        });
+        await Task.Delay(200);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete job", $"Delete the job {_job.Name} and its run history? Indices and aliases are not changed.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+        Runner.Cancel(_job.Id);
+        await Repository.DeleteImportJobAsync(_job.Id);
+        await Audit.LogAsync(AuditActions.JobDelete, _job.Instance, _job.Target, $"job {_job.Name}");
+        Navigation.NavigateTo("jobs");
+    }
+
+    private void OnRunChanged(long jobId)
+    {
+        if (jobId != _job.Id) return;
+        InvokeAsync(async () =>
+        {
+            _runs = await Repository.GetImportJobRunsAsync(_job.Id);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Runner.RunChanged -= OnRunChanged;
+}

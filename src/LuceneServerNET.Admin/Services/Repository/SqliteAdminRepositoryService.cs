@@ -229,6 +229,102 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
     #endregion
 
+    #region Import jobs
+
+    private const string JobColumns = "id, name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, created_utc, modified_utc";
+    private const string RunColumns = "id, job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message";
+
+    public async Task<IReadOnlyList<ImportJobRecord>> GetImportJobsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<ImportJobRecord>($"SELECT {JobColumns} FROM import_jobs ORDER BY name")).ToList();
+    }
+
+    public async Task<ImportJobRecord?> GetImportJobAsync(long id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<ImportJobRecord>($"SELECT {JobColumns} FROM import_jobs WHERE id = @id", new { id });
+    }
+
+    public async Task<long> InsertImportJobAsync(ImportJobRecord job, CancellationToken cancellationToken = default)
+    {
+        job.CreatedUtc = job.ModifiedUtc = DateTime.UtcNow;
+
+        await using var connection = await OpenAsync(cancellationToken);
+        job.Id = await connection.ExecuteScalarAsync<long>(
+            @"INSERT INTO import_jobs (name, instance, connection_id, sql, target, mode, mapping_json, batch_size, max_errors, keep_generations, cron, time_zone, enabled, created_utc, modified_utc)
+              VALUES (@Name, @Instance, @ConnectionId, @Sql, @Target, @Mode, @MappingJson, @BatchSize, @MaxErrors, @KeepGenerations, @Cron, @TimeZone, @Enabled, @CreatedUtc, @ModifiedUtc);
+              SELECT last_insert_rowid();", job);
+        return job.Id;
+    }
+
+    public async Task UpdateImportJobAsync(ImportJobRecord job, CancellationToken cancellationToken = default)
+    {
+        job.ModifiedUtc = DateTime.UtcNow;
+
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"UPDATE import_jobs SET name = @Name, instance = @Instance, connection_id = @ConnectionId, sql = @Sql, target = @Target,
+                     mode = @Mode, mapping_json = @MappingJson, batch_size = @BatchSize, max_errors = @MaxErrors,
+                     keep_generations = @KeepGenerations, cron = @Cron, time_zone = @TimeZone, enabled = @Enabled, modified_utc = @ModifiedUtc
+              WHERE id = @Id", job);
+    }
+
+    public async Task DeleteImportJobAsync(long id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await connection.ExecuteAsync("DELETE FROM import_job_runs WHERE job_id = @id", new { id }, transaction);
+        await connection.ExecuteAsync("DELETE FROM import_jobs WHERE id = @id", new { id }, transaction);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<long> InsertImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        run.Id = await connection.ExecuteScalarAsync<long>(
+            @"INSERT INTO import_job_runs (job_id, started_utc, finished_utc, status, triggered_by, index_name, read_count, imported, failed, message)
+              VALUES (@JobId, @StartedUtc, @FinishedUtc, @Status, @TriggeredBy, @IndexName, @ReadCount, @Imported, @Failed, @Message);
+              SELECT last_insert_rowid();", run);
+        return run.Id;
+    }
+
+    public async Task UpdateImportJobRunAsync(ImportJobRunRecord run, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"UPDATE import_job_runs SET finished_utc = @FinishedUtc, status = @Status, index_name = @IndexName,
+                     read_count = @ReadCount, imported = @Imported, failed = @Failed, message = @Message
+              WHERE id = @Id", run);
+    }
+
+    public async Task<IReadOnlyList<ImportJobRunRecord>> GetImportJobRunsAsync(long jobId, int limit = 50, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<ImportJobRunRecord>(
+            $"SELECT {RunColumns} FROM import_job_runs WHERE job_id = @jobId ORDER BY started_utc DESC, id DESC LIMIT @limit",
+            new { jobId, limit })).ToList();
+    }
+
+    public async Task<IReadOnlyDictionary<long, ImportJobRunRecord>> GetLastImportJobRunsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        var runs = await connection.QueryAsync<ImportJobRunRecord>(
+            $@"SELECT {RunColumns} FROM import_job_runs r
+               WHERE id = (SELECT id FROM import_job_runs WHERE job_id = r.job_id ORDER BY started_utc DESC, id DESC LIMIT 1)");
+        return runs.ToDictionary(r => r.JobId);
+    }
+
+    public async Task<int> MarkRunningImportJobRunsInterruptedAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.ExecuteAsync(
+            "UPDATE import_job_runs SET status = 'interrupted', finished_utc = @now, message = 'The admin application was stopped during the run' WHERE status = 'running'",
+            new { now = DateTime.UtcNow });
+    }
+
+    #endregion
+
     /// <summary>SQLite stores DateTime as ISO 8601 text; write and read it as UTC.</summary>
     private class UtcDateTimeHandler : SqlMapper.TypeHandler<DateTime>
     {

@@ -16,6 +16,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest |
 | Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
+| Import-Jobs | Wiederkehrende Importe aus einer Datenbank-Abfrage (Cron-Zeitplan): neu aufbauen und Alias umschalten, leeren und neu befüllen oder anhängen; Lauf-Verlauf |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
 | Aliases | Index-Aliases anlegen, umschalten und entfernen (siehe [API v2](api-v2.md#aliases)); Aliases stehen in der Indexliste |
 | Kopieren | Index (Mapping, Metadaten, Dokumente) unter neuem Namen auf derselben oder auf eine andere Instanz kopieren |
@@ -63,6 +64,7 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
     "DataPath": "_data",            // SQLite-Datenbank (admin.db) + Data-Protection-Schlüssel
     "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
     "Audit": { "RetentionDays": 180 },
+    "Jobs": { "Enabled": true },    // false: keine geplanten Läufe (z. B. eine zweite Admin-Instanz auf derselben Datenbank)
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: kein Login, nur lokale Entwicklung!)
       "Users": [
@@ -154,3 +156,20 @@ Gesucht wird mit dem räumlichen Filter auf das Geo-Feld, z. B. `dist_km(geom:15
 Instanz (der API-Client des Ziels braucht die Rolle `write`). Die Dokumente kommen aus `GET /api/v2/indices/{id}/documents/_export`,
 der nur **gespeicherte** Felder liefert: Felder mit `"store": false` gehen beim Kopieren verloren (die Seite zeigt sie vorher an).
 Ein bestehendes Ziel wird nur mit *Replace the target if it exists* überschrieben.
+
+## Import-Jobs
+
+*Import jobs* führen eine Datenbank-Abfrage nach Zeitplan aus und importieren das Ergebnis. Das Mapping wird einmal über die Vorschau
+erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der Abfrage dürfen sich danach nicht ändern).
+
+| Modus | Ablauf |
+|---|---|
+| Neu aufbauen und Alias umschalten | Ein neuer Index `{alias}_{yyyyMMddHHmmss}` wird angelegt und befüllt; bei Erfolg wird der Alias umgeschaltet und ältere Generationen werden gelöscht, bis auf die neuesten *Keep older generations* (Standard 1, für ein Rollback über die Alias-Seite). Generationen, auf die irgendein Alias zeigt, werden nie gelöscht. Schlägt der Lauf fehl, wird die neue Generation entfernt und der Alias bleibt unverändert. Clients verwenden den Alias-Namen. |
+| Leeren und neu befüllen | Der Index wird geleert und neu befüllt (Suchen sehen währenddessen einen leeren bzw. halben Index). |
+| Anhängen | Dokumente werden hinzugefügt. |
+
+- **Zeitplan**: Cron-Ausdruck mit 5 Feldern (`Minute Stunde Tag Monat Wochentag`, z. B. `0 3 * * *`) und Zeitzone
+  (leer = UTC). Die Seite zeigt die nächsten Läufe.
+- **Jetzt ausführen**, **Abbrechen** und ein **Lauf-Verlauf** (Status, Dauer, Zahlen, Index, Meldung) pro Job. Jeder Lauf steht im Audit-Log.
+- Läufe finden nur statt, solange die Admin-App läuft; verpasste Läufe werden nicht nachgeholt, Läufe, die bei einem Herunterfahren
+  aktiv waren, werden als *interrupted* markiert. Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.

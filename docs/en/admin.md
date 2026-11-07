@@ -16,6 +16,7 @@
 | Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test |
 | Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
+| Import jobs | Recurring imports from a database query (cron schedule): rebuild and switch an alias, clear and refill, or append; run history |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
 | Aliases | Create, switch and remove index aliases (see [API v2](api-v2.md#aliases)); aliases are shown in the index list |
 | Copy | Copy an index (mapping, metadata, documents) to a new name on the same instance or to another instance |
@@ -63,6 +64,7 @@ The UI only offers actions the API client of an instance is allowed to do: it as
     "DataPath": "_data",            // SQLite database (admin.db) + data protection keys
     "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
     "Audit": { "RetentionDays": 180 },
+    "Jobs": { "Enabled": true },    // false: no scheduled runs (e.g. a second admin instance on the same database)
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: no login, local development only!)
       "Users": [
@@ -154,3 +156,20 @@ Search with the spatial filter on the geo field, e.g. `dist_km(geom:15.44,47.07,
 (the target API client needs the `write` role). Documents are read with `GET /api/v2/indices/{id}/documents/_export`,
 which returns the **stored** fields only: fields with `"store": false` are lost in the copy (the page shows them before
 copying). An existing target is only overwritten with *Replace the target if it exists*.
+
+## Import jobs
+
+*Import jobs* run a database query on a schedule and import the result. The mapping is detected once with the preview,
+can be edited and is saved with the job (the columns of the query must not change afterwards).
+
+| Mode | What happens |
+|---|---|
+| Rebuild and switch alias | A new index `{alias}_{yyyyMMddHHmmss}` is created and filled; on success the alias is switched to it and older generations are removed, except the newest *Keep older generations* (default 1, for a rollback via the alias page). Generations used by any alias are never removed. If the run fails, the new generation is removed and the alias stays unchanged. Clients use the alias name. |
+| Clear and refill | The index is emptied and filled again (searches see an empty or partial index during the run). |
+| Append | Documents are added. |
+
+- **Schedule**: cron expression with 5 fields (`minute hour day month weekday`, e.g. `0 3 * * *`) and a time zone
+  (empty = UTC). The page shows the next runs.
+- **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
+- Runs only happen while the admin application runs; missed runs are not caught up, runs that were active during a
+  shutdown are marked *interrupted*. Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
