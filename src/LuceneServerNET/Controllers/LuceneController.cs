@@ -6,7 +6,9 @@ using LuceneServerNET.Engine.Services;
 using LuceneServerNET.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
@@ -23,11 +25,14 @@ public class LuceneController : ControllerBase
     private readonly LuceneService _lucene;
     private readonly ILogger<LuceneController> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly IConfiguration _config;
 
     public LuceneController(LuceneService lucene,
                             IWebHostEnvironment env,
+                            IConfiguration config,
                             ILogger<LuceneController> logger)
     {
+        _config = config;
         _lucene = lucene;
         _env = env;
         _logger = logger;
@@ -98,7 +103,7 @@ public class LuceneController : ControllerBase
         });
     }
 
-    [HttpGet]
+    [HttpPost]
     [Route("createindex/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
     public Task<IApiResult> CreateIndex(string id)
@@ -109,7 +114,14 @@ public class LuceneController : ControllerBase
         });
     }
 
+    [Obsolete("Use POST createindex/{id}")]
     [HttpGet]
+    [Route("createindex/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
+    public Task<IApiResult> CreateIndexLegacyGet(string id)
+        => LegacyGet("POST", () => CreateIndex(id));
+
+    [HttpDelete]
     [Route("removeindex/{id}")]
     [Authorize(Policy = ApiRoles.Admin)]
     public Task<IApiResult> RemoveIndex(string id)
@@ -119,6 +131,13 @@ public class LuceneController : ControllerBase
             return new ApiResult(_lucene.RemoveIndex(id));
         });
     }
+
+    [Obsolete("Use DELETE removeindex/{id}")]
+    [HttpGet]
+    [Route("removeindex/{id}")]
+    [Authorize(Policy = ApiRoles.Admin)]
+    public Task<IApiResult> RemoveIndexLegacyGet(string id)
+        => LegacyGet("DELETE", () => RemoveIndex(id));
 
     [HttpGet]
     [Route("indexexists/{id}")]
@@ -221,10 +240,9 @@ public class LuceneController : ControllerBase
         });
     }
 
-    [HttpGet]
+    [HttpDelete]
     [Route("remove/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-
     public Task<IApiResult> Remove(string id, string term, string termField = "_guid")
     {
         return SecureMethodHandler(id, (id) =>
@@ -235,8 +253,28 @@ public class LuceneController : ControllerBase
         });
     }
 
-
+    [Obsolete("Use DELETE remove/{id}")]
     [HttpGet]
+    [Route("remove/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
+    public Task<IApiResult> RemoveLegacyGet(string id, string term, string termField = "_guid")
+        => LegacyGet("DELETE", () => Remove(id, term, termField));
+
+    [Obsolete("Use POST refresh/{id}")]
+    [HttpGet]
+    [Route("refresh/{id}")]
+    [Authorize(Policy = ApiRoles.Write)]
+    public Task<IApiResult> RefreshLegacyGet(string id)
+        => LegacyGet("POST", () => Refresh(id));
+
+    [Obsolete("Use POST releaseall")]
+    [HttpGet]
+    [Route("releaseall")]
+    [Authorize(Policy = ApiRoles.Admin)]
+    public Task<IApiResult> ReleaseAllLegacyGet()
+        => LegacyGet("POST", () => ReleaseAll());
+
+    [HttpPost]
     [Route("refresh/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
     public Task<IApiResult> Refresh(string id)
@@ -248,7 +286,7 @@ public class LuceneController : ControllerBase
         });
     }
 
-    [HttpGet]
+    [HttpPost]
     [Route("releaseall")]
     [Authorize(Policy = ApiRoles.Admin)]
     public Task<IApiResult> ReleaseAll()
@@ -261,6 +299,28 @@ public class LuceneController : ControllerBase
     }
 
     #region Helper
+
+    public const string AllowLegacyGetMutationsConfigKey = "LuceneServer:AllowLegacyGetMutations";
+
+    /// <summary>
+    /// Handles deprecated GET calls of state-changing endpoints.
+    /// Allowed only if config LuceneServer:AllowLegacyGetMutations is true (default: true).
+    /// </summary>
+    private async Task<IApiResult> LegacyGet(string successorMethod, Func<Task<IApiResult>> func)
+    {
+        if (!_config.GetValue(AllowLegacyGetMutationsConfigKey, true))
+        {
+            Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            Response.Headers["Allow"] = successorMethod;
+            return new ApiErrorResult($"HTTP GET is not allowed for this endpoint. Use {successorMethod}.");
+        }
+
+        _logger.LogWarning("Deprecated HTTP GET call to {path}. Use {method} instead.", Request.Path, successorMethod);
+        Response.Headers["Deprecation"] = "true";
+        Response.Headers["Warning"] = $"299 - \"Deprecated: use HTTP {successorMethod} for this endpoint\"";
+
+        return await func();
+    }
 
     private ISpatialFilter ParseSpatialFilter(string filter)
     {

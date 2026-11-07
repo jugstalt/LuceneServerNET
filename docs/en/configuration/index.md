@@ -34,6 +34,7 @@ The file is created on the first start (see [Installation](../installation/index
 | `AutoRestoreOnStartup` | On startup, rebuild archived indices that no longer exist in `RootPath` (e.g. after a container restart with non-persistent storage). |
 | `AutoRestoreOnStartupCount` | If `> 0`: restore only the last *n* archived documents per index. |
 | `AutoRestoreOnStartupSinceSeconds` | If `Count` is `0` and this is `> 0`: restore only documents archived within this period (default `86400` = 1 day). If both are `0`, all documents are restored. |
+| `AllowLegacyGetMutations` | Default `true`. Temporarily allows the deprecated **GET** calls of `createindex`, `removeindex`, `remove`, `refresh` and `releaseall` (response carries `Deprecation`/`Warning` headers and a warning is logged). If `false`, these GET calls return `405 Method Not Allowed`; only POST/DELETE are accepted. Will default to `false` in a future version. |
 
 ## Swagger
 

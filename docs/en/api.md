@@ -21,11 +21,11 @@ The full schema is available in the Swagger UI (`/swagger`, if enabled).
 | Method | Endpoint | Role |
 |---|---|---|
 | GET | `/info` | read |
-| GET | `/Lucene/createindex/{index}` | write |
-| GET | `/Lucene/removeindex/{index}` | admin |
+| POST | `/Lucene/createindex/{index}` | write |
+| DELETE | `/Lucene/removeindex/{index}` | admin |
 | GET | `/Lucene/indexexists/{index}` | read |
-| GET | `/Lucene/refresh/{index}` | write |
-| GET | `/Lucene/releaseall` | admin |
+| POST | `/Lucene/refresh/{index}` | write |
+| POST | `/Lucene/releaseall` | admin |
 | POST | `/Lucene/map/{index}` | write |
 | GET | `/Lucene/mapping/{index}` | read |
 | POST | `/Lucene/addmeta/{index}?name={name}` | write |
@@ -33,18 +33,18 @@ The full schema is available in the Swagger UI (`/swagger`, if enabled).
 | GET | `/Lucene/getmetas/{index}` | read |
 | GET | `/Lucene/getmetanames/{index}` | read |
 | POST | `/Lucene/index/{index}` | write |
-| GET | `/Lucene/remove/{index}` | write |
+| DELETE | `/Lucene/remove/{index}` | write |
 | GET | `/Lucene/search/{index}` | read |
 | GET | `/Lucene/searchphonetic/{index}` | read |
 | GET | `/Lucene/group/{index}` | read |
 
 ## Index management
 
-**[GET] /Lucene/createindex/{index}**
+**[POST] /Lucene/createindex/{index}**
 
 Creates an index named {index}
 
-**[GET] /Lucene/removeindex/{index}**
+**[DELETE] /Lucene/removeindex/{index}**
 
 Permanently deletes the index
 
@@ -52,12 +52,12 @@ Permanently deletes the index
 
 Checks whether an index exists.
 
-**[GET] /Lucene/refresh/{index}**
+**[POST] /Lucene/refresh/{index}**
 
 Leads to a refresh of the listed index. This ensures that after adding documents, you can search for the newly indexed documents.
 Using the [.NET client](clients/dotnet-client.md) this call is made automatically when the client is unloaded (`Dispose()`).
 
-**[GET] /Lucene/releaseall**
+**[POST] /Lucene/releaseall**
 
 Releases all shared resources within the server. For example, the `IndexReader` or `IndexWriter`, which are shared across multiple queries in the server for optimal performance.
 After releasing, the resources are reinitialized the next time you access an index.
@@ -208,7 +208,7 @@ Request Body
 ]
 ```
 
-**[GET] /Lucene/remove/{index}?term={query-term}&termField={optional:field-used-for-term}**
+**[DELETE] /Lucene/remove/{index}?term={query-term}&termField={optional:field-used-for-term}**
 
 A query can be passed as `term`. The criteria from the query are searched in `termField` and the corresponding objects are deleted.
 

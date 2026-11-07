@@ -21,11 +21,11 @@ Das vollständige Schema zeigt die Swagger-UI (`/swagger`, falls aktiviert).
 | Methode | Endpunkt | Rolle |
 |---|---|---|
 | GET | `/info` | read |
-| GET | `/Lucene/createindex/{index}` | write |
-| GET | `/Lucene/removeindex/{index}` | admin |
+| POST | `/Lucene/createindex/{index}` | write |
+| DELETE | `/Lucene/removeindex/{index}` | admin |
 | GET | `/Lucene/indexexists/{index}` | read |
-| GET | `/Lucene/refresh/{index}` | write |
-| GET | `/Lucene/releaseall` | admin |
+| POST | `/Lucene/refresh/{index}` | write |
+| POST | `/Lucene/releaseall` | admin |
 | POST | `/Lucene/map/{index}` | write |
 | GET | `/Lucene/mapping/{index}` | read |
 | POST | `/Lucene/addmeta/{index}?name={name}` | write |
@@ -33,18 +33,18 @@ Das vollständige Schema zeigt die Swagger-UI (`/swagger`, falls aktiviert).
 | GET | `/Lucene/getmetas/{index}` | read |
 | GET | `/Lucene/getmetanames/{index}` | read |
 | POST | `/Lucene/index/{index}` | write |
-| GET | `/Lucene/remove/{index}` | write |
+| DELETE | `/Lucene/remove/{index}` | write |
 | GET | `/Lucene/search/{index}` | read |
 | GET | `/Lucene/searchphonetic/{index}` | read |
 | GET | `/Lucene/group/{index}` | read |
 
 ## Index-Verwaltung
 
-**[GET] /Lucene/createindex/{index}**
+**[POST] /Lucene/createindex/{index}**
 
 Erstellt einen Index mit dem Namen {index}
 
-**[GET] /Lucene/removeindex/{index}**
+**[DELETE] /Lucene/removeindex/{index}**
 
 Löscht den Index unwiderruflich
 
@@ -52,12 +52,12 @@ Löscht den Index unwiderruflich
 
 Überprüft, ob ein Index existiert.
 
-**[GET] /Lucene/refresh/{index}**
+**[POST] /Lucene/refresh/{index}**
 
 Führt zu einem Refresh des angeführten Index. Damit wird nach einem Hinzufügen von Dokumenten gewährleistet, dass nach den neu indizierten Dokumenten gesucht werden kann.
 Verwendet man den [.NET-Client](clients/dotnet-client.md) erfolgt dieser Aufruf automatisch beim Entladen (`Dispose()`) des Clients.
 
-**[GET] /Lucene/releaseall**
+**[POST] /Lucene/releaseall**
 
 Gibt alle geteilten Resourcen innerhalb des Servers frei. Dies sind beispielsweise der `IndexReader` oder `IndexWriter`, die im Server über mehrere Abfragen geteilt werden, um eine optimale Performance zu bieten.
 Nach dem Freigeben werden die Resourcen beim nächsten Zugriff auf einen Index wieder initialisiert.
@@ -208,7 +208,7 @@ Request Body
 ]
 ```
 
-**[GET] /Lucene/remove/{index}?term={query-term}&termField={optional:field-used-for-term}**
+**[DELETE] /Lucene/remove/{index}?term={query-term}&termField={optional:field-used-for-term}**
 
 Als `term` kann eine Abfrage übergeben werden. Nach den Kriterien aus der Abfrage wird in `termField` gesucht und die entsprechenden Objekte gelöscht.
 

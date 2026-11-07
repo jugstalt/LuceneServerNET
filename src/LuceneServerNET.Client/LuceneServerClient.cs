@@ -63,7 +63,7 @@ namespace LuceneServerNET.Client
 
         async public Task<bool> CreateIndexAsync()
         {
-            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/createindex/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/createindex/{ _indexName }"))
             {
                 ModifyHttpRequest(requestMessage);
 
@@ -93,7 +93,7 @@ namespace LuceneServerNET.Client
 
         async public Task<bool> RemoveIndexAsync()
         {
-            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Delete, $"{ _serverUrl }/lucene/removeindex/{ _indexName }"))
             {
                 ModifyHttpRequest(requestMessage);
 
@@ -108,7 +108,7 @@ namespace LuceneServerNET.Client
 
         async public Task<bool> RefreshIndex()
         {
-            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/refresh/{ _indexName }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/refresh/{ _indexName }"))
             {
                 ModifyHttpRequest(requestMessage);
 
@@ -294,7 +294,7 @@ namespace LuceneServerNET.Client
 
         async public Task<bool> RemoveDocumentsAsync(string field, string term)
         {
-            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Delete, $"{ _serverUrl }/lucene/remove/{ _indexName }?termField={ field }&term={ WebUtility.UrlEncode(term) }"))
             {
                 ModifyHttpRequest(requestMessage);
 
@@ -438,7 +438,7 @@ namespace LuceneServerNET.Client
                 Console.WriteLine($"Refresh index { refreshIndex }");
                 try
                 {
-                    using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{ _serverUrl }/lucene/refresh/{ refreshIndex }"))
+                    using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{ _serverUrl }/lucene/refresh/{ refreshIndex }"))
                     {
                         ModifyHttpRequest(requestMessage);
                         

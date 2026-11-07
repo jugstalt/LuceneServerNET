@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] – v3
 
+### Changed (breaking)
+
+- **State-changing endpoints no longer use HTTP GET.** GET requests must be safe; prefetchers,
+  link previews, crawlers and CSRF (`<img src=…>`) could create or delete indices.
+  - `POST /Lucene/createindex/{id}`, `DELETE /Lucene/removeindex/{id}`,
+    `DELETE /Lucene/remove/{id}?term=…&termField=…`, `POST /Lucene/refresh/{id}`, `POST /Lucene/releaseall`.
+  - Transition: the old GET routes still work while `LuceneServer:AllowLegacyGetMutations` is `true`
+    (default). They are marked `[Obsolete]`, return `Deprecation: true` and `Warning: 299` headers and
+    log a warning. With `false` they return `405 Method Not Allowed`.
+  - `LuceneServerNET.Client` 3.0.0 uses the new methods and therefore requires a v3 server.
+
 ### Security
 
 - **Path traversal protection for index and metadata names.** Index ids from the route

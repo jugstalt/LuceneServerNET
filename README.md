@@ -26,12 +26,12 @@ ASPNETCORE_URLS=http://localhost:5000 dotnet LuceneServerNET.dll
 Create an index, map it, add a document and search:
 
 ```bash
-curl http://localhost:5000/Lucene/createindex/books
+curl -X POST http://localhost:5000/Lucene/createindex/books
 curl -X POST http://localhost:5000/Lucene/map/books -H "Content-Type: application/json" \
      -d '{"fields":[{"name":"title","fieldType":"text","index":true,"store":true}],"primaryFields":["title"]}'
 curl -X POST http://localhost:5000/Lucene/index/books -H "Content-Type: application/json" \
      -d '[{"title":"LuceneServerNET rules!"}]'
-curl http://localhost:5000/Lucene/refresh/books
+curl -X POST http://localhost:5000/Lucene/refresh/books
 curl "http://localhost:5000/Lucene/search/books?q=rul*"
 ```
 
