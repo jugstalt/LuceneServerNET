@@ -20,6 +20,9 @@ public class ImportOptions
 
     /// <summary>Import stops when more rows failed (0 = never stop).</summary>
     public int MaxErrors { get; set; } = 1000;
+
+    /// <summary>Template variables ("@metaid", "@category").</summary>
+    public IReadOnlyDictionary<string, string>? Variables { get; set; }
 }
 
 public record ImportProgress(long Read, long Imported, long Failed, int Batches);
@@ -78,7 +81,7 @@ public class ImportService
                 cancellationToken.ThrowIfCancellationRequested();
                 var rowNumber = ++report.Read;
 
-                if (TryConvert(row, mapping, out var document, out var error))
+                if (TryConvert(row, mapping, out var document, out var error, options.Variables))
                 {
                     batch.Add((rowNumber, document!));
                 }
@@ -172,21 +175,32 @@ public class ImportService
     }
 
     /// <summary>Renames the columns to field names and converts the values to the field types.</summary>
-    internal static bool TryConvert(IDictionary<string, object?> row, InferredMapping mapping, out IDictionary<string, object>? document, out string? error)
+    internal static bool TryConvert(IDictionary<string, object?> row, InferredMapping mapping, out IDictionary<string, object>? document, out string? error,
+                                    IReadOnlyDictionary<string, string>? variables = null)
     {
         document = new Dictionary<string, object>(StringComparer.Ordinal);
         error = null;
 
         foreach (var field in mapping.Fields.Where(f => !f.Skip))
         {
-            if (!row.TryGetValue(field.Column, out var raw) || raw is null || raw is string s && String.IsNullOrWhiteSpace(s))
+            object? raw;
+            if (field.IsTemplate)
+            {
+                raw = FieldTemplate.Render(field.Template!, row, variables, mapping.Replacements);
+            }
+            else if (!row.TryGetValue(field.Column, out raw))
+            {
+                continue;
+            }
+
+            if (raw is null || raw is string s && String.IsNullOrWhiteSpace(s))
             {
                 continue;
             }
 
             if (!TryConvertValue(raw, field.FieldType, out var value))
             {
-                error = $"Column '{field.Column}': value '{raw}' is not a valid {field.FieldType}";
+                error = $"{(field.IsTemplate ? $"Template of '{field.Name}'" : $"Column '{field.Column}'")}: value '{raw}' is not a valid {field.FieldType}";
                 document = null;
                 return false;
             }

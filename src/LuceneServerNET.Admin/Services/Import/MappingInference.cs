@@ -53,11 +53,20 @@ public class InferredMapping
 
     /// <summary>Characters of the primary fields that are encoded by the server (e.g. "./"), null = none.</summary>
     public string? EncodeCharacters { get; set; }
+
+    /// <summary>Replacements applied to the values of template fields.</summary>
+    public List<TextReplacement> Replacements { get; set; } = [];
 }
 
 public class InferredField
 {
+    /// <summary>Source column (empty for template fields).</summary>
     public string Column { get; set; } = "";
+
+    /// <summary>Template like "{PLZ} {ORT}" (see FieldTemplate); null = the value of <see cref="Column"/>.</summary>
+    public string? Template { get; set; }
+
+    public bool IsTemplate => Template != null;
     public string Name { get; set; } = "";
     public string FieldType { get; set; } = FieldTypes.TextType;
     public bool Index { get; set; } = true;

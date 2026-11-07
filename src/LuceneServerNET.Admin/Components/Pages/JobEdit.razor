@@ -306,7 +306,7 @@ else
         {
             _job = await Repository.GetImportJobAsync(id) ?? new ImportJobRecord();
             _mapping = ImportJobMapping.FromJson(_job.MappingJson);
-            _columns = _mapping.Mapping.Fields.Select(f => f.Column)
+            _columns = _mapping.Mapping.Fields.Where(f => !f.IsTemplate).Select(f => f.Column)
                 .Concat(_mapping.Mapping.GeoFields.SelectMany(g => new[] { g.XColumn, g.YColumn, g.GeometryColumn }).Where(c => c != null).Select(c => c!))
                 .Distinct().ToList();
             _runs = await Repository.GetImportJobRunsAsync(id);

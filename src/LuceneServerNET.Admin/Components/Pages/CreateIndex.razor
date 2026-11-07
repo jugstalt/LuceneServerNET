@@ -81,6 +81,9 @@
         var duplicate = names.GroupBy(n => n.Trim(), StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
         if (duplicate != null) return $"Duplicate field name '{duplicate.Key}'";
 
+        var emptyTemplate = fields.FirstOrDefault(f => f.IsTemplate && String.IsNullOrWhiteSpace(f.Template));
+        if (emptyTemplate != null) return $"Field '{emptyTemplate.Name}': the template is empty";
+
         return ValidateGeo(mapping);
     }
 

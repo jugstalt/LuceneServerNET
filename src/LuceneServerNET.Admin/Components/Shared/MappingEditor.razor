@@ -15,7 +15,7 @@
             <th>
                 <MudTooltip Text="Primary fields are searched when the query does not name a field">Primary</MudTooltip>
             </th>
-            @if (!ShowColumns && !ReadOnlyTypes)
+            @if (!ReadOnlyTypes)
             {
                 <th></th>
             }
@@ -27,7 +27,18 @@
             <tr style="@(field.Skip ? "opacity:.45" : "")">
                 @if (ShowColumns)
                 {
-                    <td class="mono">@field.Column</td>
+                    @if (field.IsTemplate)
+                    {
+                        <td style="min-width:260px">
+                            <MudTextField T="string" Value="field.Template" ValueChanged="v => { field.Template = v ?? String.Empty; Changed(); }" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                          Placeholder="{COLUMN} text {COLUMN2}" Class="mono" Immediate="true" DebounceInterval="300"
+                                          Error="@(UnknownPlaceholders(field).Any())" ErrorText="@($"Unknown: {String.Join(", ", UnknownPlaceholders(field))}")" />
+                        </td>
+                    }
+                    else
+                    {
+                        <td class="mono">@field.Column</td>
+                    }
                     <td><MudCheckBox T="bool" Value="!field.Skip" ValueChanged="v => { field.Skip = !v; Changed(); }" Dense="true" /></td>
                 }
                 <td>
@@ -68,10 +79,40 @@
                 {
                     <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Mapping.Fields.Remove(field); Changed(); }" aria-label="Remove field" /></td>
                 }
+                @if (ShowColumns && !ReadOnlyTypes)
+                {
+                    <td>
+                        @if (field.IsTemplate)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Mapping.Fields.Remove(field); Changed(); }" aria-label="Remove template field" />
+                        }
+                    </td>
+                }
             </tr>
         }
     </tbody>
 </MudSimpleTable>
+
+@if (ShowColumns && !ReadOnlyTypes)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" OnClick="AddTemplateField">Add template field</MudButton>
+        <MudText Typo="Typo.caption">a field built from columns, e.g. <span class="mono">{PLZ} {ORT} {STR} {HNR}</span>@(ShowVariables ? ", variables {@metaid}, {@category}" : "")</MudText>
+    </MudStack>
+    @if (Mapping.Fields.Any(f => f.IsTemplate))
+    {
+        <MudText Typo="Typo.subtitle2" Class="mt-3">Replacements in template fields</MudText>
+        @foreach (var replacement in Mapping.Replacements)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField T="string" Value="replacement.From" ValueChanged="v => { replacement.From = v ?? String.Empty; Changed(); }" Label="From" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mono" Style="max-width:220px" />
+                <MudTextField T="string" Value="replacement.To" ValueChanged="v => { replacement.To = v ?? String.Empty; Changed(); }" Label="To" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mono" Style="max-width:220px" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Mapping.Replacements.Remove(replacement); Changed(); }" aria-label="Remove replacement" />
+            </MudStack>
+        }
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Size="Size.Small" OnClick="() => { Mapping.Replacements.Add(new TextReplacement()); Changed(); }">Add replacement</MudButton>
+    }
+}
 
 @if (ShowColumns)
 {
@@ -100,6 +141,20 @@
     [Parameter] public IReadOnlyList<string> Columns { get; set; } = [];
 
     [Parameter] public EventCallback MappingChanged { get; set; }
+
+    /// <summary>Template variables {@metaid}, {@category} are available (import jobs).</summary>
+    [Parameter] public bool ShowVariables { get; set; }
+
+    private IEnumerable<string> UnknownPlaceholders(InferredField field)
+        => Columns.Count == 0 ? [] : FieldTemplate.UnknownPlaceholders(field.Template, Columns, ShowVariables ? null : []);
+
+    private void AddTemplateField()
+    {
+        var name = "text";
+        for (int i = 2; Mapping.Fields.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase)); i++) name = $"text{i}";
+        Mapping.Fields.Add(new InferredField { Name = name, Template = String.Empty, FieldType = FieldTypes.TextType });
+        Changed();
+    }
 
     private static readonly string[] FieldTypeOptions =
         [FieldTypes.TextType, FieldTypes.StringType, FieldTypes.Int32Type, FieldTypes.DoubleType, FieldTypes.SingleType, FieldTypes.DateTimeType, FieldTypes.GeoType];

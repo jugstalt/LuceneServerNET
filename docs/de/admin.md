@@ -205,6 +205,9 @@ Weitere Koordinatenspalten lassen sich im Mapping hinzufügen (*Add point from c
 - **Linien und Polygone**: Der Server indiziert Punkte, das `geo`-Feld bekommt daher den *Point on Surface* (liegt immer auf
   der Linie bzw. im Polygon, berechnet mit [SpatialNET](https://github.com/jugstalt/spatialNET.Core) im Quellsystem).
   Die Bounding-Box steht in `<feld>_bbox` als `"minx,miny,maxx,maxy"` (WGS84, nicht indiziert); Punkte bekommen keine.
+- **Template-Felder** (*Add template field*): ein Feld aus mehreren Spalten, z. B. `{PLZ} {ORT} {STR} {HNR}` oder
+  `Adresse in {ORT} ({ORTSTEIL})`. Spaltennamen ohne Groß-/Kleinschreibung, NULL ist leer, Zahlen kulturunabhängig (`12.5`), Datum ISO;
+  mehrfache Leerzeichen werden zusammengefasst und leere Klammern `()` / `[]` entfernt. *Replacements* (von → nach) gelten für alle Template-Felder.
 - **Original-Geometrie** (optional, standardmäßig aus): `<feld>_geojson`, GeoJSON in WGS84 mit 7 Nachkommastellen (RFC 7946).
 - **Datenbanken**: PostGIS-Spalten `geometry` / `geography` werden direkt gelesen (als EWKB mit SRID, auch bei `SELECT *`).
   SQL-Server-Geometrietypen als WKB abfragen:

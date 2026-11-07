@@ -205,6 +205,9 @@ Further coordinate columns can be added in the mapping (*Add point from columns*
 - **Lines and polygons**: the server indexes points, so the `geo` field gets the *point on surface* (always on the line /
   inside the polygon, computed with [SpatialNET](https://github.com/jugstalt/spatialNET.Core) in the source system).
   The bounding box is stored in `<field>_bbox` as `"minx,miny,maxx,maxy"` (WGS84, not indexed); points get none.
+- **Template fields** (*Add template field*): a field built from columns, e.g. `{PLZ} {ORT} {STR} {HNR}` or
+  `Adresse in {ORT} ({ORTSTEIL})`. Column names are case insensitive, NULL is empty, numbers are invariant (`12.5`), dates ISO;
+  whitespace is collapsed and empty brackets `()` / `[]` are removed. *Replacements* (from → to) are applied to all template fields.
 - **Original geometry** (optional, default off): `<field>_geojson`, GeoJSON in WGS84 with 7 decimals (RFC 7946).
 - **Databases**: PostGIS `geometry` / `geography` columns are read directly (as EWKB with SRID, also with `SELECT *`).
   SQL Server geometry types must be selected as WKB:
