@@ -12,6 +12,7 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
     <MudText Typo="Typo.h4">Import jobs</MudText>
     <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen" Href="jobs/import-gview" Class="mr-2">Import gView configuration</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="jobs/new">New job</MudButton>
 </MudStack>
 <MudText Typo="Typo.body2" Class="mb-4">Imports from a database query, on a schedule or manually (run now). Jobs only run while the admin application runs; with "catch up" a missed run is started once at startup.</MudText>

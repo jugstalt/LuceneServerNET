@@ -300,6 +300,10 @@ Die übrigen Spalten bleiben im Mapping sichtbar, werden aber nicht importiert. 
 `gid`, `id`, sonst die erste Ganzzahl-Spalte). Die Meta-ID bleibt bei jedem Lauf gleich, die Dokument-IDs sind also stabil
 (gView hat bei jedem Befüllen eine neue erzeugt).
 
+**gView-Konfiguration**: *Import gView configuration* auf der Job-Seite legt aus einem gView-`FillLuceneServer`-JSON einen Job an
+(eine webgis-Quelle pro Feature-Klasse, `SELECT * FROM {name} WHERE {filter}`, Templates, Kategorie, Ersetzungen, Metadaten,
+Phonetik, Encode-Zeichen). Die Connection-Strings der Datei werden nicht verwendet: eine Datenbank-Verbindung wählen.
+
 ### Import-Jobs von außen auslösen
 
 *Create trigger token* auf der Job-Seite erzeugt ein Token für diesen Job. Es wird nur einmal angezeigt (gespeichert als SHA-256-Hash),

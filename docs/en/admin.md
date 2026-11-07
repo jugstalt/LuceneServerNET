@@ -299,6 +299,10 @@ The other columns stay visible in the mapping, but are not imported. The ID colu
 `gid`, `id`, else the first integer column). The meta id stays the same for every run, so document ids are stable
 (gView created a new one with every fill).
 
+**gView configuration**: *Import gView configuration* on the jobs page creates a job from a gView `FillLuceneServer` JSON
+(one webgis source per feature class, `SELECT * FROM {name} WHERE {filter}`, templates, category, replacements, metadata,
+phonetics, encode characters). The connection strings of the file are not used: choose a database connection.
+
 ### Trigger import jobs from outside
 
 *Create trigger token* on the job page creates a token for this job. It is shown only once (stored as SHA-256 hash), may

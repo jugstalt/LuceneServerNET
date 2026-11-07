@@ -1,0 +1,239 @@
+@page "/jobs/import-gview"
+@using LuceneServerNET.Admin.Services.Repository
+@inject IAdminRepositoryService Repository
+@inject InstanceRegistry Registry
+@inject DatabaseSource DbSource
+@inject AuditService Audit
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Import gView configuration · LuceneServer.NET Admin</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Import jobs", "jobs"), new BreadcrumbItem("Import gView configuration", null, disabled: true)])" Class="px-0 pt-0" />
+
+<MudText Typo="Typo.h4" Class="mb-2">Import gView configuration</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Creates an import job from a configuration of the gView <span class="mono">FillLuceneServer</span> tool: one source per feature class
+    with the webgis template, templates (<span class="mono">index_proto</span>), category, replacements and metadata.
+    The connection strings of the configuration are not used: choose a database connection; the queries can be adjusted before the import.
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudTextField T="string" @bind-Value="_json" Label="Configuration (JSON)" Variant="Variant.Outlined" Lines="12" Class="mono" />
+    <MudStack Row="true" Class="mt-2" AlignItems="AlignItems.Center">
+        <MudFileUpload T="IBrowserFile" FilesChanged="LoadFileAsync" Accept=".json" MaximumFileCount="1">
+            <CustomContent Context="upload">
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync">Load file</MudButton>
+            </CustomContent>
+        </MudFileUpload>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="Read" Disabled="@String.IsNullOrWhiteSpace(_json)">Read configuration</MudButton>
+    </MudStack>
+</MudPaper>
+
+@if (_config is not null)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" sm="3">
+                <MudTextField @bind-Value="_jobName" Label="Job name" Variant="Variant.Outlined" Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudSelect T="long" @bind-Value="_connectionId" Label="Database connection" Variant="Variant.Outlined">
+                    @foreach (var connection in _connections)
+                    {
+                        <MudSelectItem Value="connection.Id">@connection.Name (@connection.Provider)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudSelect T="string" @bind-Value="_instance" @bind-Value:after="CheckTargetAsync" Label="Target instance" Variant="Variant.Outlined">
+                    @foreach (var instance in _instances)
+                    {
+                        <MudSelectItem Value="instance.Name">@instance.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        <tr><td>Index / alias</td><td class="mono">@(GviewConfigImport.IndexName(_config) ?? "–")</td></tr>
+                        <tr><td>Mode</td><td>@(_config.Connection?.DeleteIndex == false ? "append" : "rebuild and switch alias")</td></tr>
+                        <tr><td>Phonetics</td><td>@(_config.Connection?.PhoneticAlgorithm ?? "–")</td></tr>
+                        <tr><td>Encode characters</td><td class="mono">@(_config.Connection?.EncodeCharacters ?? "–")</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mt-4 mb-2">Sources</MudText>
+        @foreach (var source in _sources)
+        {
+            <MudPaper Class="pa-3 mb-2" Outlined="true">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+                    <MudText><b>@(source.FeatureClass.Category ?? source.FeatureClass.Name)</b></MudText>
+                    <MudText Typo="Typo.caption" Class="mono">@source.FeatureClass.Name</MudText>
+                    @if (source.FeatureClass.Geometry)
+                    {
+                        <MudChip T="string" Size="Size.Small">geometry, EPSG @source.FeatureClass.Srs</MudChip>
+                    }
+                    <MudText Typo="Typo.caption">@source.FeatureClass.Proto?.SuggestedText</MudText>
+                </MudStack>
+                <MudTextField T="string" @bind-Value="source.Sql" Label="SELECT query" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mono" />
+            </MudPaper>
+        }
+
+        @if (_targetIsIndex)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3">
+                An index <b>@GviewConfigImport.IndexName(_config)</b> exists on @_instance. The job rebuilds it as alias: delete or rename the index
+                before the first run (or change the target on the job page).
+            </MudAlert>
+        }
+
+        <MudStack Row="true" Class="mt-3">
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync"
+                       Disabled="@(_creating || _connectionId == 0 || String.IsNullOrWhiteSpace(_jobName) || String.IsNullOrEmpty(_instance))">Create job</MudButton>
+        </MudStack>
+        @if (_creating)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-2" />
+        }
+    </MudPaper>
+}
+
+@if (_warnings.Count > 0)
+{
+    <MudAlert Severity="Severity.Warning">
+        @foreach (var warning in _warnings)
+        {
+            <div>@warning</div>
+        }
+    </MudAlert>
+    @if (_createdJobId is { } jobId)
+    {
+        <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Href="@($"jobs/{jobId}")">Open job</MudButton>
+    }
+}
+
+@code {
+    private string? _json, _jobName, _instance;
+    private long _connectionId;
+    private GviewConfig? _config;
+    private List<GviewImportSource> _sources = [];
+    private IReadOnlyList<ServerInstance> _instances = [];
+    private IReadOnlyList<DbSourceConnection> _connections = [];
+    private List<string> _warnings = [];
+    private bool _creating, _targetIsIndex;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _instances = await Registry.GetAllAsync();
+        _connections = await DbSource.GetConnectionsAsync();
+        _instance = _instances.FirstOrDefault()?.Name;
+        _connectionId = _connections.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private async Task LoadFileAsync(IBrowserFile? file)
+    {
+        if (file is null) return;
+        using var reader = new StreamReader(file.OpenReadStream(5 * 1024 * 1024));
+        _json = await reader.ReadToEndAsync();
+        Read();
+    }
+
+    private void Read()
+    {
+        _warnings = [];
+        try
+        {
+            _config = GviewConfigImport.Parse(_json ?? "");
+            _sources = GviewConfigImport.FeatureClasses(_config)
+                .Select(fc => new GviewImportSource { FeatureClass = fc, Sql = GviewConfigImport.ProposeSql(fc) }).ToList();
+            _jobName = GviewConfigImport.IndexName(_config) ?? "gview import";
+            _ = CheckTargetAsync();
+        }
+        catch (FormatException ex)
+        {
+            _config = null;
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task CheckTargetAsync()
+    {
+        _targetIsIndex = false;
+        try
+        {
+            var instance = _instances.FirstOrDefault(i => i.Name == _instance);
+            var target = _config is null ? null : GviewConfigImport.IndexName(_config);
+            if (instance is null || target is null || _config!.Connection?.DeleteIndex == false) return;
+
+            var client = Registry.CreateClient(instance);
+            var aliases = await client.GetAliasesAsync();
+            _targetIsIndex = !aliases.ContainsKey(target) && await client.IndexExistsAsync(target);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // instance not reachable: checked again by the job
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        var connection = _connections.FirstOrDefault(c => c.Id == _connectionId);
+        if (_config is null || connection is null || _instance is null) return;
+
+        _creating = true;
+        _warnings = [];
+        try
+        {
+            var (job, settings, warnings) = await GviewConfigImport.BuildJobAsync(_config, _sources, _connectionId, _instance, _jobName!,
+                async sql =>
+                {
+                    var sample = new List<IDictionary<string, object?>>();
+                    await foreach (var row in DbSource.ReadAsync(connection, sql))
+                    {
+                        sample.Add(row);
+                        if (sample.Count >= 200) break;
+                    }
+                    return sample;
+                });
+
+            if (ImportJobRunner.Validate(job) is { } error)
+            {
+                Snackbar.Add(error, Severity.Error);
+                return;
+            }
+
+            await Repository.InsertImportJobAsync(job);
+            await Audit.LogAsync(AuditActions.JobSave, job.Instance, job.Target,
+                $"job {job.Name} · imported from gView configuration · {settings.Sources.Count} sources");
+
+            if (warnings.Count == 0 && ImportJobRunner.ValidateSources(settings) is { } sourceError) warnings.Add(sourceError);
+            if (warnings.Count == 0)
+            {
+                Snackbar.Add($"Job {job.Name} created", Severity.Success);
+                Navigation.NavigateTo($"jobs/{job.Id}");
+                return;
+            }
+
+            _warnings = warnings;
+            _warnings.Insert(0, $"Job {job.Name} created – check these points on the job page:");
+            Snackbar.Add($"Job {job.Name} created with warnings", Severity.Warning);
+            _config = null;
+            _createdJobId = job.Id;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ? $"A job with the name {_jobName} exists" : ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private long? _createdJobId;
+}
