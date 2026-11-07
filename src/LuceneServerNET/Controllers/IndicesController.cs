@@ -144,6 +144,16 @@ public class IndicesController : LuceneControllerBase
     public Task<IApiResult> PutMeta(string id, string name, [FromBody] CustomMetadata metaData)
         => SecureMethodHandler(id, (id) => new ApiResult(_lucene.AddCustomMetadata(id, name, metaData.Metadata)));
 
+    /// <summary>Removes a custom metadata entry (success also if it did not exist).</summary>
+    [HttpDelete("{id}/meta/{name}")]
+    [Authorize(Policy = ApiRoles.Write)]
+    public Task<IApiResult> DeleteMeta(string id, string name)
+        => SecureMethodHandler(id, (id) =>
+        {
+            _lucene.RemoveCustomMetadata(id, name);
+            return new ApiResult();
+        });
+
     #endregion
 
     #region Documents

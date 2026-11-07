@@ -105,6 +105,10 @@ public class AdminApiTests : IClassFixture<LuceneServerFactory>
         var metadata = await _client.GetMetadataAsync(id);
         Assert.Equal("unit test", metadata["source"]);
 
+        await _client.RemoveMetadataAsync(id, "source");
+        await _client.RemoveMetadataAsync(id, "source");                 // not existing: no error
+        Assert.False((await _client.GetMetadataAsync(id)).ContainsKey("source"));
+
         // clear index (admin UI: "*:*")
         await _client.RemoveDocumentsAsync(id, "*:*");
         await _client.RefreshIndexAsync(id);

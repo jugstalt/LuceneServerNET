@@ -219,6 +219,33 @@ namespace LuceneServerNET.Engine.Services
             return true;
         }
 
+        /// <summary>Removes a custom metadata entry (also from the archive); true if it existed.</summary>
+        public bool RemoveCustomMetadata(string indexName, string name)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new IndexNotFoundException();
+            }
+
+            name = name?.Trim().ToLower();
+
+            if (!PathGuard.IsValidName(name) || name == "mapping")
+            {
+                throw new ArgumentException($"Invalid or reserved metadata name '{name}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
+            }
+
+            var fileInfo = new FileInfo(PathGuard.Combine(_rootPath, MetaIndexName(indexName), $"{name}.meta"));
+            var existed = fileInfo.Exists;
+            if (existed)
+            {
+                fileInfo.Delete();
+            }
+
+            _archive.RemoveCustomMetadata(indexName, name);
+
+            return existed;
+        }
+
         async public Task<string> GetCustomMetadata(string indexName, string name)
         {
             name = name?.Trim().ToLower();

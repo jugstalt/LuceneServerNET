@@ -127,6 +127,10 @@ namespace LuceneServerNET.Client
         public async Task PutMetadataAsync(string index, string name, string value, CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Put, $"api/v2/indices/{Esc(index)}/meta/{Esc(name)}", new CustomMetadata() { Metadata = value }, cancellationToken);
 
+        /// <summary>Removes a custom metadata entry (no error if it does not exist).</summary>
+        public async Task RemoveMetadataAsync(string index, string name, CancellationToken cancellationToken = default)
+            => await SendAsync<ApiResult>(HttpMethod.Delete, $"api/v2/indices/{Esc(index)}/meta/{Esc(name)}", null, cancellationToken);
+
         #endregion
 
         #region Documents

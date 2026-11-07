@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 ### Added
+- `DELETE /api/v2/indices/{index}/meta/{name}` removes a custom metadata entry (also from the archive); client `RemoveMetadataAsync`.
 
 - **REST API v2** (`/api/v2/indices/{id}/...`), resource oriented, in parallel to v1 (`/Lucene/...`).
   v1 stays fully supported (not breaking) but is marked as deprecated in Swagger.

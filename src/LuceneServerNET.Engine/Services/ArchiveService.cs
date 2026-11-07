@@ -201,6 +201,26 @@ namespace LuceneServerNET.Engine.Services
             }
         }
 
+        public bool RemoveCustomMetadata(string indexName, string name)
+        {
+            try
+            {
+                if (ArchiveExists(indexName))
+                {
+                    var fileInfo = new FileInfo(PathGuard.Combine(ArchiveMetaPath(indexName), PathGuard.ValidateMetadataName(name) + ".meta"));
+                    if (fileInfo.Exists)
+                    {
+                        fileInfo.Delete();
+                    }
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public string GetCustomMetadata(string indexName, string name)
         {
             try

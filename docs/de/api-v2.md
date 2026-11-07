@@ -38,6 +38,7 @@ Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der B
 | GET | `/api/v2/indices/{index}/meta/_names` | read | `GET /Lucene/getmetanames/{index}` |
 | GET | `/api/v2/indices/{index}/meta/{name}` | read | `GET /Lucene/getmeta/{index}?name=` |
 | PUT | `/api/v2/indices/{index}/meta/{name}` | write | `POST /Lucene/addmeta/{index}?name=` |
+| DELETE | `/api/v2/indices/{index}/meta/{name}` | write | – |
 | POST | `/api/v2/indices/{index}/documents` | write | `POST /Lucene/index/{index}` |
 | DELETE | `/api/v2/indices/{index}/documents?term=&field=_guid` | write | `DELETE /Lucene/remove/{index}?term=&termField=` |
 | GET | `/api/v2/indices/{index}/search` | read | `GET /Lucene/search/{index}` |
