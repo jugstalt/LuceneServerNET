@@ -11,6 +11,7 @@ static public class ServiceCollectionExtensions
         services.Configure<LuceneServiceOptions>(optionsAction);
 
         services.AddSingleton<LuceneSharedResourcesService>();
+        services.AddSingleton<AliasService>();
         services.AddTransient<LuceneService>();
         services.AddTransient<ArchiveService>();
 

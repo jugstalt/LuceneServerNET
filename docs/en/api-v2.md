@@ -46,6 +46,9 @@ Unlike v1 (always HTTP 200), v2 returns errors with a matching status code. The 
 | GET | `/api/v2/indices` (index names) | read | – |
 | GET | `/api/v2/indices/{index}/stats` | read | – |
 | GET | `/api/v2/indices/{index}/documents/_export` (NDJSON, header `X-Total-Count`) | read | – |
+| GET | `/api/v2/aliases` (alias => index) | read | – |
+| PUT | `/api/v2/aliases/{alias}` body `{ "index": "..." }` | write | – |
+| DELETE | `/api/v2/aliases/{alias}` | write | – |
 | GET | `/api/v2/admin/info` | admin | – |
 | GET | `/api/v2/admin/whoami` | read | – |
 
@@ -81,3 +84,21 @@ Unlike v1 (always HTTP 200), v2 returns errors with a matching status code. The 
 
 The same paging parameters and response fields are also available in v1
 (`/Lucene/search/{index}` and `/Lucene/searchphonetic/{index}`).
+
+## Aliases
+
+An alias points to exactly one index. Wherever an index id is expected (v1 and v2: search, groups, documents,
+mapping, metadata, stats, export, refresh), an alias can be used instead. Creating and removing indices always
+use the real index name.
+
+```bash
+# build a new generation, then switch the alias atomically
+curl -X PUT  http://localhost:8080/api/v2/indices/orte_20261107
+# ... mapping, documents, refresh ...
+curl -X PUT  http://localhost:8080/api/v2/aliases/orte -H "Content-Type: application/json" -d '{"index":"orte_20261107"}'
+curl         "http://localhost:8080/api/v2/indices/orte/search?q=graz"
+```
+
+Rules: an alias can not have the name of an existing index (409) and must point to an index, not to another alias;
+an index used by an alias can not be removed (409, remove or switch the alias first); `DELETE /api/v2/indices/{alias}`
+returns 409. Aliases are stored in `{RootPath}/aliases.json` and copied to `{ArchivePath}/aliases.json`.

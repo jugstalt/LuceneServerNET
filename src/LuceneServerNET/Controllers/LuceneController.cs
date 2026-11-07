@@ -112,7 +112,7 @@ public class LuceneController : LuceneControllerBase
         return SecureMethodHandler(id, (id) =>
         {
             return new ApiResult(_lucene.CreateIndex(id));
-        });
+        }, resolveAlias: false);
     }
 
     [Obsolete("Use POST createindex/{id}")]
@@ -130,7 +130,7 @@ public class LuceneController : LuceneControllerBase
         return SecureMethodHandler(id, (id) =>
         {
             return new ApiResult(_lucene.RemoveIndex(id));
-        });
+        }, resolveAlias: false);
     }
 
     [Obsolete("Use DELETE removeindex/{id}")]

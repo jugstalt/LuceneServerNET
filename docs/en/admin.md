@@ -17,6 +17,7 @@
 | Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
+| Aliases | Create, switch and remove index aliases (see [API v2](api-v2.md#aliases)); aliases are shown in the index list |
 | Copy | Copy an index (mapping, metadata, documents) to a new name on the same instance or to another instance |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
 

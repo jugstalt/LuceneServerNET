@@ -31,18 +31,34 @@ namespace LuceneServerNET.Engine.Services
         private readonly string _rootPath;
         private readonly ArchiveService _archive;
         private readonly LuceneSharedResourcesService _resources;
+        private readonly AliasService _aliases;
 
         private SpatialContext _spatialContext = null;
         private SpatialPrefixTree _tree = null;
 
         public LuceneService(LuceneSharedResourcesService resources,
                              ArchiveService archive,
+                             AliasService aliases,
                              IOptionsMonitor<LuceneServiceOptions> options)
         {
             _rootPath = options.CurrentValue.RootPath;
             _archive = archive;
             _resources = resources;
+            _aliases = aliases;
         }
+
+        #region Aliases
+
+        /// <summary>The index an alias points to, otherwise the name itself.</summary>
+        public string ResolveAlias(string name) => _aliases.Resolve(name);
+
+        public IReadOnlyDictionary<string, string> Aliases() => _aliases.GetAll();
+
+        public void SetAlias(string alias, string indexName) => _aliases.Set(alias, indexName, IndexExists);
+
+        public bool RemoveAlias(string alias) => _aliases.Remove(alias);
+
+        #endregion
 
         public bool IndexExists(string indexName)
         {
@@ -68,6 +84,10 @@ namespace LuceneServerNET.Engine.Services
             {
                 throw new IndexConflictException("Index is unloaded");
             }
+            if (_aliases.IsAlias(indexName))
+            {
+                throw new IndexConflictException($"'{indexName}' is an alias");
+            }
 
             var indexPath = PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName));
             var indexMetaPath = PathGuard.Combine(_rootPath, MetaIndexName(indexName));
@@ -82,6 +102,17 @@ namespace LuceneServerNET.Engine.Services
 
         public bool RemoveIndex(string indexName)
         {
+            if (_aliases.IsAlias(indexName))
+            {
+                throw new IndexConflictException($"'{indexName}' is an alias, not an index; remove the alias with DELETE api/v2/aliases/{indexName}");
+            }
+
+            var aliases = _aliases.AliasesOf(indexName).ToArray();
+            if (aliases.Length > 0)
+            {
+                throw new IndexConflictException($"Index is used by the alias(es) {String.Join(", ", aliases)}; remove or switch them first");
+            }
+
             _archive.RemoveArchive(indexName);
 
             if (!IndexExists(indexName))

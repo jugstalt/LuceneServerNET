@@ -46,6 +46,9 @@ Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der B
 | GET | `/api/v2/indices` (index names) | read | – |
 | GET | `/api/v2/indices/{index}/stats` | read | – |
 | GET | `/api/v2/indices/{index}/documents/_export` (NDJSON, header `X-Total-Count`) | read | – |
+| GET | `/api/v2/aliases` (alias => index) | read | – |
+| PUT | `/api/v2/aliases/{alias}` body `{ "index": "..." }` | write | – |
+| DELETE | `/api/v2/aliases/{alias}` | write | – |
 | GET | `/api/v2/admin/info` | admin | – |
 | GET | `/api/v2/admin/whoami` | read | – |
 
@@ -81,3 +84,21 @@ Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der B
 
 Dieselben Paging-Parameter und Antwortfelder gibt es auch in v1
 (`/Lucene/search/{index}` und `/Lucene/searchphonetic/{index}`).
+
+## Aliases
+
+Ein Alias zeigt auf genau einen Index. Überall, wo eine Index-ID erwartet wird (v1 und v2: Suche, Gruppen, Dokumente,
+Mapping, Metadaten, Stats, Export, Refresh), kann stattdessen ein Alias verwendet werden. Anlegen und Löschen von Indizes
+verwendet immer den echten Indexnamen.
+
+```bash
+# neue Generation aufbauen, dann den Alias atomar umschalten
+curl -X PUT  http://localhost:8080/api/v2/indices/orte_20261107
+# ... Mapping, Dokumente, Refresh ...
+curl -X PUT  http://localhost:8080/api/v2/aliases/orte -H "Content-Type: application/json" -d '{"index":"orte_20261107"}'
+curl         "http://localhost:8080/api/v2/indices/orte/search?q=graz"
+```
+
+Regeln: Ein Alias darf nicht wie ein bestehender Index heißen (409) und muss auf einen Index zeigen, nicht auf einen anderen Alias;
+ein Index, auf den ein Alias zeigt, lässt sich nicht löschen (409, Alias vorher entfernen oder umschalten); `DELETE /api/v2/indices/{alias}`
+liefert 409. Gespeichert in `{RootPath}/aliases.json`, Kopie in `{ArchivePath}/aliases.json`.

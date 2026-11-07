@@ -17,6 +17,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
+| Aliases | Index-Aliases anlegen, umschalten und entfernen (siehe [API v2](api-v2.md#aliases)); Aliases stehen in der Indexliste |
 | Kopieren | Index (Mapping, Metadaten, Dokumente) unter neuem Namen auf derselben oder auf eine andere Instanz kopieren |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
 

@@ -127,16 +127,17 @@ public abstract class LuceneControllerBase : ControllerBase
         };
     }
 
-    protected Task<IApiResult> SecureMethodHandler(string id, Func<string, IApiResult> func, Func<Exception, IApiResult> onException = null)
-        => SecureMethodHandler(id, (id) => Task.FromResult(func(id)), onException);
+    protected Task<IApiResult> SecureMethodHandler(string id, Func<string, IApiResult> func, Func<Exception, IApiResult> onException = null, bool resolveAlias = true)
+        => SecureMethodHandler(id, (id) => Task.FromResult(func(id)), onException, resolveAlias);
 
     protected Task<IApiResult> SecureMethodHandler(Func<IApiResult> func, Func<Exception, IApiResult> onException = null)
         => SecureMethodHandler(() => Task.FromResult(func()), onException);
 
     /// <summary>
     /// For index specific endpoints: normalizes and validates the index id (whitelist) before calling <paramref name="func"/>.
+    /// An alias is resolved to its index unless <paramref name="resolveAlias"/> is false (create/remove index).
     /// </summary>
-    protected Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null)
+    protected Task<IApiResult> SecureMethodHandler(string id, Func<string, Task<IApiResult>> func, Func<Exception, IApiResult> onException = null, bool resolveAlias = true)
     {
         return SecureMethodHandler(() =>
         {
@@ -152,7 +153,7 @@ public abstract class LuceneControllerBase : ControllerBase
                 throw new ArgumentException($"Invalid index id '{id}'. Allowed: a-z, 0-9, '_', '-' (max. 64 characters).");
             }
 
-            return func(id);
+            return func(resolveAlias ? _lucene.ResolveAlias(id) : id);
         }, onException);
     }
 

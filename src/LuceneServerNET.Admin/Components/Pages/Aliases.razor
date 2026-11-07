@@ -1,0 +1,114 @@
+@page "/i/{InstanceName}/aliases"
+@inherits InstancePageBase
+
+<PageTitle>Aliases · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem("Aliases", null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudText Typo="Typo.h4" Class="mb-2">Aliases</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">
+        An alias points to one index and can be used instead of the index name for search and indexing (v1 and v2 API).
+        Switching is atomic: rebuild an index under a new name, then switch the alias to it without downtime.
+    </MudText>
+
+    @if (Status.CanWrite)
+    {
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudTextField @bind-Value="_alias" Label="Alias" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                              Error="@(!String.IsNullOrEmpty(_alias) && !CreateIndex.IsValidIndexName(_alias))" Style="min-width:200px" />
+                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" />
+                <MudSelect @bind-Value="_index" Label="Index" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:240px">
+                    @foreach (var index in _indices)
+                    {
+                        <MudSelectItem Value="index">@index</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SetAsync(_alias, _index)"
+                           Disabled="@(!CreateIndex.IsValidIndexName(_alias ?? "") || _index is null)">Set</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudTable Items="_aliases" Dense="true" Hover="true" Outlined="true" Elevation="0">
+        <HeaderContent>
+            <MudTh>Alias</MudTh>
+            <MudTh>Index</MudTh>
+            <MudTh>Switch to</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd Class="mono"><b>@context.Key</b></MudTd>
+            <MudTd><MudLink Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(context.Value)}")">@context.Value</MudLink></MudTd>
+            <MudTd>
+                @if (Status.CanWrite)
+                {
+                    <MudSelect T="string" Value="context.Value" ValueChanged="v => SwitchAsync(context.Key, context.Value, v)" Dense="true"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:220px">
+                        @foreach (var index in _indices)
+                        {
+                            <MudSelectItem Value="index">@index</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudTd>
+            <MudTd Style="text-align:right">
+                @if (Status.CanWrite)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => RemoveAsync(context.Key)" aria-label="Remove alias" />
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>No aliases.</MudText></NoRecordsContent>
+    </MudTable>
+</InstanceGuard>
+
+@code {
+    private IDictionary<string, string> _aliases = new Dictionary<string, string>();
+    private IReadOnlyList<string> _indices = [];
+    private string? _alias, _index;
+
+    protected override async Task LoadAsync()
+    {
+        _indices = (await Client!.GetIndicesAsync()).ToList();
+        _aliases = await Client.GetAliasesAsync();
+    }
+
+    private async Task SetAsync(string? alias, string? index)
+    {
+        if (alias is null || index is null) return;
+        alias = alias.Trim().ToLowerInvariant();
+
+        if (await RunAsync(() => Client!.SetAliasAsync(alias, index), $"Alias {alias} → {index}", AuditActions.AliasSet, alias, $"→ {index}"))
+        {
+            _alias = null;
+            _aliases = await Client!.GetAliasesAsync();
+        }
+    }
+
+    private async Task SwitchAsync(string alias, string current, string index)
+    {
+        if (index == current) return;
+        if (!await ConfirmAsync("Switch alias", $"Switch {alias} from {current} to {index}? Searches and indexing via {alias} go to {index} immediately.", "Switch"))
+        {
+            return;
+        }
+        if (await RunAsync(() => Client!.SetAliasAsync(alias, index), $"Alias {alias} → {index}", AuditActions.AliasSet, alias, $"{current} → {index}"))
+        {
+            _aliases = await Client!.GetAliasesAsync();
+        }
+    }
+
+    private async Task RemoveAsync(string alias)
+    {
+        if (!await ConfirmAsync("Remove alias", $"Remove the alias {alias}? The index is not changed; clients using {alias} get errors.", "Remove"))
+        {
+            return;
+        }
+        if (await RunAsync(() => Client!.RemoveAliasAsync(alias), $"Alias {alias} removed", AuditActions.AliasDelete, alias))
+        {
+            _aliases = await Client!.GetAliasesAsync();
+        }
+    }
+}

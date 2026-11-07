@@ -31,6 +31,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   new optional parameters `from` (offset, `from + size` ≤ 10000) and `searchAfter` (cursor);
   responses contain `totalHits`, `from`, `size` and `nextSearchAfter`.
 - `LuceneServerNET.Client`: `SearchPageAsync` / `SearchPhoneticPageAsync` (existing methods unchanged).
+- **Index aliases** (additive): an alias points to one index and can be used instead of the index id in all
+  v1 and v2 endpoints (search, documents, mapping, metadata, stats, export), except creating and removing indices.
+  Switching is atomic, e.g. rebuild into `orte_20261107` and switch the alias `orte` without downtime.
+  `GET /api/v2/aliases`, `PUT /api/v2/aliases/{alias}` (`{ "index": "..." }`, role `write`), `DELETE /api/v2/aliases/{alias}`.
+  Stored in `{RootPath}/aliases.json` (copy in `{ArchivePath}`). An index used by an alias can not be removed (409),
+  an alias can not have the name of an index. Client: `GetAliasesAsync`, `SetAliasAsync`, `RemoveAliasAsync`.
 - **Admin UI** (`LuceneServerNET.Admin`, Blazor Server + MudBlazor), a separate web app that
   administrates several server instances through the v2 API:
   dashboard (health, version, uptime, roles), index list with document count and size,
@@ -47,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   GeoJSON files (FeatureCollection) and coordinate columns (lat/lon, x/y), converted to WGS84 with Proj4Net
   (source EPSG from the SRID of the value or chosen in the UI). Lines/polygons are indexed as point on surface
   plus a bounding box field (`<field>_bbox`), the original geometry can be stored as GeoJSON (`<field>_geojson`).
-  Copy an index (mapping, metadata, documents) to another name or another instance.
+  Copy an index (mapping, metadata, documents) to another name or another instance. Alias management.
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),

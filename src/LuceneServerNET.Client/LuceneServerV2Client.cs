@@ -96,6 +96,22 @@ namespace LuceneServerNET.Client
 
         #endregion
 
+        #region Aliases
+
+        /// <summary>All aliases (alias => index).</summary>
+        public async Task<IDictionary<string, string>> GetAliasesAsync(CancellationToken cancellationToken = default)
+            => (await SendAsync<AliasesResult>(HttpMethod.Get, "api/v2/aliases", cancellationToken: cancellationToken)).Aliases
+               ?? new Dictionary<string, string>();
+
+        /// <summary>Creates or switches an alias to the index.</summary>
+        public async Task SetAliasAsync(string alias, string index, CancellationToken cancellationToken = default)
+            => await SendAsync<ApiResult>(HttpMethod.Put, $"api/v2/aliases/{Esc(alias)}", new { index }, cancellationToken);
+
+        public async Task RemoveAliasAsync(string alias, CancellationToken cancellationToken = default)
+            => await SendAsync<ApiResult>(HttpMethod.Delete, $"api/v2/aliases/{Esc(alias)}", cancellationToken: cancellationToken);
+
+        #endregion
+
         #region Mapping / Meta
 
         public async Task<IndexMapping> GetMappingAsync(string index, CancellationToken cancellationToken = default)

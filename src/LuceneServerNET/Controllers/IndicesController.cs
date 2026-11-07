@@ -1,4 +1,4 @@
-using LuceneServerNET.Authentication;
+﻿using LuceneServerNET.Authentication;
 using LuceneServerNET.Core.Models.Custom;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Core.Models.Result;
@@ -57,13 +57,13 @@ public class IndicesController : LuceneControllerBase
     [HttpPut("{id}")]
     [Authorize(Policy = ApiRoles.Write)]
     public Task<IApiResult> CreateIndex(string id)
-        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.CreateIndex(id)));
+        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.CreateIndex(id)), resolveAlias: false);
 
     /// <summary>Removes an index.</summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = ApiRoles.Admin)]
     public Task<IApiResult> RemoveIndex(string id)
-        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.RemoveIndex(id)));
+        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.RemoveIndex(id)), resolveAlias: false);
 
     /// <summary>Returns success=true if the index exists (HTTP 404 otherwise). Also available as HEAD.</summary>
     [HttpGet("{id}")]
@@ -163,6 +163,7 @@ public class IndicesController : LuceneControllerBase
             await Response.WriteAsJsonAsync(new ApiErrorResult($"Invalid index id '{id}'"), cancellationToken);
             return;
         }
+        id = _lucene.ResolveAlias(id);
         if (!_lucene.IndexExists(id))
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
