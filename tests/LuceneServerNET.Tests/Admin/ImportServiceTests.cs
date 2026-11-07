@@ -143,7 +143,7 @@ public class ImportServiceTests
     [Fact]
     public void TryConvert_CombinesGeoField()
     {
-        var mapping = new InferredMapping { Geo = new GeoCombination("lat", "lon", "location") };
+        var mapping = new InferredMapping { GeoFields = [GeoFieldMapping.ForColumns("lon", "lat", "location", 4326)] };
 
         Assert.True(ImportService.TryConvert(new Dictionary<string, object> { ["lat"] = "47.5", ["lon"] = 15.25 }, mapping, out var document, out _));
         Assert.Equal("15.25 47.5", document["location"]);

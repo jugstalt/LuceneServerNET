@@ -14,7 +14,7 @@
 | Search | Autocomplete input (search as you type), search with `size`/`from`/`searchAfter`, sort, spatial filter, phonetic search, group by, results as table or JSON, request as `curl` command |
 | Create index | Mapping editor: fields, types, indexed/stored, primary fields, phonetics |
 | Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test |
-| Import | From a database query or upload CSV or JSON (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
+| Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
@@ -116,3 +116,32 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 - The query is executed twice: for the preview (first 200 rows) and for the import (streamed, all rows).
   Columns with the same name get a suffix (`id`, `id2`), binary columns are skipped, `decimal` becomes `double`.
 - Timeout per query: `Admin:Import:CommandTimeoutSeconds` (default 600).
+
+### Geo data
+
+| Source | Recognized as |
+|---|---|
+| Columns `lat`/`lon` (also `latitude`/`longitude`, `lng`) | Point, EPSG:4326 |
+| Columns `x`/`y` (also `rechtswert`/`hochwert`, `easting`/`northing`) | Point, the EPSG code has to be chosen |
+| Geometry column: WKB/EWKB (bytes), WKT/EWKT (`SRID=31256;POLYGON(...)`), GeoJSON geometry | Point, line, polygon (also multi) |
+| GeoJSON file (`.geojson`, FeatureCollection) | `properties` become fields, `geometry` a geometry column, `id` the field `id` |
+
+Further coordinate columns can be added in the mapping (*Add point from columns*).
+
+- **Coordinate system**: a SRID in the value (EWKB, EWKT, GeoJSON `crs`) wins, otherwise the EPSG code of the geo field
+  (default 4326). Everything is converted to WGS84 with [Proj4Net.Core](https://github.com/jugstalt/Proj4Net.Core);
+  unknown EPSG codes are reported before the import.
+- **Lines and polygons**: the server indexes points, so the `geo` field gets the *point on surface* (always on the line /
+  inside the polygon, computed with [SpatialNET](https://github.com/jugstalt/spatialNET.Core) in the source system).
+  The bounding box is stored in `<field>_bbox` as `"minx,miny,maxx,maxy"` (WGS84, not indexed); points get none.
+- **Original geometry** (optional, default off): `<field>_geojson`, GeoJSON in WGS84 with 7 decimals (RFC 7946).
+- **Databases**: the drivers can not read geometry types, select them as WKB:
+
+```sql
+-- PostGIS (EWKB keeps the SRID)
+SELECT id, name, ST_AsEWKB(geom) AS geom FROM places
+-- SQL Server geometry / geography (choose the EPSG code in the mapping)
+SELECT id, name, geom.STAsBinary() AS geom FROM places
+```
+
+Search with the spatial filter on the geo field, e.g. `dist_km(geom:15.44,47.07,5)` or `bbox(geom:15.4,47.0,15.5,47.1)`.

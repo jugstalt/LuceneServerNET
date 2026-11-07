@@ -42,7 +42,9 @@ public class MappingInferenceTests
         Assert.True(name.Primary);
         Assert.False(mapping.Fields.Single(f => f.Column == "code").Primary);
         Assert.Equal(FieldTypes.DoubleType, mapping.Fields.Single(f => f.Column == "lat").FieldType);
-        Assert.Equal(new GeoCombination("lat", "lon", "location"), mapping.Geo);
+        var geo = Assert.Single(mapping.GeoFields);
+        Assert.Equal(("lon", "lat", "location", 4326), (geo.XColumn, geo.YColumn, geo.FieldName, geo.Epsg));
+        Assert.False(geo.IsGeometry);
     }
 
     [Fact]
@@ -80,7 +82,7 @@ public class MappingInferenceTests
                 new InferredField { Column = "a", Name = "a", FieldType = FieldTypes.TextType, Primary = true },
                 new InferredField { Column = "b", Name = "b", Skip = true },
             ],
-            Geo = new GeoCombination("lat", "lon", "location")
+            GeoFields = [GeoFieldMapping.ForColumns("lon", "lat", "location", 4326)]
         };
 
         var mapping = MappingInference.ToIndexMapping(inferred, LuceneServerNET.Core.Phonetics.Algorithm.ColognePhonetics);

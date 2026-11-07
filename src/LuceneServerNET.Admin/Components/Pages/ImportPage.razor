@@ -80,12 +80,27 @@
                             }
                         </MudStack>
                         <MudText Typo="Typo.caption">Only one SELECT statement (or WITH ... SELECT); it runs in a transaction that is rolled back. Use a read-only database user.</MudText>
+                        <MudExpansionPanels Elevation="0" Class="mt-2">
+                            <MudExpansionPanel Text="Geometry columns (PostGIS, SQL Server)">
+                                <MudText Typo="Typo.body2" Class="mb-1">
+                                    The drivers can not read geometry types directly: select them as WKB (or WKT / GeoJSON). EWKB keeps the SRID.
+                                </MudText>
+                                <pre class="mono pre-wrap">-- PostGIS (SRID from EWKB)
+SELECT id, name, ST_AsEWKB(geom) AS geom FROM places
+
+-- SQL Server (choose the EPSG code of the column in the mapping)
+SELECT id, name, geom.STAsBinary() AS geom FROM places
+
+-- SQL Server geography
+SELECT id, name, geog.STAsBinary() AS geom FROM places</pre>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
                     </MudItem>
                 }
                 else
                 {
                     <MudItem xs="12">
-                        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".csv,.txt,.tsv,.json,.ndjson,.jsonl" Disabled="_running" MaximumFileCount="1">
+                        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".csv,.txt,.tsv,.json,.geojson,.ndjson,.jsonl" Disabled="_running" MaximumFileCount="1">
                             <CustomContent Context="upload">
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync" Disabled="_running">Choose CSV / JSON file</MudButton>
                             </CustomContent>
@@ -100,7 +115,7 @@
                                 <b>@_fileName</b> (@Format.Bytes(_fileSize), @_format) · columns: @_columns.Count · sample rows: @_sample.Count
                             </MudText>
                         }
-                        <MudText Typo="Typo.caption">CSV with header row (delimiter , ; tab or | is detected) · JSON array of objects or NDJSON · max. @Format.Bytes(MaxFileSize)</MudText>
+                        <MudText Typo="Typo.caption">CSV with header row (delimiter , ; tab or | is detected) · JSON array of objects, NDJSON or GeoJSON (FeatureCollection) · max. @Format.Bytes(MaxFileSize)</MudText>
                     </MudItem>
                 }
             </MudGrid>
@@ -133,7 +148,7 @@
                             <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
                         }
                     </MudSelect>
-                    <MappingEditor Mapping="_mapping" ShowColumns="true" />
+                    <MappingEditor Mapping="_mapping" ShowColumns="true" Columns="_columns" />
                 }
                 else if (_existingMapping is null)
                 {
@@ -142,7 +157,7 @@
                 else
                 {
                     <MudText Typo="Typo.body2" Class="mb-2">Columns are assigned to the fields of the existing mapping by name.</MudText>
-                    <MappingEditor Mapping="_mapping" ShowColumns="true" ReadOnlyTypes="true" ExistingFields="_existingMapping.Fields" />
+                    <MappingEditor Mapping="_mapping" ShowColumns="true" ReadOnlyTypes="true" ExistingFields="_existingMapping.Fields" Columns="_columns" />
                 }
             </MudPaper>
 
@@ -443,7 +458,7 @@
         }
         else
         {
-            _mapping = _existingMapping is null ? new InferredMapping() : ImportService.FromExistingMapping(_existingMapping, _columns);
+            _mapping = _existingMapping is null ? new InferredMapping() : ImportService.FromExistingMapping(_existingMapping, _columns, _sample);
         }
         return Task.CompletedTask;
     }
@@ -453,7 +468,7 @@
         if (_mapping is null || (_tempFile is null && _dbSource is null)) return;
 
         _indexName = _indexName.Trim().ToLowerInvariant();
-        _validationError = _newIndex ? CreateIndex.Validate(_indexName, _mapping) : null;
+        _validationError = _newIndex ? CreateIndex.Validate(_indexName, _mapping) : CreateIndex.ValidateGeo(_mapping);
         if (_validationError is not null) return;
 
         if (_options.ClearIndexFirst && !await ConfirmAsync("Clear index", $"Remove all documents from {_indexName} before the import?", "Clear and import"))

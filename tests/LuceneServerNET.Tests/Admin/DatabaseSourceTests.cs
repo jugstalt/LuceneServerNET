@@ -86,7 +86,7 @@ public class DatabaseSourceTests : IDisposable
 
         Assert.Equal(FieldTypes.Int32Type, mapping.Fields.Single(f => f.Column == "id").FieldType);
         Assert.Equal(FieldTypes.DoubleType, mapping.Fields.Single(f => f.Column == "area").FieldType);
-        Assert.NotNull(mapping.Geo);
+        Assert.Single(mapping.GeoFields);
     }
 
     [Fact]

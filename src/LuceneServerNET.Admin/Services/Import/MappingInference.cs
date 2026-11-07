@@ -4,14 +4,52 @@ using System.Text.RegularExpressions;
 
 namespace LuceneServerNET.Admin.Services.Import;
 
-/// <summary>Combines a latitude and a longitude column into one geo field ("lon lat").</summary>
-public record GeoCombination(string LatitudeColumn, string LongitudeColumn, string FieldName);
+/// <summary>
+/// A geo field of the import: either a point from two coordinate columns (X/Y or lon/lat)
+/// or a geometry column (WKB/EWKB, WKT/EWKT, GeoJSON). Values are converted to WGS84;
+/// lines/polygons become their point on surface plus a bounding box field.
+/// </summary>
+public class GeoFieldMapping
+{
+    /// <summary>Name of the "geo" field (representative point).</summary>
+    public string FieldName { get; set; } = "location";
+
+    /// <summary>X / longitude column (point from coordinate columns).</summary>
+    public string? XColumn { get; set; }
+
+    /// <summary>Y / latitude column (point from coordinate columns).</summary>
+    public string? YColumn { get; set; }
+
+    /// <summary>Geometry column (WKB, WKT, GeoJSON).</summary>
+    public string? GeometryColumn { get; set; }
+
+    /// <summary>Coordinate system of the source (EPSG). A SRID in the value (EWKB, EWKT) wins. 0 = not chosen yet.</summary>
+    public int Epsg { get; set; } = Geo.GeoConverter.Wgs84;
+
+    /// <summary>Field for the bounding box "minx,miny,maxx,maxy" (WGS84) of lines and polygons.</summary>
+    public string BBoxFieldName { get; set; } = "location_bbox";
+
+    /// <summary>Store the original geometry as GeoJSON (WGS84) in <see cref="GeoJsonFieldName"/>.</summary>
+    public bool StoreGeoJson { get; set; }
+
+    public string GeoJsonFieldName { get; set; } = "location_geojson";
+
+    public bool IsGeometry => GeometryColumn != null;
+
+    public string SourceDescription => IsGeometry ? GeometryColumn! : $"{XColumn} / {YColumn}";
+
+    public static GeoFieldMapping ForColumns(string xColumn, string yColumn, string fieldName, int epsg)
+        => new() { XColumn = xColumn, YColumn = yColumn, FieldName = fieldName, Epsg = epsg, BBoxFieldName = $"{fieldName}_bbox", GeoJsonFieldName = $"{fieldName}_geojson" };
+
+    public static GeoFieldMapping ForGeometry(string column, string fieldName, int epsg)
+        => new() { GeometryColumn = column, FieldName = fieldName, Epsg = epsg, BBoxFieldName = $"{fieldName}_bbox", GeoJsonFieldName = $"{fieldName}_geojson" };
+}
 
 /// <summary>Proposed mapping for a sample of documents: column => field + type.</summary>
 public class InferredMapping
 {
     public List<InferredField> Fields { get; set; } = [];
-    public GeoCombination? Geo { get; set; }
+    public List<GeoFieldMapping> GeoFields { get; set; } = [];
 }
 
 public class InferredField
@@ -35,6 +73,8 @@ public static class MappingInference
 {
     private static readonly string[] LatitudeNames = ["lat", "latitude", "y_wgs84", "breite"];
     private static readonly string[] LongitudeNames = ["lon", "lng", "long", "longitude", "x_wgs84", "laenge", "länge"];
+    private static readonly string[] XNames = ["x", "rechtswert", "easting", "east", "x_coord", "xcoord"];
+    private static readonly string[] YNames = ["y", "hochwert", "northing", "north", "y_coord", "ycoord"];
     private static readonly Regex IsoDateRegex = new(@"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$", RegexOptions.Compiled);
 
     public static InferredMapping Infer(IReadOnlyList<IDictionary<string, object?>> sample)
@@ -49,6 +89,15 @@ public static class MappingInference
                                .Where(v => v != null && !(v is string s && String.IsNullOrWhiteSpace(s)))
                                .ToList();
 
+            // geometry column (WKB, WKT, GeoJSON) => geo field, not a normal field
+            if (values.Count > 0 && values.All(Geo.GeoConverter.LooksLikeGeometry))
+            {
+                var name = UniqueName(ToFieldName(column), usedNames);
+                usedNames.Add($"{name}_bbox");
+                result.GeoFields.Add(GeoFieldMapping.ForGeometry(column, name, SridOf(values) ?? Geo.GeoConverter.Wgs84));
+                continue;
+            }
+
             result.Fields.Add(new InferredField()
             {
                 Column = column,
@@ -57,12 +106,21 @@ public static class MappingInference
             });
         }
 
-        // lat/lon => additional geo field
-        var latField = result.Fields.FirstOrDefault(f => LatitudeNames.Contains(f.Column.ToLowerInvariant()) && IsNumeric(f.FieldType));
-        var lonField = result.Fields.FirstOrDefault(f => LongitudeNames.Contains(f.Column.ToLowerInvariant()) && IsNumeric(f.FieldType));
+        // lat/lon (WGS84) or x/y (projected, EPSG has to be chosen) => additional geo field
+        var latField = NumericField(result, LatitudeNames);
+        var lonField = NumericField(result, LongitudeNames);
         if (latField != null && lonField != null)
         {
-            result.Geo = new GeoCombination(latField.Column, lonField.Column, UniqueName("location", usedNames));
+            result.GeoFields.Add(GeoFieldMapping.ForColumns(lonField.Column, latField.Column, UniqueName("location", usedNames), Geo.GeoConverter.Wgs84));
+        }
+        else
+        {
+            var xField = NumericField(result, XNames);
+            var yField = NumericField(result, YNames);
+            if (xField != null && yField != null)
+            {
+                result.GeoFields.Add(GeoFieldMapping.ForColumns(xField.Column, yField.Column, UniqueName("location", usedNames), 0));
+            }
         }
 
         // primary (default search) fields: all text fields, else the first string field
@@ -116,6 +174,23 @@ public static class MappingInference
         return FieldTypes.TextType;
     }
 
+    private static InferredField? NumericField(InferredMapping mapping, string[] names)
+        => mapping.Fields.FirstOrDefault(f => names.Contains(f.Column.ToLowerInvariant()) && IsNumeric(f.FieldType));
+
+    /// <summary>SRID of the first value that has one (EWKB, EWKT, GeoJSON crs).</summary>
+    private static int? SridOf(IEnumerable<object?> values)
+    {
+        foreach (var value in values.Take(20))
+        {
+            try
+            {
+                if (Geo.GeoConverter.Parse(value!).Srid is int srid) return srid;
+            }
+            catch { }
+        }
+        return null;
+    }
+
     private static bool IsNumeric(string fieldType) => fieldType is FieldTypes.DoubleType or FieldTypes.SingleType or FieldTypes.Int32Type;
 
     /// <summary>Field names must not be empty or start with '_' (reserved by the server).</summary>
@@ -146,9 +221,17 @@ public static class MappingInference
             mapping.Fields.Add(new FieldMapping(field.Name, field.FieldType) { Index = field.Index, Store = field.Store });
         }
 
-        if (inferred.Geo != null)
+        foreach (var geo in inferred.GeoFields)
         {
-            mapping.Fields.Add(new FieldMapping(inferred.Geo.FieldName, FieldTypes.GeoType) { Index = true, Store = true });
+            mapping.Fields.Add(new FieldMapping(geo.FieldName, FieldTypes.GeoType) { Index = true, Store = true });
+            if (geo.IsGeometry)
+            {
+                mapping.Fields.Add(new FieldMapping(geo.BBoxFieldName, FieldTypes.StringType) { Index = false, Store = true });
+                if (geo.StoreGeoJson)
+                {
+                    mapping.Fields.Add(new FieldMapping(geo.GeoJsonFieldName, FieldTypes.StringType) { Index = false, Store = true });
+                }
+            }
         }
 
         mapping.PrimaryFields = inferred.Fields.Where(f => f.Primary && !f.Skip).Select(f => f.Name).ToList();

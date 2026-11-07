@@ -194,18 +194,42 @@ public class ImportService
             document[field.Name] = value!;
         }
 
-        if (mapping.Geo != null &&
-            row.TryGetValue(mapping.Geo.LatitudeColumn, out var latRaw) && latRaw != null &&
-            row.TryGetValue(mapping.Geo.LongitudeColumn, out var lonRaw) && lonRaw != null)
+        foreach (var geo in mapping.GeoFields)
         {
-            if (TryConvertValue(latRaw, FieldTypes.DoubleType, out var lat) && TryConvertValue(lonRaw, FieldTypes.DoubleType, out var lon))
+            try
             {
+                Geo.GeoResult? result = null;
+
+                if (geo.IsGeometry)
+                {
+                    if (row.TryGetValue(geo.GeometryColumn!, out var geometryRaw) && geometryRaw is not null && !(geometryRaw is string g && String.IsNullOrWhiteSpace(g)))
+                    {
+                        result = Geo.GeoConverter.FromGeometry(geometryRaw, geo.Epsg, geo.StoreGeoJson);
+                    }
+                }
+                else if (row.TryGetValue(geo.XColumn!, out var xRaw) && xRaw != null && !(xRaw is string xs && String.IsNullOrWhiteSpace(xs)) &&
+                         row.TryGetValue(geo.YColumn!, out var yRaw) && yRaw != null && !(yRaw is string ys && String.IsNullOrWhiteSpace(ys)))
+                {
+                    if (!TryConvertValue(xRaw, FieldTypes.DoubleType, out var x) || !TryConvertValue(yRaw, FieldTypes.DoubleType, out var y))
+                    {
+                        throw new FormatException($"Invalid coordinates '{xRaw}' / '{yRaw}'");
+                    }
+                    result = Geo.GeoConverter.FromXY((double)x!, (double)y!, geo.Epsg);
+                }
+
+                if (result is null)
+                {
+                    continue;
+                }
+
                 // GeoType.Parse format: "lon lat"
-                document[mapping.Geo.FieldName] = FormattableString.Invariant($"{(double)lon!} {(double)lat!}");
+                document[geo.FieldName] = result.Point;
+                if (result.BBox != null) document[geo.BBoxFieldName] = result.BBox;
+                if (result.GeoJson != null) document[geo.GeoJsonFieldName] = result.GeoJson;
             }
-            else
+            catch (Exception ex)
             {
-                error = $"Invalid coordinates '{latRaw}' / '{lonRaw}'";
+                error = $"Geo field '{geo.FieldName}' ({geo.SourceDescription}): {ex.Message}";
                 document = null;
                 return false;
             }
@@ -241,10 +265,31 @@ public class ImportService
     }
 
     /// <summary>Assigns the columns of a file to the fields of an existing mapping (by name, case insensitive).</summary>
-    public static InferredMapping FromExistingMapping(IndexMapping mapping, IEnumerable<string> columns)
+    public static InferredMapping FromExistingMapping(IndexMapping mapping, IEnumerable<string> columns, IReadOnlyList<IDictionary<string, object?>>? sample = null)
     {
         var result = new InferredMapping();
-        foreach (var column in columns)
+
+        // geo sources of the file/query => geo fields of the existing mapping
+        var geoFields = mapping.Fields.Where(f => f.FieldType == FieldTypes.GeoType).ToList();
+        var geometryColumns = new HashSet<string>(StringComparer.Ordinal);
+        if (sample is { Count: > 0 } && geoFields.Count > 0)
+        {
+            foreach (var geo in MappingInference.Infer(sample).GeoFields)
+            {
+                var target = geoFields.FirstOrDefault(f => f.Name.Equals(geo.FieldName, StringComparison.OrdinalIgnoreCase))
+                             ?? (geoFields.Count == 1 && result.GeoFields.Count == 0 ? geoFields[0] : null);
+                if (target == null) continue;
+
+                geo.FieldName = target.Name;
+                geo.BBoxFieldName = $"{target.Name}_bbox";
+                geo.GeoJsonFieldName = $"{target.Name}_geojson";
+                geo.StoreGeoJson = mapping.GetField(geo.GeoJsonFieldName) != null;
+                result.GeoFields.Add(geo);
+                if (geo.GeometryColumn != null) geometryColumns.Add(geo.GeometryColumn);
+            }
+        }
+
+        foreach (var column in columns.Where(c => !geometryColumns.Contains(c)))
         {
             var field = mapping.Fields.FirstOrDefault(f => f.Name.Equals(column, StringComparison.OrdinalIgnoreCase)
                                                          || f.Name.Equals(MappingInference.ToFieldName(column), StringComparison.OrdinalIgnoreCase));

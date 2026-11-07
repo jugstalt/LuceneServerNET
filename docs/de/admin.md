@@ -14,7 +14,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Suche | Autocomplete-Eingabe (Search as you type), Suche mit `size`/`from`/`searchAfter`, Sortierung, räumlicher Filter, phonetische Suche, Gruppierung, Ergebnis als Tabelle oder JSON, Request als `curl`-Befehl |
 | Index anlegen | Mapping-Editor: Felder, Typen, indiziert/gespeichert, Primärfelder, Phonetik |
 | Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest |
-| Import | Aus einer Datenbank-Abfrage oder CSV bzw. JSON (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
+| Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
@@ -116,3 +116,32 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 - Die Abfrage läuft zweimal: für die Vorschau (erste 200 Zeilen) und für den Import (gestreamt, alle Zeilen).
   Gleichnamige Spalten bekommen ein Suffix (`id`, `id2`), Binärspalten werden übersprungen, `decimal` wird zu `double`.
 - Timeout pro Abfrage: `Admin:Import:CommandTimeoutSeconds` (Standard 600).
+
+### Geodaten
+
+| Quelle | Erkannt als |
+|---|---|
+| Spalten `lat`/`lon` (auch `latitude`/`longitude`, `lng`) | Punkt, EPSG:4326 |
+| Spalten `x`/`y` (auch `rechtswert`/`hochwert`, `easting`/`northing`) | Punkt, der EPSG-Code muss gewählt werden |
+| Geometrie-Spalte: WKB/EWKB (Bytes), WKT/EWKT (`SRID=31256;POLYGON(...)`), GeoJSON-Geometrie | Punkt, Linie, Polygon (auch Multi) |
+| GeoJSON-Datei (`.geojson`, FeatureCollection) | `properties` werden Felder, `geometry` eine Geometrie-Spalte, `id` das Feld `id` |
+
+Weitere Koordinatenspalten lassen sich im Mapping hinzufügen (*Add point from columns*).
+
+- **Koordinatensystem**: Eine SRID im Wert (EWKB, EWKT, GeoJSON `crs`) hat Vorrang, sonst gilt der EPSG-Code des Geo-Felds
+  (Standard 4326). Alles wird mit [Proj4Net.Core](https://github.com/jugstalt/Proj4Net.Core) nach WGS84 umgerechnet;
+  unbekannte EPSG-Codes werden vor dem Import gemeldet.
+- **Linien und Polygone**: Der Server indiziert Punkte, das `geo`-Feld bekommt daher den *Point on Surface* (liegt immer auf
+  der Linie bzw. im Polygon, berechnet mit [SpatialNET](https://github.com/jugstalt/spatialNET.Core) im Quellsystem).
+  Die Bounding-Box steht in `<feld>_bbox` als `"minx,miny,maxx,maxy"` (WGS84, nicht indiziert); Punkte bekommen keine.
+- **Original-Geometrie** (optional, standardmäßig aus): `<feld>_geojson`, GeoJSON in WGS84 mit 7 Nachkommastellen (RFC 7946).
+- **Datenbanken**: Die Treiber können Geometrie-Typen nicht lesen, daher als WKB abfragen:
+
+```sql
+-- PostGIS (EWKB behält die SRID)
+SELECT id, name, ST_AsEWKB(geom) AS geom FROM places
+-- SQL Server geometry / geography (EPSG-Code im Mapping wählen)
+SELECT id, name, geom.STAsBinary() AS geom FROM places
+```
+
+Gesucht wird mit dem räumlichen Filter auf das Geo-Feld, z. B. `dist_km(geom:15.44,47.07,5)` oder `bbox(geom:15.4,47.0,15.5,47.1)`.

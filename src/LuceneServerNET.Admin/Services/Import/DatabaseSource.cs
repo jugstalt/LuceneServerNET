@@ -199,7 +199,8 @@ public class DatabaseSource
         int i => (long)i,
         DateTimeOffset dto => dto.UtcDateTime,
         Guid g => g.ToString(),
-        byte[] => null,                     // binary columns are not imported
+        byte[] b when Geo.GeoConverter.LooksLikeGeometry(b) => b,   // WKB / EWKB geometry
+        byte[] => null,                     // other binary columns are not imported
         bool b => b ? "true" : "false",
         _ => value
     };

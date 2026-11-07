@@ -1,0 +1,171 @@
+@* Geo fields of an import: point from coordinate columns or geometry column (WKB/WKT/GeoJSON), source EPSG, bbox and optional original. *@
+@using LuceneServerNET.Admin.Services.Geo
+
+<MudText Typo="Typo.subtitle1" Class="mt-4 mb-1">Geo fields</MudText>
+<MudText Typo="Typo.caption" Class="mb-2 d-block">
+    Converted to WGS84. Lines and polygons are indexed as their point on surface plus a bounding box field;
+    a SRID in the value (EWKB, EWKT) wins over the EPSG code.
+</MudText>
+
+@if (Mapping.GeoFields.Count > 0)
+{
+    <div style="overflow-x:auto">
+    <MudSimpleTable Dense="true" Outlined="true">
+        <thead>
+            <tr><th>Source</th><th>Geo field</th><th>EPSG of the source</th><th>Bounding box field</th><th>Store original (GeoJSON)</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var geo in Mapping.GeoFields)
+            {
+                var epsgError = EpsgError(geo.Epsg);
+                <tr>
+                    <td class="mono">
+                        @geo.SourceDescription
+                        <MudText Typo="Typo.caption" Class="d-block">@(geo.IsGeometry ? "geometry column" : "x / y columns")</MudText>
+                    </td>
+                    <td>
+                        @if (FixedFieldNames)
+                        {
+                            <MudSelect T="string" Value="geo.FieldName" ValueChanged="v => SetExistingField(geo, v)"
+                                       Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:160px">
+                                @foreach (var name in ExistingGeoFields)
+                                {
+                                    <MudSelectItem Value="name">@name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudTextField T="string" Value="geo.FieldName" ValueChanged="v => { geo.FieldName = v; Changed(); }" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:160px" />
+                        }
+                    </td>
+                    <td style="min-width:200px">
+                        <MudAutocomplete T="string" Value="@(geo.Epsg > 0 ? geo.Epsg.ToString() : "")" ValueChanged="v => SetEpsg(geo, v)"
+                                         SearchFunc="SearchEpsgAsync" CoerceText="false" CoerceValue="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                         Placeholder="e.g. 31256" Error="@(epsgError != null)" ErrorText="@epsgError" ResetValueOnEmptyText="false">
+                            <ItemTemplate Context="code">@EpsgLabel(code)</ItemTemplate>
+                        </MudAutocomplete>
+                    </td>
+                    <td>
+                        @if (geo.IsGeometry)
+                        {
+                            <MudTextField T="string" Value="geo.BBoxFieldName" ValueChanged="v => { geo.BBoxFieldName = v; Changed(); }" Disabled="FixedFieldNames"
+                                          Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:180px" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption">– (points)</MudText>
+                        }
+                    </td>
+                    <td>
+                        @if (geo.IsGeometry)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudCheckBox T="bool" Value="geo.StoreGeoJson" ValueChanged="v => { geo.StoreGeoJson = v; Changed(); }" Disabled="FixedFieldNames" Dense="true" />
+                                @if (geo.StoreGeoJson)
+                                {
+                                    <MudTextField T="string" Value="geo.GeoJsonFieldName" ValueChanged="v => { geo.GeoJsonFieldName = v; Changed(); }" Disabled="FixedFieldNames"
+                                                  Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:180px" />
+                                }
+                            </MudStack>
+                        }
+                    </td>
+                    <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Mapping.GeoFields.Remove(geo); Changed(); }" aria-label="Remove geo field" /></td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    </div>
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mt-2">
+    <MudSelect @bind-Value="_xColumn" Label="X / longitude column" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:180px" Clearable="true">
+        @foreach (var column in Columns)
+        {
+            <MudSelectItem Value="column">@column</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect @bind-Value="_yColumn" Label="Y / latitude column" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:180px" Clearable="true">
+        @foreach (var column in Columns)
+        {
+            <MudSelectItem Value="column">@column</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AddLocation" Disabled="@(_xColumn is null || _yColumn is null)" OnClick="AddPoint">Add point from columns</MudButton>
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired] public InferredMapping Mapping { get; set; } = new();
+    [Parameter] public IReadOnlyList<string> Columns { get; set; } = [];
+
+    /// <summary>Import into an existing index: only existing geo fields can be chosen.</summary>
+    [Parameter] public bool FixedFieldNames { get; set; }
+
+    [Parameter] public IEnumerable<string> ExistingGeoFields { get; set; } = [];
+    [Parameter] public EventCallback MappingChanged { get; set; }
+
+    private string? _xColumn, _yColumn;
+
+    private static string EpsgLabel(string code)
+        => int.TryParse(code, out var c) && GeoConverter.CommonEpsg.FirstOrDefault(e => e.Code == c) is { Name: not null } e ? $"{code} · {e.Name}" : code;
+
+    private Task<IEnumerable<string>> SearchEpsgAsync(string? text, CancellationToken cancellationToken)
+    {
+        var all = GeoConverter.CommonEpsg.Select(e => e.Code.ToString());
+        if (String.IsNullOrWhiteSpace(text)) return Task.FromResult(all);
+
+        var matches = GeoConverter.CommonEpsg
+            .Where(e => e.Code.ToString().Contains(text.Trim()) || e.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Code.ToString())
+            .ToList();
+        if (int.TryParse(text.Trim(), out var code) && !matches.Contains(code.ToString()))
+        {
+            matches.Insert(0, code.ToString());
+        }
+        return Task.FromResult<IEnumerable<string>>(matches);
+    }
+
+    /// <summary>Validation message for the EPSG code (null = valid).</summary>
+    public static string? EpsgError(int epsg)
+    {
+        if (epsg <= 0) return "Choose the coordinate system";
+        try
+        {
+            GeoConverter.ValidateEpsg(epsg);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    private void SetExistingField(GeoFieldMapping geo, string name)
+    {
+        geo.FieldName = name;
+        geo.BBoxFieldName = $"{name}_bbox";
+        geo.GeoJsonFieldName = $"{name}_geojson";
+        Changed();
+    }
+
+    private void SetEpsg(GeoFieldMapping geo, string? value)
+    {
+        geo.Epsg = int.TryParse(value?.Split(' ')[0], out var code) ? code : 0;
+        Changed();
+    }
+
+    private void AddPoint()
+    {
+        if (_xColumn is null || _yColumn is null) return;
+
+        var used = Mapping.Fields.Select(f => f.Name).Concat(Mapping.GeoFields.Select(g => g.FieldName)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var name = FixedFieldNames ? ExistingGeoFields.FirstOrDefault() ?? "location" : "location";
+        for (int i = 2; !FixedFieldNames && used.Contains(name); i++) name = $"location{i}";
+
+        Mapping.GeoFields.Add(GeoFieldMapping.ForColumns(_xColumn, _yColumn, name, 0));
+        _xColumn = _yColumn = null;
+        Changed();
+    }
+
+    private void Changed() => MappingChanged.InvokeAsync();
+}

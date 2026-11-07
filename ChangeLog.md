@@ -43,6 +43,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Docker image: `Dockerfile.admin`; started by the Aspire AppHost.
   Import from a database (SQL Server, PostgreSQL, SQLite): stored connections (encrypted),
   a SELECT query with preview, then the same mapping proposal and batch import as for files.
+  Geo data import: geometry columns (WKB/EWKB, WKT/EWKT, GeoJSON; PostGIS `ST_AsEWKB`, SQL Server `STAsBinary()`),
+  GeoJSON files (FeatureCollection) and coordinate columns (lat/lon, x/y), converted to WGS84 with Proj4Net
+  (source EPSG from the SRID of the value or chosen in the UI). Lines/polygons are indexed as point on surface
+  plus a bounding box field (`<field>_bbox`), the original geometry can be stored as GeoJSON (`<field>_geojson`).
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),

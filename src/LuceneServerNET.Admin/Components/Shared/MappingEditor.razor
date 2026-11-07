@@ -70,21 +70,15 @@
                 }
             </tr>
         }
-        @if (Mapping.Geo is { } geo)
-        {
-            <tr>
-                @if (ShowColumns)
-                {
-                    <td class="mono">@geo.LongitudeColumn + @geo.LatitudeColumn</td>
-                    <td><MudCheckBox T="bool" Value="true" ValueChanged="v => { if (!v) { Mapping.Geo = null; Changed(); } }" Dense="true" /></td>
-                }
-                <td class="mono">@geo.FieldName</td>
-                <td>geo</td>
-                <td colspan="4"><MudText Typo="Typo.caption">combined from longitude and latitude</MudText></td>
-            </tr>
-        }
     </tbody>
 </MudSimpleTable>
+
+@if (ShowColumns)
+{
+    <GeoFieldsEditor Mapping="Mapping" Columns="Columns" FixedFieldNames="ReadOnlyTypes"
+                     ExistingGeoFields="@ExistingFields.Where(f => f.FieldType == FieldTypes.GeoType).Select(f => f.Name)"
+                     MappingChanged="MappingChanged" />
+}
 
 @if (!ShowColumns && !ReadOnlyTypes)
 {
@@ -101,6 +95,9 @@
     [Parameter] public bool ReadOnlyTypes { get; set; }
 
     [Parameter] public IEnumerable<FieldMapping> ExistingFields { get; set; } = [];
+
+    /// <summary>All source columns (for adding geo fields from coordinate columns).</summary>
+    [Parameter] public IReadOnlyList<string> Columns { get; set; } = [];
 
     [Parameter] public EventCallback MappingChanged { get; set; }
 

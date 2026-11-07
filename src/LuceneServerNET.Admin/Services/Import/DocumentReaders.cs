@@ -17,7 +17,7 @@ public static class DocumentReaders
     public static SourceFormat DetectFormat(string fileName)
         => Path.GetExtension(fileName).ToLowerInvariant() switch
         {
-            ".json" or ".ndjson" or ".jsonl" => SourceFormat.Json,
+            ".json" or ".geojson" or ".ndjson" or ".jsonl" => SourceFormat.Json,
             _ => SourceFormat.Csv
         };
 
@@ -91,8 +91,12 @@ public static class DocumentReaders
                 var root = document.RootElement;
                 if (root.ValueKind == JsonValueKind.Object)
                 {
-                    // { "items": [...] } => first array property
-                    var array = root.EnumerateObject().Select(p => p.Value).FirstOrDefault(v => v.ValueKind == JsonValueKind.Array);
+                    // GeoJSON FeatureCollection => "features" (it may also have a "bbox" array);
+                    // { "items": [...] } => first array property of objects
+                    var array = root.TryGetProperty("features", out var features) && features.ValueKind == JsonValueKind.Array
+                        ? features
+                        : root.EnumerateObject().Select(p => p.Value)
+                              .FirstOrDefault(v => v.ValueKind == JsonValueKind.Array && v.EnumerateArray().Any(i => i.ValueKind == JsonValueKind.Object));
                     root = array.ValueKind == JsonValueKind.Array ? array : root;
                 }
 
@@ -130,6 +134,28 @@ public static class DocumentReaders
     private static IDictionary<string, object?> ToRow(JsonElement element)
     {
         var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        // GeoJSON feature: properties => columns, geometry => "geometry" column (GeoJSON text), id => "id"
+        if (element.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "Feature")
+        {
+            if (element.TryGetProperty("properties", out var properties) && properties.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in properties.EnumerateObject())
+                {
+                    row[property.Name] = ToValue(property.Value);
+                }
+            }
+            if (element.TryGetProperty("id", out var id) && !row.ContainsKey("id"))
+            {
+                row["id"] = ToValue(id);
+            }
+            var geometryColumn = row.ContainsKey("geometry") ? "_geometry" : "geometry";
+            row[geometryColumn] = element.TryGetProperty("geometry", out var geometry) && geometry.ValueKind == JsonValueKind.Object
+                ? geometry.GetRawText()
+                : null;
+            return row;
+        }
+
         foreach (var property in element.EnumerateObject())
         {
             row[property.Name] = ToValue(property.Value);

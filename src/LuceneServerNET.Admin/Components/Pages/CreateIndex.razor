@@ -65,10 +65,30 @@
         if (!IsValidIndexName(name)) return "Invalid index name";
         var fields = mapping.Fields.Where(f => !f.Skip).ToList();
         if (fields.Count == 0) return "At least one field is required";
-        if (fields.Any(f => !MappingEditor.IsValidName(f.Name))) return "Field names must not be empty or start with '_'";
-        var duplicate = fields.GroupBy(f => f.Name.Trim(), StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
-        if (duplicate != null) return $"Duplicate field name '{duplicate.Key}'";
         if (!fields.Any(f => f.Primary)) return "Select at least one primary field";
+
+        var names = fields.Select(f => f.Name)
+            .Concat(mapping.GeoFields.SelectMany(g => g.IsGeometry
+                ? (g.StoreGeoJson ? new[] { g.FieldName, g.BBoxFieldName, g.GeoJsonFieldName } : new[] { g.FieldName, g.BBoxFieldName })
+                : new[] { g.FieldName }))
+            .ToList();
+        if (names.Any(n => !MappingEditor.IsValidName(n))) return "Field names must not be empty or start with '_'";
+        var duplicate = names.GroupBy(n => n.Trim(), StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate != null) return $"Duplicate field name '{duplicate.Key}'";
+
+        return ValidateGeo(mapping);
+    }
+
+    /// <summary>Every geo field needs a known source coordinate system.</summary>
+    internal static string? ValidateGeo(InferredMapping mapping)
+    {
+        foreach (var geo in mapping.GeoFields)
+        {
+            if (GeoFieldsEditor.EpsgError(geo.Epsg) is { } error)
+            {
+                return $"Geo field '{geo.FieldName}' ({geo.SourceDescription}): {error}";
+            }
+        }
         return null;
     }
 
