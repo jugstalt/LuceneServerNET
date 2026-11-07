@@ -67,7 +67,7 @@ namespace LuceneServerNET.Engine.Extensions
 
         #region Term Parsing
 
-        static public string ParseSerachTerm(this string term, IndexMapping mapping)
+        static public string ParseSearchTerm(this string term, IndexMapping mapping)
         {
             if (term == null ||
                 mapping?.PrimaryFieldsEncodeCharacters == null ||

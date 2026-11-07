@@ -533,7 +533,7 @@ namespace LuceneServerNET.Engine.Services
                     primarySearchFields ?? mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
 
-                query = parser.Parse(term.ParseSerachTerm(mapping));
+                query = parser.Parse(term.ParseSearchTerm(mapping));
             }
 
             // Spatial Filter
@@ -726,7 +726,7 @@ namespace LuceneServerNET.Engine.Services
                     mapping.PrimaryFields.ToArray(),
                     _resources.GetAnalyzer(indexName));
 
-                query = parser.Parse(term.ParseSerachTerm(mapping));
+                query = parser.Parse(term.ParseSearchTerm(mapping));
             }
 
             var topGroups = groupingSearch.Search(searcher, query, 0, 100000);
@@ -737,7 +737,7 @@ namespace LuceneServerNET.Engine.Services
                                 var value = g.GroupValue;
                                 if (g.GroupValue is BytesRef)
                                 {
-                                    value = Encoding.UTF8.GetString(((BytesRef)g.GroupValue).Bytes);
+                                    value = ((BytesRef)g.GroupValue).Utf8ToString();
                                 }
 
                                 return new Dictionary<string, object>()

@@ -86,6 +86,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `group`: group values are decoded with `BytesRef.Utf8ToString()` (respects offset/length) instead of
+  decoding the whole underlying byte buffer. No visible effect with the current Lucene.NET version
+  (it returns exact copies), but no longer relies on that implementation detail.
+
 - **Cologne phonetics:** a `c` at the end of a word was ignored; it is now encoded as `8`
   (`Novac` → `638`, before `63`).
 - **Soundex:** the code of the first letter is now used to suppress an identical following code
