@@ -16,6 +16,7 @@
 | Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test |
 | Import | From a database query or upload CSV or JSON (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
+| Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
 
 The UI only offers actions the API client of an instance is allowed to do: it asks the server
@@ -59,6 +60,7 @@ The UI only offers actions the API client of an instance is allowed to do: it as
   "Admin": {
     "DataPath": "_data",            // SQLite database (admin.db) + data protection keys
     "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
+    "Audit": { "RetentionDays": 180 },
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: no login, local development only!)
       "Users": [

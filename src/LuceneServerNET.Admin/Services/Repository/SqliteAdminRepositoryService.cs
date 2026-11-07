@@ -177,6 +177,58 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
 
     #endregion
 
+    #region Audit log
+
+    public async Task InsertAuditAsync(AuditRecord record, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"INSERT INTO audit_log (timestamp_utc, user_name, action, instance, target, details, success)
+              VALUES (@TimestampUtc, @UserName, @Action, @Instance, @Target, @Details, @Success)", record);
+    }
+
+    public async Task<(IReadOnlyList<AuditRecord> Items, int Total)> QueryAuditAsync(AuditQuery query, CancellationToken cancellationToken = default)
+    {
+        var where = new List<string>();
+        var parameters = new DynamicParameters();
+
+        if (query.FromUtc.HasValue) { where.Add("timestamp_utc >= @from"); parameters.Add("from", query.FromUtc.Value); }
+        if (query.ToUtc.HasValue) { where.Add("timestamp_utc < @to"); parameters.Add("to", query.ToUtc.Value); }
+        if (!String.IsNullOrWhiteSpace(query.UserName)) { where.Add("user_name = @user COLLATE NOCASE"); parameters.Add("user", query.UserName.Trim()); }
+        if (!String.IsNullOrWhiteSpace(query.Action)) { where.Add("action = @action"); parameters.Add("action", query.Action); }
+        if (!String.IsNullOrWhiteSpace(query.Instance)) { where.Add("instance = @instance COLLATE NOCASE"); parameters.Add("instance", query.Instance.Trim()); }
+        if (!String.IsNullOrWhiteSpace(query.Text)) { where.Add("(target LIKE @text OR details LIKE @text)"); parameters.Add("text", $"%{query.Text.Trim()}%"); }
+        if (query.Success.HasValue) { where.Add("success = @success"); parameters.Add("success", query.Success.Value); }
+
+        var whereSql = where.Count == 0 ? "" : "WHERE " + String.Join(" AND ", where);
+        parameters.Add("limit", Math.Clamp(query.Limit, 1, 1000));
+        parameters.Add("offset", Math.Max(0, query.Offset));
+
+        await using var connection = await OpenAsync(cancellationToken);
+        var total = await connection.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM audit_log {whereSql}", parameters);
+        var items = await connection.QueryAsync<AuditRecord>(
+            $@"SELECT id, timestamp_utc, user_name, action, instance, target, details, success
+               FROM audit_log {whereSql}
+               ORDER BY timestamp_utc DESC, id DESC
+               LIMIT @limit OFFSET @offset", parameters);
+
+        return (items.ToList(), total);
+    }
+
+    public async Task<IReadOnlyList<string>> GetAuditActionsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<string>("SELECT DISTINCT action FROM audit_log ORDER BY action")).ToList();
+    }
+
+    public async Task<int> DeleteAuditOlderThanAsync(DateTime utc, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.ExecuteAsync("DELETE FROM audit_log WHERE timestamp_utc < @utc", new { utc });
+    }
+
+    #endregion
+
     /// <summary>SQLite stores DateTime as ISO 8601 text; write and read it as UTC.</summary>
     private class UtcDateTimeHandler : SqlMapper.TypeHandler<DateTime>
     {

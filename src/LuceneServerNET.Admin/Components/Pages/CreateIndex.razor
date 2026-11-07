@@ -84,7 +84,7 @@
             if (await Client!.IndexExistsAsync(_name)) throw new InvalidOperationException($"Index {_name} already exists");
             await Client.CreateIndexAsync(_name);
             await Client.PutMappingAsync(_name, MappingInference.ToIndexMapping(_mapping, _phonetics));
-        }, $"Index {_name} created");
+        }, $"Index {_name} created", AuditActions.IndexCreate, _name, $"{_mapping.Fields.Count(f => !f.Skip)} fields");
         _busy = false;
 
         if (ok)

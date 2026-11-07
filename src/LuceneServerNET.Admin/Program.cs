@@ -1,4 +1,5 @@
 using LuceneServerNET.Admin.Components;
+using LuceneServerNET.Admin.Services.Audit;
 using LuceneServerNET.Admin.Services.Auth;
 using LuceneServerNET.Admin.Services.Import;
 using LuceneServerNET.Admin.Services.Instances;
@@ -46,6 +47,9 @@ builder.Services.AddSingleton<IAdminRepositoryService>(sp =>
 builder.Services.AddSingleton<InstanceRegistry>();
 builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<DatabaseSource>();
+builder.Services.AddSingleton<AuditLogger>();
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddHostedService<AuditCleanupService>();
 
 // file uploads (import) are streamed through the SignalR circuit
 builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 1024 * 1024);

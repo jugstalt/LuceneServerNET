@@ -1,0 +1,100 @@
+@page "/audit"
+@using LuceneServerNET.Admin.Services.Repository
+@inject IAdminRepositoryService Repository
+
+<PageTitle>Audit log · LuceneServer.NET Admin</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Audit log</MudText>
+
+<MudPaper Class="pa-3 mb-3" Outlined="true">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="2">
+            <MudDatePicker @bind-Date="_from" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudDatePicker @bind-Date="_to" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect @bind-Value="_action" Label="Action" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                @foreach (var action in _actions)
+                {
+                    <MudSelectItem Value="action">@action</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudTextField @bind-Value="_user" Label="User" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudTextField @bind-Value="_instance" Label="Instance" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudTextField @bind-Value="_text" Label="Target / details" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudCheckBox @bind-Value="_onlyFailed" Label="Only failed" />
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync">Search</MudButton>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable @ref="_table" T="AuditRecord" ServerData="LoadAsync" Dense="true" Hover="true" RowsPerPage="50">
+    <HeaderContent>
+        <MudTh>Time</MudTh>
+        <MudTh>User</MudTh>
+        <MudTh>Action</MudTh>
+        <MudTh>Instance</MudTh>
+        <MudTh>Target</MudTh>
+        <MudTh>Details</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd Style="white-space:nowrap">@Format.Date(context.TimestampUtc)</MudTd>
+        <MudTd>@context.UserName</MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Color="@(context.Success ? Color.Default : Color.Error)">@context.Action</MudChip>
+        </MudTd>
+        <MudTd>@context.Instance</MudTd>
+        <MudTd Class="mono">@context.Target</MudTd>
+        <MudTd><span class="pre-wrap">@context.Details</span></MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No entries.</MudText></NoRecordsContent>
+    <PagerContent><MudTablePager PageSizeOptions="[25, 50, 100, 250]" /></PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<AuditRecord>? _table;
+    private IReadOnlyList<string> _actions = [];
+    private DateTime? _from, _to;
+    private string? _action, _user, _instance, _text;
+    private bool _onlyFailed;
+
+    protected override async Task OnInitializedAsync()
+        => _actions = await Repository.GetAuditActionsAsync();
+
+    private async Task SearchAsync()
+    {
+        if (_table != null) await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<AuditRecord>> LoadAsync(TableState state, CancellationToken cancellationToken)
+    {
+        var (items, total) = await Repository.QueryAuditAsync(new AuditQuery
+        {
+            // date pickers are local dates
+            FromUtc = _from?.Date.ToUniversalTime(),
+            ToUtc = _to?.Date.AddDays(1).ToUniversalTime(),
+            Action = _action,
+            UserName = _user,
+            Instance = _instance,
+            Text = _text,
+            Success = _onlyFailed ? false : null,
+            Offset = state.Page * state.PageSize,
+            Limit = state.PageSize
+        }, cancellationToken);
+
+        return new TableData<AuditRecord> { Items = items, TotalItems = total };
+    }
+}

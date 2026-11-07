@@ -16,6 +16,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest |
 | Import | Aus einer Datenbank-Abfrage oder CSV bzw. JSON (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
+| Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
 
 Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt den Server
@@ -59,6 +60,7 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
   "Admin": {
     "DataPath": "_data",            // SQLite-Datenbank (admin.db) + Data-Protection-Schlüssel
     "Import": { "MaxFileSizeMB": 500, "CommandTimeoutSeconds": 600 },
+    "Audit": { "RetentionDays": 180 },
     "Authentication": {
       "Type": "Local",              // Local | Oidc | None (None: kein Login, nur lokale Entwicklung!)
       "Users": [

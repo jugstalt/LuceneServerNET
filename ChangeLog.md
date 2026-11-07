@@ -43,6 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Docker image: `Dockerfile.admin`; started by the Aspire AppHost.
   Import from a database (SQL Server, PostgreSQL, SQLite): stored connections (encrypted),
   a SELECT query with preview, then the same mapping proposal and batch import as for files.
+  Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
+  with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),
   `GET /api/v2/indices/{id}/stats` (documents, size on disk, last modification),
   `GET /api/v2/admin/info` (version, uptime, platform; role `admin`) and

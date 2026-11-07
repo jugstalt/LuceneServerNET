@@ -190,7 +190,7 @@
 
     private async Task SaveMetaAsync()
     {
-        if (await RunAsync(() => Client!.PutMetadataAsync(IndexName, _metaName.Trim(), _metaValue), $"Metadata {_metaName} saved"))
+        if (await RunAsync(() => Client!.PutMetadataAsync(IndexName, _metaName.Trim(), _metaValue), $"Metadata {_metaName} saved", AuditActions.MetadataSave, IndexName, _metaName.Trim()))
         {
             _metadata = await Client!.GetMetadataAsync(IndexName);
             _metaName = _metaValue = "";
@@ -199,7 +199,7 @@
 
     private async Task RefreshIndexAsync()
     {
-        await RunAsync(() => Client!.RefreshIndexAsync(IndexName), "Index refreshed");
+        await RunAsync(() => Client!.RefreshIndexAsync(IndexName), "Index refreshed", AuditActions.IndexRefresh, IndexName);
         await ReloadStatsAsync();
     }
 
@@ -211,7 +211,7 @@
         {
             await Client!.RemoveDocumentsAsync(IndexName, _deleteTerm, _deleteField);
             await Client.RefreshIndexAsync(IndexName);
-        }, "Documents deleted");
+        }, "Documents deleted", AuditActions.DocumentsDelete, IndexName, $"{_deleteField}: {_deleteTerm}");
         await ReloadStatsAsync();
     }
 
@@ -223,7 +223,7 @@
         {
             await Client!.RemoveDocumentsAsync(IndexName, "*:*", "_guid");
             await Client.RefreshIndexAsync(IndexName);
-        }, "Index cleared");
+        }, "Index cleared", AuditActions.IndexClear, IndexName);
         await ReloadStatsAsync();
     }
 
@@ -231,7 +231,7 @@
     {
         if (_deleteConfirm != IndexName) return;
 
-        if (await RunAsync(() => Client!.RemoveIndexAsync(IndexName), $"Index {IndexName} deleted"))
+        if (await RunAsync(() => Client!.RemoveIndexAsync(IndexName), $"Index {IndexName} deleted", AuditActions.IndexDelete, IndexName))
         {
             Navigation.NavigateTo(InstanceUrl);
         }

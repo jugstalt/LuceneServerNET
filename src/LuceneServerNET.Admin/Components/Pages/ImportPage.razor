@@ -468,7 +468,7 @@
                 if (await Client!.IndexExistsAsync(_indexName)) throw new InvalidOperationException($"Index {_indexName} already exists");
                 await Client.CreateIndexAsync(_indexName);
                 await Client.PutMappingAsync(_indexName, MappingInference.ToIndexMapping(_mapping, _phonetics));
-            }, $"Index {_indexName} created");
+            }, $"Index {_indexName} created", AuditActions.IndexCreate, _indexName, "import");
             if (!created) return;
         }
 
@@ -502,6 +502,14 @@
         finally
         {
             _running = false;
+            if (_report is { } report)
+            {
+                var source = _dbSource is { } d ? $"db {d.Connection.Name}: {d.Sql}" : $"file {_fileName}";
+                await Audit.LogAsync(AuditActions.Import, InstanceName, _indexName,
+                    $"{source} · read {report.Read}, imported {report.Imported}, failed {report.Errors.Count}" +
+                    (report.Cancelled ? " · cancelled" : "") + (report.FatalError is null ? "" : $" · {report.FatalError}"),
+                    success: report.FatalError is null && !report.StoppedBecauseOfErrors);
+            }
             if (_newIndex)
             {
                 // the index exists now => further imports go into it

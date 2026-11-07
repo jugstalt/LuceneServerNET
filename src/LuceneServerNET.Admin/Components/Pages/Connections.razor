@@ -2,6 +2,7 @@
 @inject DatabaseSource Source
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuditService Audit
 
 <PageTitle>Database connections · LuceneServer.NET Admin</PageTitle>
 
@@ -123,6 +124,8 @@
         try
         {
             await Source.SaveConnectionAsync(_edit.Id, _edit.Name, _edit.Provider, _edit.ConnectionString);
+            await Audit.LogAsync(AuditActions.ConnectionSave, target: _edit.Name,
+                                 details: $"{_edit.Provider}, " + (_edit.Id is null ? "added" : "changed") + (String.IsNullOrEmpty(_edit.ConnectionString) ? "" : ", connection string set"));
             Snackbar.Add($"Connection {_edit.Name} saved", Severity.Success);
             _edit = null;
             await LoadAsync();
@@ -139,6 +142,7 @@
         if (confirmed != true) return;
 
         await Source.DeleteConnectionAsync(connection.Id);
+        await Audit.LogAsync(AuditActions.ConnectionDelete, target: connection.Name);
         Snackbar.Add($"Connection {connection.Name} removed", Severity.Success);
         await LoadAsync();
     }

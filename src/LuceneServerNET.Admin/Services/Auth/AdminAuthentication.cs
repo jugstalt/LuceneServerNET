@@ -1,3 +1,4 @@
+using LuceneServerNET.Admin.Services.Audit;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -61,6 +62,12 @@ public static class AdminAuthentication
                 options.ClientSecret = section["ClientSecret"];
                 options.ResponseType = "code";
                 options.SaveTokens = false;
+                options.Events.OnTicketReceived = async context =>
+                {
+                    var audit = context.HttpContext.RequestServices.GetRequiredService<AuditLogger>();
+                    await audit.LogAsync(context.Principal?.Identity?.Name ?? "", AuditActions.Login,
+                                         details: $"oidc, ip {context.HttpContext.Connection.RemoteIpAddress}");
+                };
                 options.GetClaimsFromUserInfoEndpoint = true;
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters.NameClaimType = "name";
@@ -154,6 +161,7 @@ public static class AdminAuthentication
                                              [FromForm] string? password,
                                              [FromForm] string? returnUrl,
                                              IConfiguration config,
+                                             AuditLogger audit,
                                              ILogger<LocalUser> logger) =>
         {
             var target = SafeReturnUrl(returnUrl);
@@ -166,6 +174,7 @@ public static class AdminAuthentication
             if (!config.VerifyLocalUser(username, password))
             {
                 logger.LogWarning("Failed admin login for user {User} from {Ip}", username, context.Connection.RemoteIpAddress);
+                await audit.LogAsync(username?.Trim() ?? "", AuditActions.LoginFailed, details: $"ip {context.Connection.RemoteIpAddress}", success: false);
                 await Task.Delay(500);
                 return Results.Redirect($"/login?error=1&returnUrl={Uri.EscapeDataString(target)}");
             }
@@ -175,6 +184,7 @@ public static class AdminAuthentication
                 CookieAuthenticationDefaults.AuthenticationScheme);
 
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+            await audit.LogAsync(username.Trim(), AuditActions.Login, details: $"ip {context.Connection.RemoteIpAddress}");
             return Results.Redirect(target);
         }).AllowAnonymous();
 
@@ -183,8 +193,9 @@ public static class AdminAuthentication
                               [OpenIdConnectDefaults.AuthenticationScheme]))
            .AllowAnonymous();
 
-        app.MapPost("/account/logout", async (HttpContext context) =>
+        app.MapPost("/account/logout", async (HttpContext context, AuditLogger audit) =>
         {
+            await audit.LogAsync(context.User.Identity?.Name ?? "", AuditActions.Logout);
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             if (type == Oidc)
             {

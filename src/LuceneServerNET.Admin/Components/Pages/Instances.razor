@@ -2,6 +2,7 @@
 @inject InstanceRegistry Registry
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuditService Audit
 
 <PageTitle>Instances · LuceneServer.NET Admin</PageTitle>
 
@@ -139,6 +140,8 @@
         try
         {
             await Registry.SaveAsync(_edit.Id, _edit.Name, _edit.Url, _edit.ClientId, _edit.ClientSecret);
+            await Audit.LogAsync(AuditActions.InstanceSave, _edit.Name, _edit.Url,
+                                 (_edit.Id is null ? "added" : "changed") + (String.IsNullOrEmpty(_edit.ClientSecret) ? "" : ", secret set"));
             Snackbar.Add($"Instance {_edit.Name} saved", Severity.Success);
             _edit = null;
             await LoadAsync();
@@ -159,6 +162,7 @@
         if (confirmed != true) return;
 
         await Registry.DeleteAsync(instance.DatabaseId.Value);
+        await Audit.LogAsync(AuditActions.InstanceDelete, instance.Name, instance.Url);
         Snackbar.Add($"Instance {instance.Name} removed", Severity.Success);
         await LoadAsync();
     }

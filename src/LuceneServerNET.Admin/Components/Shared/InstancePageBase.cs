@@ -1,3 +1,4 @@
+using LuceneServerNET.Admin.Services.Audit;
 using LuceneServerNET.Admin.Services.Instances;
 using LuceneServerNET.Client;
 using Microsoft.AspNetCore.Components;
@@ -12,6 +13,7 @@ public abstract class InstancePageBase : ComponentBase
     [Inject] protected ISnackbar Snackbar { get; set; } = default!;
     [Inject] protected IDialogService DialogService { get; set; } = default!;
     [Inject] protected NavigationManager Navigation { get; set; } = default!;
+    [Inject] protected AuditService Audit { get; set; } = default!;
 
     [Parameter] public string InstanceName { get; set; } = "";
 
@@ -50,11 +52,19 @@ public abstract class InstancePageBase : ComponentBase
     protected virtual Task LoadAsync() => Task.CompletedTask;
 
     /// <summary>Runs an action and shows errors / success as snackbar.</summary>
-    protected async Task<bool> RunAsync(Func<Task> action, string? successMessage = null)
+    protected Task<bool> RunAsync(Func<Task> action, string? successMessage = null)
+        => RunAsync(action, successMessage, auditAction: null);
+
+    /// <summary>Runs an action, shows errors / success as snackbar and writes the audit log (success and failure).</summary>
+    protected async Task<bool> RunAsync(Func<Task> action, string? successMessage, string? auditAction, string? auditTarget = null, string? auditDetails = null)
     {
         try
         {
             await action();
+            if (auditAction != null)
+            {
+                await Audit.LogAsync(auditAction, InstanceName, auditTarget, auditDetails);
+            }
             if (successMessage != null)
             {
                 Snackbar.Add(successMessage, Severity.Success);
@@ -63,6 +73,10 @@ public abstract class InstancePageBase : ComponentBase
         }
         catch (Exception ex)
         {
+            if (auditAction != null)
+            {
+                await Audit.LogAsync(auditAction, InstanceName, auditTarget, $"{auditDetails} error: {ex.Message}".Trim(), success: false);
+            }
             Snackbar.Add(ex.Message, Severity.Error);
             return false;
         }
