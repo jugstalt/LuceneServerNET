@@ -53,17 +53,9 @@
 else
 {
     <MudPaper Class="pa-4 mb-4" Outlined="true">
-        <MudText Typo="Typo.h6" Class="mb-2">1. Source</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">1. Job</MudText>
         <MudGrid>
             <MudItem xs="12" sm="4"><MudTextField @bind-Value="_job.Name" Label="Job name" Variant="Variant.Outlined" Immediate="true" OnKeyUp="MarkDirty" /></MudItem>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="long" Value="_job.ConnectionId" ValueChanged="v => { _job.ConnectionId = v; MarkDirty(); }" Label="Database connection" Variant="Variant.Outlined">
-                    @foreach (var connection in _connections)
-                    {
-                        <MudSelectItem Value="connection.Id">@connection.Name (@connection.Provider)</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
             <MudItem xs="12" sm="4">
                 <MudSelect T="string" Value="_job.Instance" ValueChanged="v => { _job.Instance = v; MarkDirty(); }" Label="Target instance" Variant="Variant.Outlined">
                     @foreach (var instance in _instances)
@@ -72,37 +64,46 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12">
-                <MudTextField @bind-Value="_job.Sql" Label="SELECT query" Variant="Variant.Outlined" Lines="5" Class="mono" OnKeyUp="MarkDirty" />
-                <MudButton Class="mt-2" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Preview" OnClick="PreviewAsync" Disabled="_previewing">
-                    @(_mapping.Mapping.Fields.Count == 0 && _mapping.Mapping.GeoFields.Count == 0 ? "Preview and detect mapping" : "Preview and detect mapping again")
-                </MudButton>
-                @if (_sample.Count > 0)
-                {
-                    <MudText Typo="Typo.caption" Class="ml-2">@_sample.Count sample rows, @_columns.Count columns</MudText>
-                }
+            <MudItem xs="12" sm="2">
+                <MudSelect T="LuceneServerNET.Core.Phonetics.Algorithm" Value="_settings.Phonetics" ValueChanged="v => { _settings.Phonetics = v; MarkDirty(); }"
+                           Label="Phonetics of the primary fields" Variant="Variant.Outlined">
+                    @foreach (var algorithm in Enum.GetValues<LuceneServerNET.Core.Phonetics.Algorithm>())
+                    {
+                        <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="2">
+                <MudTextField T="string" Value="_settings.EncodeCharacters" ValueChanged="v => { _settings.EncodeCharacters = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); MarkDirty(); }"
+                              Label="Encode characters" Placeholder="e.g. ./" Variant="Variant.Outlined" Class="mono" Immediate="true" />
             </MudItem>
         </MudGrid>
     </MudPaper>
 
-    @if (_mapping.Mapping.Fields.Count > 0 || _mapping.Mapping.GeoFields.Count > 0)
-    {
-        <MudPaper Class="pa-4 mb-4" Outlined="true">
-            <MudText Typo="Typo.h6" Class="mb-2">2. Mapping</MudText>
-            <MudText Typo="Typo.body2" Class="mb-2">The mapping is saved with the job and used for every run (the columns of the query must not change).</MudText>
-            <MudSelect T="LuceneServerNET.Core.Phonetics.Algorithm" Value="_mapping.Phonetics" ValueChanged="v => { _mapping.Phonetics = v; MarkDirty(); }"
-                       Label="Phonetics of the primary fields" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2">
-                @foreach (var algorithm in Enum.GetValues<LuceneServerNET.Core.Phonetics.Algorithm>())
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6">2. Sources</MudText>
+            <MudText Typo="Typo.body2">all sources are imported into the same index; the mapping is saved with the job (the columns of the queries must not change)</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddSource">Add source</MudButton>
+        </MudStack>
+        @if (_settings.Sources.Count == 0)
+        {
+            <MudText Typo="Typo.body2">No source yet.</MudText>
+        }
+        else
+        {
+            <MudTabs @bind-ActivePanelIndex="_sourceIndex" Elevation="0" Outlined="true" TabPanelsClass="pa-4">
+                @foreach (var source in _settings.Sources)
                 {
-                    <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
+                    <MudTabPanel Text="@source.DisplayName" @key="source">
+                        <JobSourceEditor Source="source" Connections="_connections" CanRemove="@(_settings.Sources.Count > 1)"
+                                         OnChanged="MarkDirty" OnRemove="RemoveSourceAsync" />
+                    </MudTabPanel>
                 }
-            </MudSelect>
-            <MudTextField T="string" Value="_mapping.Mapping.EncodeCharacters" ValueChanged="v => { _mapping.Mapping.EncodeCharacters = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); MarkDirty(); }"
-                              Label="Encode characters" Placeholder="e.g. ./" HelperText="characters of the primary fields that are encoded (e.g. to find 'Nr. 10')"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2 mono" Immediate="true" />
-            <MappingEditor Mapping="_mapping.Mapping" ShowColumns="true" Columns="_columns" MappingChanged="MarkDirty" />
-        </MudPaper>
-    }
+            </MudTabs>
+        }
+    </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudText Typo="Typo.h6" Class="mb-2">3. Target and schedule</MudText>
@@ -271,13 +272,12 @@ else
     private ImportJobRecord _job = new();
     private string? _webhookHeader;
     private bool _testingWebhook;
-    private ImportJobMapping _mapping = new();
+    private ImportJobMapping _settings = new();
+    private int _sourceIndex;
     private IReadOnlyList<ServerInstance> _instances = [];
     private IReadOnlyList<DbSourceConnection> _connections = [];
     private IReadOnlyList<ImportJobRunRecord> _runs = [];
-    private List<IDictionary<string, object?>> _sample = [];
-    private List<string> _columns = [];
-    private bool _loading = true, _previewing, _dirty;
+    private bool _loading = true, _dirty;
     private string? _error;
 
     private IEnumerable<string> NextRuns
@@ -305,10 +305,7 @@ else
         if (JobId is { } id)
         {
             _job = await Repository.GetImportJobAsync(id) ?? new ImportJobRecord();
-            _mapping = ImportJobMapping.FromJson(_job.MappingJson);
-            _columns = _mapping.Mapping.Fields.Where(f => !f.IsTemplate).Select(f => f.Column)
-                .Concat(_mapping.Mapping.GeoFields.SelectMany(g => new[] { g.XColumn, g.YColumn, g.GeometryColumn }).Where(c => c != null).Select(c => c!))
-                .Distinct().ToList();
+            _settings = ImportJobMapping.ForJob(_job);
             _runs = await Repository.GetImportJobRunsAsync(id);
         }
         else
@@ -319,6 +316,7 @@ else
                 ConnectionId = _connections.FirstOrDefault()?.Id ?? 0,
                 TimeZone = TimeZoneInfo.Local.Id
             };
+            _settings.Sources.Add(new ImportJobSource { ConnectionId = _job.ConnectionId });
         }
         _loading = false;
     }
@@ -333,39 +331,19 @@ else
 
     private string ScheduleText => _job.HasSchedule ? $"{_job.Cron} {_job.TimeZone}" : "manual";
 
-    private async Task PreviewAsync()
+    private void AddSource()
     {
-        var connection = _connections.FirstOrDefault(c => c.Id == _job.ConnectionId);
-        if (connection is null)
-        {
-            Snackbar.Add("Choose a database connection", Severity.Warning);
-            return;
-        }
+        _settings.Sources.Add(new ImportJobSource { ConnectionId = _settings.Sources.LastOrDefault()?.ConnectionId ?? _connections.FirstOrDefault()?.Id ?? 0 });
+        _sourceIndex = _settings.Sources.Count - 1;
+        MarkDirty();
+    }
 
-        _previewing = true;
-        try
-        {
-            var sample = new List<IDictionary<string, object?>>();
-            await foreach (var row in DbSource.ReadAsync(connection, _job.Sql))
-            {
-                sample.Add(row);
-                if (sample.Count >= 200) break;
-            }
-            if (sample.Count == 0) throw new InvalidOperationException("The query returns no rows");
-
-            _sample = sample;
-            _columns = sample.SelectMany(r => r.Keys).Distinct().ToList();
-            _mapping.Mapping = MappingInference.Infer(sample);
-            MarkDirty();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _previewing = false;
-        }
+    private async Task RemoveSourceAsync(ImportJobSource source)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Remove source", $"Remove the source {source.DisplayName} from the job?", yesText: "Remove", cancelText: "Cancel") != true) return;
+        _settings.Sources.Remove(source);
+        _sourceIndex = Math.Clamp(_sourceIndex, 0, Math.Max(0, _settings.Sources.Count - 1));
+        MarkDirty();
     }
 
     private async Task SaveAsync()
@@ -375,11 +353,12 @@ else
 
         _error = ImportJobRunner.Validate(_job)
                  ?? JobWebhook.ValidateHeader(_webhookHeader)
-                 ?? (_mapping.Mapping.Fields.Count == 0 ? "Detect the mapping with the preview first" : null)
-                 ?? CreateIndex.Validate("x", _mapping.Mapping);
+                 ?? ImportJobRunner.ValidateSources(_settings);
         if (_error is not null) return;
 
-        _job.MappingJson = _mapping.ToJson();
+        _job.MappingJson = _settings.ToJson();
+        _job.ConnectionId = _settings.Sources[0].ConnectionId;   // columns of older versions
+        _job.Sql = _settings.Sources[0].Sql;
         if (_job.WebhookUrl is null) _job.WebhookHeaderProtected = null;
         else if (!String.IsNullOrWhiteSpace(_webhookHeader)) _job.WebhookHeaderProtected = Webhook.ProtectHeader(_webhookHeader);
         _webhookHeader = null;

@@ -41,7 +41,7 @@
                     }
                     <td><MudCheckBox T="bool" Value="!field.Skip" ValueChanged="v => { field.Skip = !v; Changed(); }" Dense="true" /></td>
                 }
-                <td>
+                <td style="min-width:160px">
                     @if (ReadOnlyTypes)
                     {
                         <MudSelect T="string" Value="field.Name" ValueChanged="v => { field.Name = v; ApplyExisting(field); Changed(); }" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined">

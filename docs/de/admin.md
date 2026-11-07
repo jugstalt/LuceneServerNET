@@ -231,8 +231,9 @@ Ein bestehendes Ziel wird nur mit *Replace the target if it exists* überschrieb
 
 ## Import-Jobs
 
-*Import jobs* führen eine Datenbank-Abfrage nach Zeitplan aus und importieren das Ergebnis. Das Mapping wird einmal über die Vorschau
-erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der Abfrage dürfen sich danach nicht ändern).
+*Import jobs* führen Datenbank-Abfragen (eine oder mehrere Quellen) nach Zeitplan, manuell oder von außen ausgelöst aus und importieren
+das Ergebnis. Das Mapping wird einmal über die Vorschau erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
+Abfragen dürfen sich danach nicht ändern).
 
 | Modus | Ablauf |
 |---|---|
@@ -269,6 +270,35 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
   wenn ein geplanter Lauf verpasst wurde, während die App nicht lief (nur einmal, egal wie viele verpasst wurden).
   Läufe, die bei einem Herunterfahren aktiv waren, werden als *interrupted* markiert. Für verlässliche Zeitpläne die Admin-App als
   Dienst betreiben (siehe [Als Windows-Dienst betreiben](#als-windows-dienst-betreiben)). Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
+
+### Quellen und die webgis-Vorlage
+
+Ein Job hat eine oder mehrere **Quellen** (Reiter auf der Job-Seite): jeweils mit eigener Datenbank-Verbindung, Abfrage, Mapping und
+Metadaten. Alle Quellen werden in denselben Index (dieselbe Generation) importiert; bei *Neu aufbauen und Alias umschalten* wird der Alias
+nach der letzten Quelle umgeschaltet. Ein Feld, das mehrere Quellen verwenden, muss überall denselben Typ haben. *Phonetik* und
+*Encode characters* gelten für den Index.
+
+**Metadaten pro Quelle**: im Index unter der **Meta-ID** der Quelle gespeichert (32 Hex-Zeichen, einmal erzeugt, für jeden Lauf gleich)
+als JSON `{"id", "category", "sample", "description", "service", "query", ...}` plus eigene Schlüssel. Im Modus *Leeren und neu befüllen*
+werden Einträge von Quellen, die aus dem Job entfernt wurden (Schlüssel im Format einer Meta-ID), gelöscht.
+
+**Template-Variablen**: `{@metaid}` (Meta-ID der Quelle) und `{@category}` (Kategorie aus den Metadaten).
+
+**webgis-Vorlage** (*Apply webgis template* nach der Vorschau, ID-Spalte wählen): die Struktur des webgis-Suchindex, die das gView-Werkzeug
+`FillLuceneServer` ablöst:
+
+| Feld | Inhalt |
+|---|---|
+| `id` | `{@metaid}.{ID-Spalte}` – webgis liest daraus die Meta-ID, aus den Metadaten Service und Query und das Objekt über seine ID |
+| `suggested_text` | Template, z. B. `{PLZ} {ORT} {STR} {HNR}` (Primärfeld, Pflicht) |
+| `subtext` | Template, z. B. `Adresse in {ORT} ({ORTSTEIL})` (Primärfeld) |
+| `category` | `{@category}` (Primärfeld; die Kategorie in den Metadaten ist Pflicht) |
+| `thumbnail_url` | Template oder feste URL (nur gespeichert) |
+| `geo`, `bbox` | die erste Geo-Quelle (Punkt; Linien und Polygone: Punkt auf der Fläche, `bbox` in WGS84) |
+
+Die übrigen Spalten bleiben im Mapping sichtbar, werden aber nicht importiert. Die ID-Spalte wird vorgeschlagen (`objectid`, `oid`, `fid`,
+`gid`, `id`, sonst die erste Ganzzahl-Spalte). Die Meta-ID bleibt bei jedem Lauf gleich, die Dokument-IDs sind also stabil
+(gView hat bei jedem Befüllen eine neue erzeugt).
 
 ### Import-Jobs von außen auslösen
 

@@ -1,4 +1,5 @@
 using Cronos;
+using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Admin.Services.Audit;
 using LuceneServerNET.Admin.Services.Import;
 using LuceneServerNET.Admin.Services.Instances;
@@ -29,14 +30,75 @@ public static class ImportJobStatus
     public const string Running = "running", Succeeded = "succeeded", Warning = "warning", Failed = "failed", Cancelled = "cancelled", Interrupted = "interrupted";
 }
 
-/// <summary>The mapping of a job (fixed when the job is saved).</summary>
+/// <summary>Sources and index settings of a job (column mapping_json; fixed when the job is saved).</summary>
 public class ImportJobMapping
 {
+    /// <summary>Mapping of jobs saved before sources existed (moved to the first source by <see cref="Normalize"/>).</summary>
     public InferredMapping Mapping { get; set; } = new();
+
     public Core.Phonetics.Algorithm Phonetics { get; set; }
 
+    /// <summary>Encoded characters of the primary fields (e.g. "./").</summary>
+    public string? EncodeCharacters { get; set; }
+
+    public List<ImportJobSource> Sources { get; set; } = [];
+
     public string ToJson() => JsonSerializer.Serialize(this);
-    public static ImportJobMapping FromJson(string json) => JsonSerializer.Deserialize<ImportJobMapping>(json) ?? new();
+
+    public static ImportJobMapping FromJson(string json)
+        => String.IsNullOrWhiteSpace(json) ? new() : JsonSerializer.Deserialize<ImportJobMapping>(json) ?? new();
+
+    /// <summary>Loads the job settings; a job of an older version becomes one source.</summary>
+    public static ImportJobMapping ForJob(ImportJobRecord job)
+    {
+        var result = FromJson(job.MappingJson);
+        result.Normalize(job);
+        return result;
+    }
+
+    public void Normalize(ImportJobRecord job)
+    {
+        if (Sources.Count == 0 && (Mapping.Fields.Count > 0 || Mapping.GeoFields.Count > 0))
+        {
+            EncodeCharacters ??= Mapping.EncodeCharacters;
+            Sources.Add(new ImportJobSource { Name = job.Name, ConnectionId = job.ConnectionId, Sql = job.Sql, Mapping = Mapping });
+        }
+        Mapping = new();
+    }
+
+    /// <summary>
+    /// The index mapping of all sources: union of the fields (a field used by several sources must have the same
+    /// type, index and store options), primary fields of all sources.
+    /// </summary>
+    public IndexMapping ToIndexMapping()
+    {
+        var result = new IndexMapping { Fields = new List<FieldMapping>() };
+        var primary = new List<string>();
+
+        foreach (var source in Sources)
+        {
+            source.Mapping.EncodeCharacters = EncodeCharacters;
+            var mapping = MappingInference.ToIndexMapping(source.Mapping, Phonetics);
+            foreach (var field in mapping.Fields)
+            {
+                var existing = result.Fields.FirstOrDefault(f => f.Name == field.Name);
+                if (existing is null)
+                {
+                    result.Fields.Add(field);
+                }
+                else if (existing.FieldType != field.FieldType || existing.Index != field.Index || existing.Store != field.Store)
+                {
+                    throw new InvalidOperationException($"Field '{field.Name}' is mapped differently in the sources ({existing.FieldType} / {field.FieldType})");
+                }
+            }
+            primary.AddRange(mapping.PrimaryFields ?? []);
+            result.PrimaryFieldsPhonetics = mapping.PrimaryFieldsPhonetics;
+            result.PrimaryFieldsEncodeCharacters = mapping.PrimaryFieldsEncodeCharacters;
+        }
+
+        result.PrimaryFields = primary.Distinct().ToList();
+        return result;
+    }
 }
 
 /// <summary>Live progress of a running job.</summary>
@@ -175,20 +237,46 @@ public class ImportJobRunner
         if (job.KeepGenerations < 0) return "Keep generations must be >= 0";
         try
         {
-            DatabaseSource.ValidateQuery(job.Sql);
-        }
-        catch (Exception ex)
-        {
-            return ex.Message;
-        }
-        try
-        {
             if (job.HasSchedule) CronExpression.Parse(job.Cron.Trim());
             ResolveTimeZone(job.TimeZone);
         }
         catch (Exception ex)
         {
             return $"Schedule: {ex.Message}";
+        }
+        return null;
+    }
+
+    /// <summary>Validates the sources of a job; returns an error message or null.</summary>
+    public static string? ValidateSources(ImportJobMapping settings)
+    {
+        if (settings.Sources.Count == 0) return "Add a source";
+        if (settings.Sources.Select(s => s.MetaId).Distinct().Count() != settings.Sources.Count) return "Two sources have the same meta id";
+
+        foreach (var source in settings.Sources)
+        {
+            if (source.ConnectionId == 0) return $"{source.DisplayName}: choose a database connection";
+            try
+            {
+                DatabaseSource.ValidateQuery(source.Sql);
+            }
+            catch (Exception ex)
+            {
+                return $"{source.DisplayName}: {ex.Message}";
+            }
+            if (!ImportJobSource.IsMetaId(source.MetaId)) return $"{source.DisplayName}: the meta id must be 32 hex characters (a-f, 0-9)";
+            if (!source.HasMapping) return $"{source.DisplayName}: detect the mapping with the preview first";
+            if (Components.Pages.CreateIndex.Validate("x", source.Mapping) is { } mappingError) return $"{source.DisplayName}: {mappingError}";
+            if (source.Preset == WebgisPreset.Name && WebgisPreset.Validate(source) is { } webgisError) return webgisError;
+        }
+
+        try
+        {
+            settings.ToIndexMapping();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message;
         }
         return null;
     }
@@ -294,11 +382,11 @@ public class ImportJobRunner
     {
         var instance = await _registry.GetAsync(job.Instance, cancellationToken) ?? throw new InvalidOperationException($"Instance {job.Instance} not found");
         var client = _registry.CreateClient(instance);
-        var source = (await _database.GetConnectionsAsync(cancellationToken)).FirstOrDefault(c => c.Id == job.ConnectionId)
-                     ?? throw new InvalidOperationException("Database connection not found");
-        var jobMapping = ImportJobMapping.FromJson(job.MappingJson);
-        var indexMapping = MappingInference.ToIndexMapping(jobMapping.Mapping, jobMapping.Phonetics);
-        var options = new ImportOptions { BatchSize = job.BatchSize, MaxErrors = job.MaxErrors, RefreshAtEnd = true };
+        var connections = await _database.GetConnectionsAsync(cancellationToken);
+        var settings = ImportJobMapping.ForJob(job);
+        if (ValidateSources(settings) is { } sourceError) throw new InvalidOperationException(sourceError);
+        var indexMapping = settings.ToIndexMapping();
+        var clearFirst = false;
 
         string index;
         string? previousIndex = null;
@@ -324,22 +412,81 @@ public class ImportJobRunner
                 await client.CreateIndexAsync(index, cancellationToken);
                 await client.PutMappingAsync(index, indexMapping, cancellationToken);
             }
-            options.ClearIndexFirst = job.Mode == ImportJobModes.Clear;
+            clearFirst = job.Mode == ImportJobModes.Clear;
         }
         run.IndexName = index;
         await _repository.UpdateImportJobRunAsync(run, CancellationToken.None);
 
-        var report = await _importer.ImportAsync(client, index, _database.ReadAsync(source, job.Sql, cancellationToken),
-                                                 jobMapping.Mapping, options, ProgressReporter(job.Id), cancellationToken);
+        // metadata entry per source (webgis reads it with the meta id from the document id)
+        foreach (var source in settings.Sources.Where(s => !s.Metadata.IsEmpty))
+        {
+            await client.PutMetadataAsync(index, source.MetaId, source.Metadata.ToJson(source.MetaId), cancellationToken);
+        }
+        if (clearFirst)
+        {
+            // entries of sources that were removed from the job
+            var metaIds = settings.Sources.Select(s => s.MetaId).ToHashSet();
+            foreach (var name in (await client.GetMetadataAsync(index, cancellationToken)).Keys.Where(k => ImportJobSource.IsMetaId(k) && !metaIds.Contains(k)))
+            {
+                await client.RemoveMetadataAsync(index, name, cancellationToken);
+            }
+        }
+
+        var report = new ImportReport();
+        var errors = new List<string>();
+        for (int i = 0; i < settings.Sources.Count; i++)
+        {
+            var source = settings.Sources[i];
+            var connection = connections.FirstOrDefault(c => c.Id == source.ConnectionId)
+                             ?? throw new InvalidOperationException($"{source.DisplayName}: database connection not found");
+            if (_progress.TryGetValue(job.Id, out var progress))
+            {
+                progress.Source = i + 1;
+                progress.Sources = settings.Sources.Count;
+            }
+
+            var options = new ImportOptions
+            {
+                BatchSize = job.BatchSize,
+                MaxErrors = job.MaxErrors <= 0 ? 0 : Math.Max(1, job.MaxErrors - errors.Count),
+                ClearIndexFirst = clearFirst && i == 0,
+                RefreshAtEnd = false,
+                Variables = source.Variables
+            };
+
+            var sourceReport = await _importer.ImportAsync(client, index, _database.ReadAsync(connection, source.Sql, cancellationToken),
+                                                           source.Mapping, options,
+                                                           ProgressReporter(job.Id, report.Read, report.Imported, errors.Count), cancellationToken);
+            report.Read += sourceReport.Read;
+            report.Imported += sourceReport.Imported;
+            errors.AddRange(sourceReport.Errors.Select(e => settings.Sources.Count > 1 ? $"{source.DisplayName} row {e.Row}: {e.Message}" : $"row {e.Row}: {e.Message}"));
+            report.Cancelled = sourceReport.Cancelled;
+            report.StoppedBecauseOfErrors = sourceReport.StoppedBecauseOfErrors;
+            report.FatalError = sourceReport.FatalError is null ? null : (settings.Sources.Count > 1 ? $"{source.DisplayName}: {sourceReport.FatalError}" : sourceReport.FatalError);
+
+            if (report.Cancelled || report.StoppedBecauseOfErrors || report.FatalError is not null) break;
+        }
+
+        if (report.Imported > 0)
+        {
+            try
+            {
+                await client.RefreshIndexAsync(index, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                report.FatalError ??= $"Refresh failed: {ex.Message}";
+            }
+        }
         run.ReadCount = report.Read;
         run.Imported = report.Imported;
-        run.Failed = report.Errors.Count;
+        run.Failed = errors.Count;
 
         var failed = report.FatalError is not null || report.StoppedBecauseOfErrors || report.Cancelled;
         if (failed)
         {
             run.Status = report.Cancelled ? ImportJobStatus.Cancelled : ImportJobStatus.Failed;
-            run.Message = report.FatalError ?? (report.StoppedBecauseOfErrors ? $"Stopped after {report.Errors.Count} errors: {report.Errors.LastOrDefault()?.Message}" : "Cancelled");
+            run.Message = report.FatalError ?? (report.StoppedBecauseOfErrors ? $"Stopped after {errors.Count} errors: {errors.LastOrDefault()}" : "Cancelled");
 
             if (job.Mode == ImportJobModes.ReplaceAlias)
             {
@@ -358,10 +505,10 @@ public class ImportJobRunner
                           (removed.Count == 0 ? "" : $" · removed {String.Join(", ", removed)}");
         }
 
-        run.Status = report.Errors.Count > 0 ? ImportJobStatus.Warning : ImportJobStatus.Succeeded;
-        if (report.Errors.Count > 0)
+        run.Status = errors.Count > 0 ? ImportJobStatus.Warning : ImportJobStatus.Succeeded;
+        if (errors.Count > 0)
         {
-            run.Message = $"{report.Errors.Count} rows skipped, first: row {report.Errors[0].Row}: {report.Errors[0].Message}" +
+            run.Message = $"{errors.Count} rows skipped, first: {errors[0]}" +
                           (run.Message is null ? "" : $" · {run.Message}");
         }
     }

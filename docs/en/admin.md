@@ -231,8 +231,9 @@ copying). An existing target is only overwritten with *Replace the target if it 
 
 ## Import jobs
 
-*Import jobs* run a database query on a schedule and import the result. The mapping is detected once with the preview,
-can be edited and is saved with the job (the columns of the query must not change afterwards).
+*Import jobs* run database queries (one or more sources) on a schedule, manually or triggered from outside and import the
+result. The mapping is detected once with the preview, can be edited and is saved with the job (the columns of the queries
+must not change afterwards).
 
 | Mode | What happens |
 |---|---|
@@ -269,6 +270,34 @@ can be edited and is saved with the job (the columns of the query must not chang
   startup if a scheduled run was missed while the application was stopped (only once, however many were missed).
   Runs that were active during a shutdown are marked *interrupted*. For reliable schedules run the admin application as a
   service (see [Run as Windows service](#run-as-windows-service)). Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
+
+### Sources and the webgis template
+
+A job has one or more **sources** (tabs on the job page): each with its own database connection, query, mapping and
+metadata. All sources are imported into the same index (generation); with *Rebuild and switch alias* the alias is switched
+after the last source. A field used by several sources must have the same type. *Phonetics* and *Encode characters* apply to the index.
+
+**Metadata per source**: stored in the index under the **meta id** of the source (32 hex characters, created once, stable
+for every run) as JSON `{"id", "category", "sample", "description", "service", "query", ...}` plus own keys. In mode
+*Clear and refill*, entries of sources removed from the job (keys that look like a meta id) are deleted.
+
+**Template variables**: `{@metaid}` (meta id of the source) and `{@category}` (category of the metadata).
+
+**webgis template** (*Apply webgis template* after the preview, choose the ID column): the structure of the webgis search index,
+which replaces the gView `FillLuceneServer` tool:
+
+| Field | Content |
+|---|---|
+| `id` | `{@metaid}.{ID column}` – webgis takes the meta id from it, reads service and query from the metadata and the object by its id |
+| `suggested_text` | template, e.g. `{PLZ} {ORT} {STR} {HNR}` (primary field, required) |
+| `subtext` | template, e.g. `Adresse in {ORT} ({ORTSTEIL})` (primary field) |
+| `category` | `{@category}` (primary field; the category of the metadata is required) |
+| `thumbnail_url` | template or fixed URL (stored only) |
+| `geo`, `bbox` | the first geo source (point; lines and polygons: point on surface, `bbox` in WGS84) |
+
+The other columns stay visible in the mapping, but are not imported. The ID column is proposed (`objectid`, `oid`, `fid`,
+`gid`, `id`, else the first integer column). The meta id stays the same for every run, so document ids are stable
+(gView created a new one with every fill).
 
 ### Trigger import jobs from outside
 

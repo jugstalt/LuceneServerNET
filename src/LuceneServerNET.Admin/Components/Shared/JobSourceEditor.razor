@@ -1,0 +1,231 @@
+@* One source of an import job: query, mapping (free or webgis template), metadata. *@
+@using LuceneServerNET.Admin.Services.Jobs
+@inject DatabaseSource DbSource
+@inject ISnackbar Snackbar
+
+<MudGrid>
+    <MudItem xs="12" sm="4">
+        <MudTextField T="string" Value="Source.Name" ValueChanged="v => { Source.Name = v ?? String.Empty; Changed(); }" Label="Source name" Placeholder="e.g. Adressen"
+                      Variant="Variant.Outlined" Immediate="true" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudSelect T="long" Value="Source.ConnectionId" ValueChanged="v => { Source.ConnectionId = v; Changed(); }" Label="Database connection" Variant="Variant.Outlined">
+            @foreach (var connection in Connections)
+            {
+                <MudSelectItem Value="connection.Id">@connection.Name (@connection.Provider)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="4" Class="d-flex align-center justify-end">
+        @if (CanRemove)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Remove">Remove source</MudButton>
+        }
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" Value="Source.Sql" ValueChanged="v => { Source.Sql = v ?? String.Empty; Changed(); }" Label="SELECT query" Variant="Variant.Outlined" Lines="4" Class="mono" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Preview" OnClick="PreviewAsync" Disabled="_previewing">
+                @(Source.HasMapping ? "Preview (load columns)" : "Preview and detect mapping")
+            </MudButton>
+            @if (Source.HasMapping)
+            {
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" OnClick="DetectAgainAsync" Disabled="_previewing">Detect mapping again</MudButton>
+            }
+            @if (_sample.Count > 0)
+            {
+                <MudText Typo="Typo.caption">@_sample.Count sample rows, @_columns.Count columns</MudText>
+            }
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+@if (Source.HasMapping)
+{
+    <MudDivider Class="my-4" />
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudText Typo="Typo.subtitle1"><b>Mapping</b></MudText>
+        @if (Source.Preset == WebgisPreset.Name)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary">webgis</MudChip>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => { Source.Preset = null; Changed(); }">Use free mapping</MudButton>
+        }
+        else
+        {
+            <MudSelect T="string" @bind-Value="_idColumn" Label="ID column" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:220px">
+                @foreach (var column in Columns)
+                {
+                    <MudSelectItem Value="column">@column</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.AutoFixHigh" OnClick="ApplyWebgis" Disabled="@(_idColumn is null)">Apply webgis template</MudButton>
+            <MudText Typo="Typo.caption">id, suggested_text, subtext, category, thumbnail_url, geo, bbox</MudText>
+        }
+    </MudStack>
+    <MappingEditor Mapping="Source.Mapping" ShowColumns="true" ShowVariables="true" Columns="Columns" MappingChanged="Changed" />
+
+    @if (_sample.Count > 0 && Source.Mapping.Fields.Any(f => f.IsTemplate && !f.Skip))
+    {
+        <MudText Typo="Typo.subtitle2" Class="mt-3">Template preview (first rows)</MudText>
+        <MudSimpleTable Dense="true" Outlined="true">
+            <thead><tr>@foreach (var field in TemplateFields) { <th>@field.Name</th> }</tr></thead>
+            <tbody>
+                @foreach (var row in _sample.Take(3))
+                {
+                    <tr>@foreach (var field in TemplateFields) { <td>@FieldTemplate.Render(field.Template!, row, Source.Variables, Source.Mapping.Replacements)</td> }</tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+}
+
+<MudDivider Class="my-4" />
+<MudText Typo="Typo.subtitle1"><b>Metadata</b></MudText>
+<MudText Typo="Typo.body2" Class="mb-2">
+    Stored in the index under the meta id. webgis takes the meta id from the document id ({@@metaid}.{ID}) and reads service and query from this entry.
+</MudText>
+<MudGrid>
+    <MudItem xs="12" sm="4">
+        <MudTextField T="string" Value="Source.Metadata.Category" ValueChanged="v => { Source.Metadata.Category = v; Changed(); }" Label="Category" Placeholder="e.g. Adresse"
+                      HelperText="also the template variable {@@category}" Variant="Variant.Outlined" Immediate="true" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudTextField T="string" Value="Source.Metadata.Service" ValueChanged="v => { Source.Metadata.Service = v; Changed(); }" Label="Service" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudTextField T="string" Value="Source.Metadata.Query" ValueChanged="v => { Source.Metadata.Query = v; Changed(); }" Label="Query" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" Value="Source.Metadata.Sample" ValueChanged="v => { Source.Metadata.Sample = v; Changed(); }" Label="Sample" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" Value="Source.Metadata.Description" ValueChanged="v => { Source.Metadata.Description = v; Changed(); }" Label="Description" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12">
+        @foreach (var extra in Source.Metadata.Extra)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField T="string" Value="extra.From" ValueChanged="v => { extra.From = v ?? String.Empty; Changed(); }" Label="Key" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:220px" />
+                <MudTextField T="string" Value="extra.To" ValueChanged="v => { extra.To = v ?? String.Empty; Changed(); }" Label="Value" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Source.Metadata.Extra.Remove(extra); Changed(); }" aria-label="Remove key" />
+            </MudStack>
+        }
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Size="Size.Small" OnClick="() => { Source.Metadata.Extra.Add(new TextReplacement()); Changed(); }">Add key</MudButton>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" Value="Source.MetaId" ValueChanged="v => { Source.MetaId = (v ?? String.Empty).Trim().ToLowerInvariant(); Changed(); }" Label="Meta id" Variant="Variant.Outlined"
+                      Class="mono" Margin="Margin.Dense" Error="@(!ImportJobSource.IsMetaId(Source.MetaId))" ErrorText="32 hex characters"
+                      HelperText="stable: document ids stay the same for every run. Change it only if webgis expects another id." />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public ImportJobSource Source { get; set; } = new();
+    [Parameter] public IReadOnlyList<DbSourceConnection> Connections { get; set; } = [];
+    [Parameter] public bool CanRemove { get; set; }
+    [Parameter] public EventCallback<ImportJobSource> OnRemove { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<IDictionary<string, object?>> _sample = [];
+    private List<string> _columns = [];
+    private string? _idColumn;
+    private bool _previewing;
+    private ImportJobSource? _loadedFor;
+
+    private IReadOnlyList<string> Columns => _columns.Count > 0 ? _columns : Source.MappedColumns.ToList();
+
+    private IEnumerable<InferredField> TemplateFields => Source.Mapping.Fields.Where(f => f.IsTemplate && !f.Skip);
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_loadedFor, Source))
+        {
+            _loadedFor = Source;
+            _sample = [];
+            _columns = [];
+            _idColumn = WebgisPreset.ProposeIdColumn(Source.Mapping, Columns);
+        }
+    }
+
+    private Task Changed() => OnChanged.InvokeAsync();
+
+    private Task Remove() => OnRemove.InvokeAsync(Source);
+
+    private async Task<bool> LoadSampleAsync()
+    {
+        var connection = Connections.FirstOrDefault(c => c.Id == Source.ConnectionId);
+        if (connection is null)
+        {
+            Snackbar.Add("Choose a database connection", Severity.Warning);
+            return false;
+        }
+
+        _previewing = true;
+        try
+        {
+            var sample = new List<IDictionary<string, object?>>();
+            await foreach (var row in DbSource.ReadAsync(connection, Source.Sql))
+            {
+                sample.Add(row);
+                if (sample.Count >= 200) break;
+            }
+            if (sample.Count == 0) throw new InvalidOperationException("The query returns no rows");
+
+            _sample = sample;
+            _columns = sample.SelectMany(r => r.Keys).Distinct().ToList();
+            _idColumn ??= WebgisPreset.ProposeIdColumn(MappingInference.Infer(sample), _columns);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _previewing = false;
+        }
+    }
+
+    /// <summary>First preview detects the mapping; later previews only load the columns and sample rows.</summary>
+    private async Task PreviewAsync()
+    {
+        if (await LoadSampleAsync() && !Source.HasMapping)
+        {
+            Source.Mapping = MappingInference.Infer(_sample);
+            _idColumn = WebgisPreset.ProposeIdColumn(Source.Mapping, _columns);
+            await Changed();
+        }
+    }
+
+    private async Task DetectAgainAsync()
+    {
+        if (!await LoadSampleAsync()) return;
+
+        var preset = Source.Preset;
+        var templates = Source.Mapping.Fields.Where(f => f.IsTemplate).ToList();
+        var replacements = Source.Mapping.Replacements;
+
+        Source.Mapping = MappingInference.Infer(_sample);
+        Source.Mapping.Replacements = replacements;
+        if (preset == WebgisPreset.Name && _idColumn != null)
+        {
+            Source.Mapping.Fields.AddRange(templates);
+            WebgisPreset.Apply(Source.Mapping, _idColumn);
+        }
+        else
+        {
+            Source.Mapping.Fields.AddRange(templates);
+        }
+        await Changed();
+    }
+
+    private async Task ApplyWebgis()
+    {
+        if (_idColumn is null) return;
+        WebgisPreset.Apply(Source.Mapping, _idColumn);
+        Source.Preset = WebgisPreset.Name;
+        await Changed();
+    }
+}

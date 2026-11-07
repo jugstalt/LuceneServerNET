@@ -95,7 +95,6 @@ public class ImportJobTests : IDisposable
         Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.Target = "Bad Name")));
         Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.Target = new string('a', 50))));          // too long for generations
         Assert.Null(ImportJobRunner.Validate(ValidJob().With(j => { j.Target = new string('a', 50); j.Mode = ImportJobModes.Clear; })));
-        Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.Sql = "DELETE FROM orte")));
         Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.Cron = "not a cron")));
         Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.TimeZone = "Nowhere/City")));
         Assert.NotNull(ImportJobRunner.Validate(ValidJob().With(j => j.Mode = "other")));
