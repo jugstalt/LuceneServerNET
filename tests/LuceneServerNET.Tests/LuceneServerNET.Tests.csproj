@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LuceneServerNET.Client\LuceneServerNET.Client.csproj" />
+    <ProjectReference Include="..\..\src\LuceneServerNET.Admin\LuceneServerNET.Admin.csproj" />
     <ProjectReference Include="..\..\src\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
     <ProjectReference Include="..\..\src\LuceneServerNET.Parse\LuceneServerNET.Parse.csproj" />
     <ProjectReference Include="..\..\src\LuceneServerNET.Engine\LuceneServerNET.Engine.csproj" />

@@ -1,0 +1,91 @@
+@page "/i/{InstanceName}"
+@inherits InstancePageBase
+
+<PageTitle>@InstanceName · LuceneServer.NET Admin</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
+        <MudText Typo="Typo.h4">@InstanceName</MudText>
+        <RoleChips Roles="Status.Roles" />
+        <MudSpacer />
+        <MudTextField @bind-Value="_filter" Placeholder="Filter" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.FilterList" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">Refresh</MudButton>
+        @if (Status.CanWrite)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upload" Href="@($"{InstanceUrl}/import")">Import</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"{InstanceUrl}/create")">Create index</MudButton>
+        }
+    </MudStack>
+
+    <MudTable Items="FilteredIndices" Hover="true" Dense="true" Loading="_loadingStats" T="IndexRow"
+              OnRowClick="@(e => Navigation.NavigateTo($"{InstanceUrl}/index/{Uri.EscapeDataString(e.Item!.Name)}"))" RowStyle="cursor:pointer">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel T="IndexRow" SortBy="r => r.Name" InitialDirection="SortDirection.Ascending">Index</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right"><MudTableSortLabel T="IndexRow" SortBy="r => r.Stats == null ? -1 : r.Stats.DocumentCount">Documents</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right"><MudTableSortLabel T="IndexRow" SortBy="r => r.Stats == null ? -1 : r.Stats.SizeInBytes">Size</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="IndexRow" SortBy="r => r.Stats == null ? null : r.Stats.LastModifiedUtc">Last modified</MudTableSortLabel></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.Name</b></MudTd>
+            <MudTd Style="text-align:right">@(context.Stats is null ? "…" : Format.Number(context.Stats.DocumentCount))</MudTd>
+            <MudTd Style="text-align:right">@(context.Stats is null ? "…" : Format.Bytes(context.Stats.SizeInBytes))</MudTd>
+            <MudTd>@(context.Error ?? Format.Date(context.Stats?.LastModifiedUtc))</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No indices.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</InstanceGuard>
+
+@code {
+    private class IndexRow
+    {
+        public string Name { get; init; } = "";
+        public IndexStats? Stats { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private List<IndexRow> _indices = [];
+    private string _filter = "";
+    private bool _loadingStats;
+
+    private IEnumerable<IndexRow> FilteredIndices =>
+        String.IsNullOrWhiteSpace(_filter) ? _indices : _indices.Where(i => i.Name.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task LoadAsync()
+    {
+        _indices = (await Client!.GetIndicesAsync()).Select(n => new IndexRow { Name = n }).ToList();
+        _ = LoadStatsAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await RunAsync(LoadAsync);
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _loadingStats = true;
+        using var throttle = new SemaphoreSlim(4);
+        await Task.WhenAll(_indices.Select(async row =>
+        {
+            await throttle.WaitAsync();
+            try
+            {
+                row.Stats = await Client!.GetIndexStatsAsync(row.Name);
+            }
+            catch (Exception ex)
+            {
+                row.Error = ex.Message;
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }));
+        _loadingStats = false;
+        await InvokeAsync(StateHasChanged);
+    }
+}

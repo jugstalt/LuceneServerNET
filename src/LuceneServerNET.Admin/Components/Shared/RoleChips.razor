@@ -1,0 +1,8 @@
+@foreach (var role in Roles)
+{
+    <MudChip T="string" Size="Size.Small" Color="@(role == "admin" ? Color.Secondary : role == "write" ? Color.Primary : Color.Default)">@role</MudChip>
+}
+
+@code {
+    [Parameter] public IEnumerable<string> Roles { get; set; } = [];
+}

@@ -89,6 +89,7 @@ builder.Services.AddLuceneService(options =>
 {
     options.RootPath = configuration.GetStringValue("LuceneServer:RootPath");
     options.ArchivePath = configuration.GetStringValue("LuceneServer:ArchivePath");
+    options.BackgroundCommitSeconds = configuration.GetIntValue("LuceneServer:BackgroundCommitSeconds", 20);
 });
 
 builder.Services.AddRestoreService(options =>

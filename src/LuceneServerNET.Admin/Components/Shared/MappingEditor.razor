@@ -1,0 +1,131 @@
+@* Editor for index fields (name, type, index, store, primary). Used for "create index" and the import wizard. *@
+
+<MudSimpleTable Dense="true" Hover="true" Outlined="true">
+    <thead>
+        <tr>
+            @if (ShowColumns)
+            {
+                <th>Column</th>
+                <th>Import</th>
+            }
+            <th>Field</th>
+            <th>Type</th>
+            <th>Indexed</th>
+            <th>Stored</th>
+            <th>
+                <MudTooltip Text="Primary fields are searched when the query does not name a field">Primary</MudTooltip>
+            </th>
+            @if (!ShowColumns && !ReadOnlyTypes)
+            {
+                <th></th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var field in Mapping.Fields)
+        {
+            <tr style="@(field.Skip ? "opacity:.45" : "")">
+                @if (ShowColumns)
+                {
+                    <td class="mono">@field.Column</td>
+                    <td><MudCheckBox T="bool" Value="!field.Skip" ValueChanged="v => { field.Skip = !v; Changed(); }" Dense="true" /></td>
+                }
+                <td>
+                    @if (ReadOnlyTypes)
+                    {
+                        <MudSelect T="string" Value="field.Name" ValueChanged="v => { field.Name = v; ApplyExisting(field); Changed(); }" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined">
+                            @foreach (var existing in ExistingFields)
+                            {
+                                <MudSelectItem Value="existing.Name">@existing.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudTextField T="string" Value="field.Name" ValueChanged="v => { field.Name = v; Changed(); }" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                      Error="@(!IsValidName(field.Name))" ErrorText="Required, must not start with '_'" />
+                    }
+                </td>
+                <td>
+                    @if (ReadOnlyTypes)
+                    {
+                        <MudText Typo="Typo.body2">@field.FieldType</MudText>
+                    }
+                    else
+                    {
+                        <MudSelect T="string" Value="field.FieldType" ValueChanged="v => { field.FieldType = v; Changed(); }" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined">
+                            @foreach (var type in FieldTypeOptions)
+                            {
+                                <MudSelectItem Value="type">@type</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </td>
+                <td><MudCheckBox T="bool" Value="field.Index" ValueChanged="v => { field.Index = v; Changed(); }" Disabled="ReadOnlyTypes" Dense="true" /></td>
+                <td><MudCheckBox T="bool" Value="field.Store" ValueChanged="v => { field.Store = v; Changed(); }" Disabled="ReadOnlyTypes" Dense="true" /></td>
+                <td><MudCheckBox T="bool" Value="field.Primary" ValueChanged="v => { field.Primary = v; Changed(); }" Disabled="ReadOnlyTypes" Dense="true" /></td>
+                @if (!ShowColumns && !ReadOnlyTypes)
+                {
+                    <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => { Mapping.Fields.Remove(field); Changed(); }" aria-label="Remove field" /></td>
+                }
+            </tr>
+        }
+        @if (Mapping.Geo is { } geo)
+        {
+            <tr>
+                @if (ShowColumns)
+                {
+                    <td class="mono">@geo.LongitudeColumn + @geo.LatitudeColumn</td>
+                    <td><MudCheckBox T="bool" Value="true" ValueChanged="v => { if (!v) { Mapping.Geo = null; Changed(); } }" Dense="true" /></td>
+                }
+                <td class="mono">@geo.FieldName</td>
+                <td>geo</td>
+                <td colspan="4"><MudText Typo="Typo.caption">combined from longitude and latitude</MudText></td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@if (!ShowColumns && !ReadOnlyTypes)
+{
+    <MudButton Class="mt-2" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" OnClick="AddField">Add field</MudButton>
+}
+
+@code {
+    [Parameter, EditorRequired] public InferredMapping Mapping { get; set; } = new();
+
+    /// <summary>Show the source columns (import).</summary>
+    [Parameter] public bool ShowColumns { get; set; }
+
+    /// <summary>Import into an existing index: only assign columns to existing fields.</summary>
+    [Parameter] public bool ReadOnlyTypes { get; set; }
+
+    [Parameter] public IEnumerable<FieldMapping> ExistingFields { get; set; } = [];
+
+    [Parameter] public EventCallback MappingChanged { get; set; }
+
+    private static readonly string[] FieldTypeOptions =
+        [FieldTypes.TextType, FieldTypes.StringType, FieldTypes.Int32Type, FieldTypes.DoubleType, FieldTypes.SingleType, FieldTypes.DateTimeType, FieldTypes.GeoType];
+
+    public static bool IsValidName(string? name) => !String.IsNullOrWhiteSpace(name) && !name.Trim().StartsWith('_');
+
+    private void AddField()
+    {
+        Mapping.Fields.Add(new InferredField { Name = $"field{Mapping.Fields.Count + 1}" });
+        Changed();
+    }
+
+    private void ApplyExisting(InferredField field)
+    {
+        var existing = ExistingFields.FirstOrDefault(f => f.Name == field.Name);
+        if (existing != null)
+        {
+            field.FieldType = existing.FieldType;
+            field.Index = existing.Index;
+            field.Store = existing.Store;
+            field.Skip = false;
+        }
+    }
+
+    private void Changed() => MappingChanged.InvokeAsync();
+}

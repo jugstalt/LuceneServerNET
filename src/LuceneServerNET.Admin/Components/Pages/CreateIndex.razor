@@ -1,0 +1,95 @@
+@page "/i/{InstanceName}/create"
+@inherits InstancePageBase
+
+<PageTitle>Create index · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem("Create index", null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudText Typo="Typo.h4" Class="mb-4">Create index</MudText>
+
+    @if (!Status.CanWrite)
+    {
+        <MudAlert Severity="Severity.Warning">The API client of this instance has no write role.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_name" Label="Index name" Variant="Variant.Outlined" Immediate="true"
+                                  HelperText="a-z, 0-9, '_' and '-' (max. 64 characters)" Error="@(!String.IsNullOrEmpty(_name) && !IsValidIndexName(_name))" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_phonetics" Label="Phonetics of the primary fields" Variant="Variant.Outlined">
+                        @foreach (var algorithm in Enum.GetValues<LuceneServerNET.Core.Phonetics.Algorithm>())
+                        {
+                            <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.h6" Class="mt-4 mb-2">Fields</MudText>
+            <MappingEditor Mapping="_mapping" />
+
+            @if (_validationError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3">@_validationError</MudAlert>
+            }
+
+            <MudStack Row="true" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="_busy">Create</MudButton>
+                <MudButton Variant="Variant.Text" Href="@InstanceUrl">Cancel</MudButton>
+                <MudSpacer />
+                <MudText Typo="Typo.caption">Want to derive the fields from a file? Use <MudLink Href="@($"{InstanceUrl}/import")">Import</MudLink> with a new index.</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+</InstanceGuard>
+
+@code {
+    private string _name = "";
+    private LuceneServerNET.Core.Phonetics.Algorithm _phonetics = LuceneServerNET.Core.Phonetics.Algorithm.None;
+    private InferredMapping _mapping = new()
+    {
+        Fields = [new InferredField { Name = "id", FieldType = FieldTypes.StringType }, new InferredField { Name = "title", Primary = true }]
+    };
+    private string? _validationError;
+    private bool _busy;
+
+    public static bool IsValidIndexName(string name) => System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z0-9_-]{1,64}$");
+
+    internal static string? Validate(string name, InferredMapping mapping)
+    {
+        if (!IsValidIndexName(name)) return "Invalid index name";
+        var fields = mapping.Fields.Where(f => !f.Skip).ToList();
+        if (fields.Count == 0) return "At least one field is required";
+        if (fields.Any(f => !MappingEditor.IsValidName(f.Name))) return "Field names must not be empty or start with '_'";
+        var duplicate = fields.GroupBy(f => f.Name.Trim(), StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate != null) return $"Duplicate field name '{duplicate.Key}'";
+        if (!fields.Any(f => f.Primary)) return "Select at least one primary field";
+        return null;
+    }
+
+    private async Task CreateAsync()
+    {
+        _name = _name.Trim().ToLowerInvariant();
+        _validationError = Validate(_name, _mapping);
+        if (_validationError != null) return;
+
+        _busy = true;
+        var ok = await RunAsync(async () =>
+        {
+            if (await Client!.IndexExistsAsync(_name)) throw new InvalidOperationException($"Index {_name} already exists");
+            await Client.CreateIndexAsync(_name);
+            await Client.PutMappingAsync(_name, MappingInference.ToIndexMapping(_mapping, _phonetics));
+        }, $"Index {_name} created");
+        _busy = false;
+
+        if (ok)
+        {
+            Navigation.NavigateTo($"{InstanceUrl}/index/{Uri.EscapeDataString(_name)}");
+        }
+    }
+}

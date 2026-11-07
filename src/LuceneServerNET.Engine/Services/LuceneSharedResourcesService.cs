@@ -7,6 +7,8 @@ using Lucene.Net.Util;
 using LuceneServerNET.Core.Extensions;
 using LuceneServerNET.Core.Models.Mapping;
 using LuceneServerNET.Engine.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
@@ -20,7 +22,7 @@ namespace LuceneServerNET.Engine.Services
     {
         const LuceneVersion AppLuceneVersion = LuceneVersion.LUCENE_48;
 
-        private static readonly TimeSpan BackgroundInterval = TimeSpan.FromSeconds(20);
+        private const int DefaultBackgroundCommitSeconds = 20;
 
         private readonly string _rootPath;
         private readonly ConcurrentDictionary<string, LuceneResources> _resources;
@@ -30,14 +32,21 @@ namespace LuceneServerNET.Engine.Services
         private int _timerRunning = 0;
         private int _disposed = 0;
 
-        public LuceneSharedResourcesService(IOptionsMonitor<LuceneServiceOptions> options)
+        private readonly ILogger _logger;
+
+        public LuceneSharedResourcesService(IOptionsMonitor<LuceneServiceOptions> options,
+                                            ILogger<LuceneSharedResourcesService> logger = null)
         {
+            _logger = (ILogger)logger ?? NullLogger.Instance;
+
             _rootPath = options.CurrentValue.RootPath.CreateDirectoryIfNotExists();
 
             _resources = new ConcurrentDictionary<string, LuceneResources>();
             _mappings = new ConcurrentDictionary<string, MappingResource>();
 
-            _timer = new Timer(Timer_Elapsed, null, BackgroundInterval, BackgroundInterval);
+            var seconds = options.CurrentValue.BackgroundCommitSeconds;
+            var backgroundInterval = TimeSpan.FromSeconds(seconds > 0 ? seconds : DefaultBackgroundCommitSeconds);
+            _timer = new Timer(Timer_Elapsed, null, backgroundInterval, backgroundInterval);
         }
 
         private LuceneResources GetResources(string indexName)
@@ -139,7 +148,7 @@ namespace LuceneServerNET.Engine.Services
                     catch (Exception ex)
                     {
                         // an unhandled exception in a timer callback would terminate the process
-                        Console.Error.WriteLine($"Index {kv.Key}: background refresh/commit failed: {ex.Message}");
+                        _logger.LogError(ex, "Index {IndexName}: background refresh/commit failed", kv.Key);
                     }
                 }
             }
@@ -200,7 +209,7 @@ namespace LuceneServerNET.Engine.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Index {key}: release failed: {ex.Message}");
+                    _logger.LogError(ex, "Index {IndexName}: release failed", key);
                 }
             }
 

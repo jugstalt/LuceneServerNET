@@ -364,7 +364,7 @@ namespace LuceneServerNET.Engine.Services
                             }
                             else
                             {
-                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToInt32(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToInt32()));
                             }
                             break;
                         case FieldTypes.DoubleType:
@@ -377,7 +377,7 @@ namespace LuceneServerNET.Engine.Services
                             }
                             else
                             {
-                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToDouble(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToDouble()));
                             }
                             break;
                         case FieldTypes.SingleType:
@@ -390,7 +390,7 @@ namespace LuceneServerNET.Engine.Services
                             }
                             else
                             {
-                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, Convert.ToSingle(value)));
+                                doc.Add(new Lucene.Net.Documents.StoredField(field.Name, value.ToSingle()));
                             }
                             break;
                         case FieldTypes.DateTimeType:
@@ -468,6 +468,53 @@ namespace LuceneServerNET.Engine.Services
             }
 
             _resources.RefreshResources(indexName);
+        }
+
+        #endregion
+
+        #region Administration
+
+        /// <summary>
+        /// Names of all indices (directories in the root path, without the hidden ".name" meta directories).
+        /// </summary>
+        public IEnumerable<string> IndexNames()
+        {
+            var root = new DirectoryInfo(_rootPath);
+            if (!root.Exists)
+            {
+                return Array.Empty<string>();
+            }
+
+            return root.GetDirectories()
+                       .Select(d => d.Name)
+                       .Where(n => !n.StartsWith(".") && PathGuard.IsValidName(n))
+                       .OrderBy(n => n)
+                       .ToArray();
+        }
+
+        public Core.Models.Admin.IndexStats IndexStats(string indexName)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new IndexNotFoundException();
+            }
+
+            var stats = new Core.Models.Admin.IndexStats() { Name = indexName };
+
+            var indexDirectory = new DirectoryInfo(PathGuard.Combine(_rootPath, PathGuard.ValidateIndexName(indexName)));
+            var files = indexDirectory.GetFiles("*", SearchOption.AllDirectories);
+            stats.SizeInBytes = files.Sum(f => f.Length);
+            stats.LastModifiedUtc = files.Length > 0 ? files.Max(f => f.LastWriteTimeUtc) : null;
+
+            if (files.Any(f => f.Name.StartsWith("segments")))
+            {
+                using var searcherLease = _resources.AcquireSearcher(indexName);
+                var reader = searcherLease.Searcher.IndexReader;
+                stats.DocumentCount = reader.NumDocs;
+                stats.DeletedDocumentCount = reader.NumDeletedDocs;
+            }
+
+            return stats;
         }
 
         #endregion

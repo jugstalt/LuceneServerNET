@@ -33,6 +33,7 @@ Die Datei wird beim ersten Start erzeugt (siehe [Installation](../installation/i
 |---|---|
 | `RootPath` | Verzeichnis mit den Index-Ordnern. Pflicht. |
 | `ArchivePath` | Optional. Ist er gesetzt, werden Mapping, Metadaten und jedes indizierte Dokument zusätzlich als JSON-Dateien hier abgelegt, damit ein Index neu aufgebaut werden kann. |
+| `BackgroundCommitSeconds` | Optional, Standard `20`. Intervall (Sekunden), in dem der Server alle offenen Indizes im Hintergrund refresht und committet. Änderungen sind spätestens nach dieser Zeit in der Suche sichtbar, auch ohne explizites `refresh`. |
 | `AutoRestoreOnStartup` | Beim Start archivierte Indizes neu aufbauen, die in `RootPath` nicht mehr existieren (z. B. nach einem Container-Neustart ohne persistenten Speicher). |
 | `AutoRestoreOnStartupCount` | Wenn `> 0`: nur die letzten *n* archivierten Dokumente je Index wiederherstellen. |
 | `AutoRestoreOnStartupSinceSeconds` | Wenn `Count` `0` ist und dieser Wert `> 0`: nur Dokumente aus diesem Zeitraum wiederherstellen (Standard `86400` = 1 Tag). Sind beide `0`, werden alle Dokumente wiederhergestellt. |

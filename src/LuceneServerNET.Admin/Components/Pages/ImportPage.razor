@@ -1,0 +1,404 @@
+@page "/i/{InstanceName}/import"
+@inherits InstancePageBase
+@implements IAsyncDisposable
+@inject ImportService Importer
+@inject IConfiguration Configuration
+
+<PageTitle>Import · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem("Import", null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudText Typo="Typo.h4" Class="mb-4">Import</MudText>
+
+    @if (!Status.CanWrite)
+    {
+        <MudAlert Severity="Severity.Warning">The API client of this instance has no write role.</MudAlert>
+    }
+    else
+    {
+        @* 1. target + file *@
+        <MudPaper Class="pa-4 mb-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">1. Target and file</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudToggleGroup T="bool" Value="_newIndex" ValueChanged="OnTargetModeChanged" Outlined="true" Disabled="_running">
+                        <MudToggleItem Value="false" Text="Existing index" />
+                        <MudToggleItem Value="true" Text="New index" />
+                    </MudToggleGroup>
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    @if (_newIndex)
+                    {
+                        <MudTextField @bind-Value="_indexName" Label="New index name" Variant="Variant.Outlined" Immediate="true" Disabled="_running"
+                                      HelperText="a-z, 0-9, '_' and '-'" Error="@(!String.IsNullOrEmpty(_indexName) && !CreateIndex.IsValidIndexName(_indexName))" />
+                    }
+                    else
+                    {
+                        <MudSelect T="string" Value="_indexName" ValueChanged="OnExistingIndexChanged" Label="Index" Variant="Variant.Outlined" Disabled="_running">
+                            @foreach (var index in _indices)
+                            {
+                                <MudSelectItem Value="index">@index</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </MudItem>
+                <MudItem xs="12">
+                    <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".csv,.txt,.tsv,.json,.ndjson,.jsonl" Disabled="_running" MaximumFileCount="1">
+                        <CustomContent Context="upload">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync" Disabled="_running">Choose CSV / JSON file</MudButton>
+                        </CustomContent>
+                    </MudFileUpload>
+                    @if (_uploading)
+                    {
+                        <MudProgressLinear Color="Color.Primary" Value="_uploadPercent" Class="mt-2" />
+                    }
+                    @if (_fileName is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">
+                            <b>@_fileName</b> (@Format.Bytes(_fileSize), @_format) · columns: @_columns.Count · sample rows: @_sample.Count
+                        </MudText>
+                    }
+                    <MudText Typo="Typo.caption">CSV with header row (delimiter , ; tab or | is detected) · JSON array of objects or NDJSON · max. @Format.Bytes(MaxFileSize)</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (_mapping is not null)
+        {
+            @* 2. preview + mapping *@
+            <MudPaper Class="pa-4 mb-4" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">2. Preview</MudText>
+                <div style="overflow-x:auto">
+                    <MudSimpleTable Dense="true" Outlined="true">
+                        <thead><tr>@foreach (var column in _columns) { <th class="mono">@column</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var row in _sample.Take(8))
+                            {
+                                <tr>@foreach (var column in _columns) { <td>@Shorten(Format.Value(row.TryGetValue(column, out var v) ? v : null))</td> }</tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+
+                <MudText Typo="Typo.h6" Class="mt-4 mb-2">3. Mapping</MudText>
+                @if (_newIndex)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2">The types were derived from the first @_sample.Count rows. Check and adjust them before importing.</MudText>
+                    <MudSelect @bind-Value="_phonetics" Label="Phonetics of the primary fields" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2">
+                        @foreach (var algorithm in Enum.GetValues<LuceneServerNET.Core.Phonetics.Algorithm>())
+                        {
+                            <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MappingEditor Mapping="_mapping" ShowColumns="true" />
+                }
+                else if (_existingMapping is null)
+                {
+                    <MudAlert Severity="Severity.Warning">The index has no mapping yet. Create it as new index or define a mapping first.</MudAlert>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2">Columns are assigned to the fields of the existing mapping by name.</MudText>
+                    <MappingEditor Mapping="_mapping" ShowColumns="true" ReadOnlyTypes="true" ExistingFields="_existingMapping.Fields" />
+                }
+            </MudPaper>
+
+            @* 3. options + run *@
+            <MudPaper Class="pa-4 mb-4" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-2">4. Import</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
+                    <MudNumericField @bind-Value="_options.BatchSize" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" Disabled="_running" />
+                    <MudNumericField @bind-Value="_options.MaxErrors" Label="Stop after errors (0 = never)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" Disabled="_running" />
+                    @if (!_newIndex)
+                    {
+                        <MudCheckBox @bind-Value="_options.ClearIndexFirst" Label="Clear index first" Color="Color.Error" Disabled="_running" />
+                    }
+                    <MudCheckBox @bind-Value="_options.RefreshAtEnd" Label="Refresh at the end" Disabled="_running" />
+                    <MudSpacer />
+                    @if (_running)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => _cancellation?.Cancel()">Cancel</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="StartAsync" Disabled="!CanStart">Start import</MudButton>
+                    }
+                </MudStack>
+
+                @if (_validationError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">@_validationError</MudAlert>
+                }
+
+                @if (_progress is not null)
+                {
+                    <MudProgressLinear Class="mt-4" Color="Color.Primary" Indeterminate="_running" Value="100" />
+                    <MudText Typo="Typo.body2" Class="mt-2">
+                        Read @Format.Number(_progress.Read) · imported @Format.Number(_progress.Imported) · failed @Format.Number(_progress.Failed) · @_progress.Batches batches
+                    </MudText>
+                }
+            </MudPaper>
+
+            @if (_report is not null)
+            {
+                <MudPaper Class="pa-4" Outlined="true">
+                    <MudText Typo="Typo.h6" Class="mb-2">Report</MudText>
+                    <MudAlert Severity="@ReportSeverity">
+                        @Format.Number(_report.Imported) of @Format.Number(_report.Read) rows imported in @_report.Duration.TotalSeconds.ToString("0.0") s.
+                        @if (_report.Cancelled) { <span> Cancelled.</span> }
+                        @if (_report.StoppedBecauseOfErrors) { <span> Stopped: too many errors.</span> }
+                        @if (_report.FatalError is not null) { <span> Error: @_report.FatalError</span> }
+                    </MudAlert>
+                    @if (_report.Errors.Count > 0)
+                    {
+                        <MudTable Items="_report.Errors" Dense="true" Class="mt-3" Elevation="0" Outlined="true" RowsPerPage="25">
+                            <HeaderContent><MudTh>Row</MudTh><MudTh>Error</MudTh></HeaderContent>
+                            <RowTemplate><MudTd>@context.Row</MudTd><MudTd>@context.Message</MudTd></RowTemplate>
+                            <PagerContent><MudTablePager /></PagerContent>
+                        </MudTable>
+                    }
+                    <MudButton Class="mt-3" Variant="Variant.Text" Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(_indexName)}")">Open index</MudButton>
+                </MudPaper>
+            }
+        }
+    }
+</InstanceGuard>
+
+@code {
+    [SupplyParameterFromQuery(Name = "index")] public string? PreselectedIndex { get; set; }
+
+    private const int SampleSize = 200;
+
+    private long MaxFileSize => Configuration.GetValue<long>("Admin:Import:MaxFileSizeMB", 500) * 1024 * 1024;
+
+    private IReadOnlyList<string> _indices = [];
+    private bool _newIndex;
+    private string _indexName = "";
+    private IndexMapping? _existingMapping;
+    private LuceneServerNET.Core.Phonetics.Algorithm _phonetics;
+
+    private string? _tempFile, _fileName;
+    private long _fileSize;
+    private SourceFormat _format;
+    private bool _uploading;
+    private double _uploadPercent;
+    private List<IDictionary<string, object?>> _sample = [];
+    private List<string> _columns = [];
+    private InferredMapping? _mapping;
+
+    private ImportOptions _options = new();
+    private bool _running;
+    private CancellationTokenSource? _cancellation;
+    private ImportProgress? _progress;
+    private ImportReport? _report;
+    private string? _validationError;
+
+    private bool CanStart => _mapping is not null && !String.IsNullOrWhiteSpace(_indexName) && (_newIndex || _existingMapping is not null);
+
+    private Severity ReportSeverity => _report switch
+    {
+        { FatalError: not null } or { StoppedBecauseOfErrors: true } => Severity.Error,
+        { Cancelled: true } => Severity.Warning,
+        { Errors.Count: > 0 } => Severity.Warning,
+        _ => Severity.Success
+    };
+
+    protected override async Task LoadAsync()
+    {
+        _indices = (await Client!.GetIndicesAsync()).ToList();
+        if (!String.IsNullOrEmpty(PreselectedIndex) && _indices.Contains(PreselectedIndex))
+        {
+            await OnExistingIndexChanged(PreselectedIndex);
+        }
+        else if (_indices.Count == 0)
+        {
+            _newIndex = true;
+        }
+    }
+
+    private async Task OnTargetModeChanged(bool newIndex)
+    {
+        _newIndex = newIndex;
+        _indexName = "";
+        _existingMapping = null;
+        _options.ClearIndexFirst = false;
+        await BuildMappingAsync();
+    }
+
+    private async Task OnExistingIndexChanged(string index)
+    {
+        _indexName = index;
+        await RunAsync(async () => _existingMapping = await Client!.GetMappingAsync(index));
+        await BuildMappingAsync();
+    }
+
+    private async Task OnFileSelectedAsync(IBrowserFile? file)
+    {
+        if (file is null) return;
+
+        DeleteTempFile();
+        _report = null;
+        _progress = null;
+        _uploading = true;
+        _uploadPercent = 0;
+
+        try
+        {
+            if (file.Size > MaxFileSize)
+            {
+                throw new InvalidOperationException($"File is larger than {Format.Bytes(MaxFileSize)}");
+            }
+
+            _tempFile = Path.Combine(Path.GetTempPath(), $"lucene-admin-import-{Guid.NewGuid():N}{Path.GetExtension(file.Name)}");
+            await using (var source = file.OpenReadStream(MaxFileSize))
+            await using (var target = File.Create(_tempFile))
+            {
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read));
+                    total += read;
+                    var percent = file.Size == 0 ? 100 : total * 100.0 / file.Size;
+                    if (percent - _uploadPercent >= 2)
+                    {
+                        _uploadPercent = percent;
+                        StateHasChanged();
+                    }
+                }
+            }
+
+            _fileName = file.Name;
+            _fileSize = file.Size;
+            _format = DocumentReaders.DetectFormat(file.Name);
+
+            _sample = [];
+            await using (var stream = File.OpenRead(_tempFile))
+            {
+                await foreach (var row in DocumentReaders.ReadAsync(stream, _format))
+                {
+                    _sample.Add(row);
+                    if (_sample.Count >= SampleSize) break;
+                }
+            }
+            _columns = _sample.SelectMany(r => r.Keys).Distinct().ToList();
+
+            if (_sample.Count == 0)
+            {
+                throw new InvalidOperationException("The file contains no rows");
+            }
+
+            if (_newIndex && String.IsNullOrWhiteSpace(_indexName))
+            {
+                _indexName = System.Text.RegularExpressions.Regex.Replace(Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant(), "[^a-z0-9_-]", "_");
+                if (_indexName.Length > 64) _indexName = _indexName[..64];
+            }
+
+            await BuildMappingAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            DeleteTempFile();
+            _mapping = null;
+            _fileName = null;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private Task BuildMappingAsync()
+    {
+        if (_sample.Count == 0)
+        {
+            _mapping = null;
+        }
+        else if (_newIndex)
+        {
+            _mapping = MappingInference.Infer(_sample);
+        }
+        else
+        {
+            _mapping = _existingMapping is null ? new InferredMapping() : ImportService.FromExistingMapping(_existingMapping, _columns);
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task StartAsync()
+    {
+        if (_mapping is null || _tempFile is null) return;
+
+        _indexName = _indexName.Trim().ToLowerInvariant();
+        _validationError = _newIndex ? CreateIndex.Validate(_indexName, _mapping) : null;
+        if (_validationError is not null) return;
+
+        if (_options.ClearIndexFirst && !await ConfirmAsync("Clear index", $"Remove all documents from {_indexName} before the import?", "Clear and import"))
+        {
+            return;
+        }
+
+        if (_newIndex)
+        {
+            var created = await RunAsync(async () =>
+            {
+                if (await Client!.IndexExistsAsync(_indexName)) throw new InvalidOperationException($"Index {_indexName} already exists");
+                await Client.CreateIndexAsync(_indexName);
+                await Client.PutMappingAsync(_indexName, MappingInference.ToIndexMapping(_mapping, _phonetics));
+            }, $"Index {_indexName} created");
+            if (!created) return;
+        }
+
+        _running = true;
+        _report = null;
+        _progress = new ImportProgress(0, 0, 0, 0);
+        _cancellation = new CancellationTokenSource();
+
+        var progress = new Progress<ImportProgress>(p =>
+        {
+            _progress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            await using var stream = File.OpenRead(_tempFile);
+            _report = await Importer.ImportAsync(Client!, _indexName,
+                                                 DocumentReaders.ReadAsync(stream, _format, _cancellation.Token),
+                                                 _mapping, _options, progress, _cancellation.Token);
+        }
+        finally
+        {
+            _running = false;
+            if (_newIndex)
+            {
+                // the index exists now => further imports go into it
+                _indices = (await Client!.GetIndicesAsync()).ToList();
+                _newIndex = false;
+                _existingMapping = await Client.GetMappingAsync(_indexName);
+            }
+        }
+    }
+
+    private static string Shorten(string value) => value.Length > 60 ? value[..60] + "…" : value;
+
+    private void DeleteTempFile()
+    {
+        try
+        {
+            if (_tempFile is not null && File.Exists(_tempFile)) File.Delete(_tempFile);
+        }
+        catch { }
+        _tempFile = null;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _cancellation?.Cancel();
+        DeleteTempFile();
+        return ValueTask.CompletedTask;
+    }
+}

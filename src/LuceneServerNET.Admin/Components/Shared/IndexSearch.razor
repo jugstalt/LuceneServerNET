@@ -1,0 +1,299 @@
+@* Search playground: autocomplete, full search with paging options, grouping. Shows the request as curl command. *@
+@using System.Text.Json
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h6" Class="mb-1">Autocomplete</MudText>
+<MudText Typo="Typo.body2" Class="mb-2">Type to search the primary fields (@string.Join(", ", Mapping?.PrimaryFields ?? [])) like a search-as-you-type input would.</MudText>
+<MudGrid>
+    <MudItem xs="12" md="8">
+        <MudAutocomplete T="Hit" Label="Search" Variant="Variant.Outlined" SearchFunc="AutocompleteAsync" ToStringFunc="h => h?.Label"
+                         ValueChanged="h => _selected = h" DebounceInterval="200" MaxItems="20" ShowProgressIndicator="true"
+                         ResetValueOnEmptyText="true" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true">
+            <ItemTemplate Context="hit">
+                <MudText Typo="Typo.body2">@hit.Label</MudText>
+                @if (hit.Detail is { Length: > 0 })
+                {
+                    <MudText Typo="Typo.caption">@hit.Detail</MudText>
+                }
+            </ItemTemplate>
+        </MudAutocomplete>
+        @if (!String.IsNullOrEmpty(_autocompleteQuery))
+        {
+            <MudText Typo="Typo.caption">q = <span class="mono">@_autocompleteQuery</span></MudText>
+        }
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudSelect @bind-Value="_labelField" Label="Label field" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var field in StoredFields)
+                {
+                    <MudSelectItem Value="field">@field</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch @bind-Value="_autocompletePhonetic" Label="Phonetic" Color="Color.Primary" />
+        </MudStack>
+    </MudItem>
+</MudGrid>
+@if (_selected is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mt-2">
+        <pre class="mono pre-wrap" style="margin:0">@JsonSerializer.Serialize(_selected.Document, _indented)</pre>
+    </MudPaper>
+}
+
+<MudDivider Class="my-6" />
+
+<MudText Typo="Typo.h6" Class="mb-2">Search</MudText>
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudTextField @bind-Value="_request.Query" Label="Query (q)" Placeholder="empty = all documents · e.g. vienna*, title:abc, ~fuzzy" Variant="Variant.Outlined" OnKeyUp="OnQueryKeyUp" Immediate="true" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField @bind-Value="_request.OutFields" Label="Out fields" Placeholder="field1,field2 (empty = all stored)" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudNumericField @bind-Value="_request.Size" Label="Size" Min="0" Max="10000" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudNumericField @bind-Value="_request.From" Label="From" Min="0" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudSelect @bind-Value="_request.SortField" Label="Sort field" Variant="Variant.Outlined" Clearable="true">
+            @foreach (var field in Mapping?.Fields.Where(f => f.Index).Select(f => f.Name) ?? [])
+            {
+                <MudSelectItem Value="field">@field</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudTextField @bind-Value="_request.Filter" Label="Spatial filter" Placeholder="bbox:minx,miny,maxx,maxy or dist:lon,lat,km" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSwitch @bind-Value="_request.SortReverse" Label="Sort descending" Color="Color.Primary" />
+            <MudSwitch @bind-Value="_request.Phonetic" Label="Phonetic" Color="Color.Primary" />
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="() => SearchAsync(false)" Disabled="_searching">Search</MudButton>
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Outlined="true" Class="pa-2 mt-3 d-flex align-center">
+    <code class="mono pre-wrap flex-grow-1">@CurlCommand</code>
+    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="CopyCurlAsync" aria-label="Copy curl command" />
+</MudPaper>
+
+@if (_result is not null)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3">
+        <MudText Typo="Typo.body2">
+            <b>@Format.Number(_result.TotalHits ?? 0)</b> hits · showing @(_result.From + 1)–@(_result.From + _hits.Count) · @_result.MilliSeconds.ToString("0.0") ms
+        </MudText>
+        <MudSpacer />
+        <MudToggleGroup T="bool" @bind-Value="_showJson" Size="Size.Small" Outlined="true">
+            <MudToggleItem Value="false" Text="Table" />
+            <MudToggleItem Value="true" Text="JSON" />
+        </MudToggleGroup>
+        @if (!String.IsNullOrEmpty(_result.NextSearchAfter))
+        {
+            <MudButton Variant="Variant.Text" EndIcon="@Icons.Material.Filled.NavigateNext" OnClick="() => SearchAsync(true)">Next page</MudButton>
+        }
+    </MudStack>
+
+    @if (_showJson)
+    {
+        <pre class="mono pre-wrap">@JsonSerializer.Serialize(_hits, _indented)</pre>
+    }
+    else
+    {
+        <div style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Hover="true" Outlined="true" Class="mt-2">
+                <thead>
+                    <tr>
+                        @foreach (var column in _columns)
+                        {
+                            <th class="mono">@column</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var hit in _hits)
+                    {
+                        <tr>
+                            @foreach (var column in _columns)
+                            {
+                                <td>@Shorten(Format.Value(hit.TryGetValue(column, out var v) ? v : null))</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    }
+}
+
+<MudDivider Class="my-6" />
+
+<MudText Typo="Typo.h6" Class="mb-2">Group by</MudText>
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudSelect @bind-Value="_groupField" Label="Field" Variant="Variant.Outlined">
+            @foreach (var field in Mapping?.Fields.Where(f => f.Index && f.FieldType == FieldTypes.StringType).Select(f => f.Name) ?? [])
+            {
+                <MudSelectItem Value="field">@field</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField @bind-Value="_groupQuery" Label="Query (optional)" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="2">
+        <MudButton Variant="Variant.Outlined" OnClick="GroupAsync" Disabled="String.IsNullOrEmpty(_groupField)" FullWidth="true" Style="height:56px">Group</MudButton>
+    </MudItem>
+</MudGrid>
+@if (_groups is not null)
+{
+    <MudSimpleTable Dense="true" Outlined="true" Class="mt-2" Style="max-width:600px">
+        <thead><tr>@foreach (var key in _groups.SelectMany(g => g.Keys).Distinct()) { <th>@key</th> }</tr></thead>
+        <tbody>
+            @foreach (var group in _groups)
+            {
+                <tr>@foreach (var key in _groups.SelectMany(g => g.Keys).Distinct()) { <td>@Format.Value(group.TryGetValue(key, out var v) ? v : null)</td> }</tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public LuceneServerV2Client Client { get; set; } = default!;
+    [Parameter, EditorRequired] public string IndexName { get; set; } = "";
+    [Parameter] public IndexMapping? Mapping { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    public class Hit
+    {
+        public string Label { get; init; } = "";
+        public string? Detail { get; init; }
+        public IDictionary<string, object> Document { get; init; } = new Dictionary<string, object>();
+    }
+
+    private static readonly JsonSerializerOptions _indented = new() { WriteIndented = true };
+
+    private string? _labelField;
+    private bool _autocompletePhonetic;
+    private Hit? _selected;
+    private string? _autocompleteQuery;
+
+    private SearchRequest _request = new();
+    private LuceneServerNET.Core.Models.Result.LuceneSearchResult? _result;
+    private List<IDictionary<string, object>> _hits = [];
+    private List<string> _columns = [];
+    private bool _searching, _showJson;
+
+    private string? _groupField, _groupQuery;
+    private List<IDictionary<string, object>>? _groups;
+
+    private IEnumerable<string> StoredFields => Mapping?.Fields.Where(f => f.Store).Select(f => f.Name) ?? [];
+
+    protected override void OnParametersSet()
+    {
+        _labelField ??= Mapping?.PrimaryFields?.FirstOrDefault(p => StoredFields.Contains(p)) ?? StoredFields.FirstOrDefault();
+    }
+
+    private string CurlCommand
+    {
+        get
+        {
+            var url = $"{Client.ServerUrl}/{LuceneServerV2Client.SearchPath(IndexName, _request)}";
+            return $"curl \"{url}\"";
+        }
+    }
+
+    private async Task<IEnumerable<Hit>> AutocompleteAsync(string? text, CancellationToken cancellationToken)
+    {
+        if (String.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        try
+        {
+            // phonetic search encodes whole words => no prefix query
+            _autocompleteQuery = _autocompletePhonetic ? text.Trim() : AutocompleteQuery.Build(text);
+            var result = await Client.SearchAsync(IndexName, new SearchRequest { Query = _autocompleteQuery, Size = 10, Phonetic = _autocompletePhonetic }, cancellationToken);
+            await InvokeAsync(StateHasChanged);
+            var others = StoredFields.Where(f => f != _labelField).Take(3).ToArray();
+
+            return (result.Hits ?? []).Select(h => new Hit
+            {
+                Label = _labelField != null && h.TryGetValue(_labelField, out var label) ? Format.Value(label) : "(no label)",
+                Detail = String.Join(" · ", others.Where(h.ContainsKey).Select(f => Shorten(Format.Value(h[f]), 40))),
+                Document = h
+            }).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return [];
+        }
+    }
+
+    private async Task OnQueryKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync(false);
+    }
+
+    private async Task SearchAsync(bool nextPage)
+    {
+        _searching = true;
+        try
+        {
+            if (nextPage && _result?.NextSearchAfter is { } cursor)
+            {
+                _request.SearchAfter = cursor;
+                _request.From = 0;
+            }
+            else
+            {
+                _request.SearchAfter = null;
+            }
+
+            _result = await Client.SearchAsync(IndexName, _request);
+            _hits = (_result.Hits ?? []).ToList();
+            _columns = _hits.SelectMany(h => h.Keys).Distinct().OrderBy(k => k.StartsWith('_') ? 1 : 0).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private async Task GroupAsync()
+    {
+        try
+        {
+            _groups = (await Client.GroupAsync(IndexName, _groupField!, _groupQuery)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task CopyCurlAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", CurlCommand);
+        Snackbar.Add("Copied", Severity.Info);
+    }
+
+    private static string Shorten(string value, int max = 120) => value.Length > max ? value[..max] + "…" : value;
+}

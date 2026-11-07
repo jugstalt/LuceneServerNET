@@ -1,0 +1,42 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout Layout.EmptyLayout
+@using LuceneServerNET.Admin.Services.Auth
+@inject IConfiguration Configuration
+
+<PageTitle>Login · LuceneServer.NET Admin</PageTitle>
+
+<div class="login-page">
+    <div class="login-card">
+        <h1>LuceneServer.NET <span>Admin</span></h1>
+
+        @if (Configuration.AuthenticationType() == AdminAuthentication.Oidc)
+        {
+            <a class="login-button" href="account/oidc-login?returnUrl=@Uri.EscapeDataString(SafeReturnUrl)">Sign in</a>
+        }
+        else
+        {
+            @if (Error is not null)
+            {
+                <div class="login-error">Invalid user name or password.</div>
+            }
+            <form method="post" action="account/login">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="@SafeReturnUrl" />
+                <label for="username">User</label>
+                <input id="username" name="username" autocomplete="username" required autofocus />
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required />
+                <button class="login-button" type="submit">Sign in</button>
+            </form>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    private string SafeReturnUrl => AdminAuthentication.SafeReturnUrl(ReturnUrl);
+}

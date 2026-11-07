@@ -2,6 +2,7 @@
 using Lucene.Net.Search;
 using LuceneServerNET.Core.Models.Mapping;
 using System;
+using System.Globalization;
 
 namespace LuceneServerNET.Engine.Extensions;
 
@@ -13,6 +14,17 @@ static public class MappingFieldExtensions
 
         switch (fieldMapping.FieldType)
         {
+            case FieldTypes.Int32Type:
+            case FieldTypes.DoubleType:
+            case FieldTypes.SingleType:
+                // Document.Get() formats numbers with the current culture ("47,0707" on a german server)
+                // => format the stored numeric value culture invariant (stays a string for compatibility)
+                var numeric = doc.GetField(fieldMapping.Name)?.GetNumericValue();
+                if (numeric != null)
+                {
+                    val = Convert.ToString(numeric, CultureInfo.InvariantCulture);
+                }
+                break;
             case FieldTypes.DateTimeType:
                 try
                 {

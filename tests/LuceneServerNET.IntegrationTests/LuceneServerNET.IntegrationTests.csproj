@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LuceneServerNET\LuceneServerNET.csproj" />
+    <ProjectReference Include="..\..\src\LuceneServerNET.Client\LuceneServerNET.Client.csproj" />
   </ItemGroup>
 
 </Project>

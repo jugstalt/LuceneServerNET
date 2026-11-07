@@ -54,6 +54,7 @@ plugins:
             Clients: Clients
             .NET client: .NET-Client
             Sample applications: Beispielanwendungen
+            Admin UI: Admin-Oberfläche
             Tools: Tools
             Changelog: Changelog
 
@@ -79,6 +80,7 @@ nav:
   - Clients:
       - .NET client: clients/dotnet-client.md
       - Sample applications: clients/samples.md
+  - Admin UI: admin.md
   - Tools: tools.md
   - Changelog: changelog.md
 

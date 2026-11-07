@@ -43,6 +43,10 @@ Unlike v1 (always HTTP 200), v2 returns errors with a matching status code. The 
 | GET | `/api/v2/indices/{index}/search` | read | `GET /Lucene/search/{index}` |
 | GET | `/api/v2/indices/{index}/search/phonetic` | read | `GET /Lucene/searchphonetic/{index}` |
 | GET | `/api/v2/indices/{index}/groups?field=&q=` | read | `GET /Lucene/group/{index}?groupField=&q=` |
+| GET | `/api/v2/indices` (index names) | read | – |
+| GET | `/api/v2/indices/{index}/stats` | read | – |
+| GET | `/api/v2/admin/info` | admin | – |
+| GET | `/api/v2/admin/whoami` | read | – |
 
 ## Search and paging
 

@@ -1,0 +1,96 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject InstanceRegistry Registry
+@inject IConfiguration Configuration
+@using LuceneServerNET.Admin.Services.Auth
+
+<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="() => _drawerOpen = !_drawerOpen" />
+        <MudText Typo="Typo.h6" Class="ml-2">LuceneServer.NET <span style="opacity:.7">Admin</span></MudText>
+        <MudSpacer />
+        <MudTooltip Text="Toggle dark mode">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="() => _isDarkMode = !_isDarkMode" />
+        </MudTooltip>
+        <AuthorizeView>
+            <Authorized>
+                @if (Configuration.AuthenticationType() != AdminAuthentication.None)
+                {
+                    <MudText Typo="Typo.body2" Class="mx-2 d-none d-sm-flex">@context.User.Identity?.Name</MudText>
+                    <form method="post" action="account/logout">
+                        <AntiforgeryToken />
+                        <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" aria-label="Logout" />
+                    </form>
+                }
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
+        <MudNavMenu>
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="instances" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dns">Instances</MudNavLink>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Instances</MudText>
+            @foreach (var instance in _instances)
+            {
+                <MudNavLink Href="@($"i/{Uri.EscapeDataString(instance.Name)}")" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Storage">@instance.Name</MudNavLink>
+            }
+            @if (_instances.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="px-4">No instances yet</MudText>
+            }
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+<div id="blazor-error-ui" style="display:none">
+    An unhandled error has occurred. <a href="" class="reload">Reload</a>
+</div>
+
+@code {
+    private MudThemeProvider? _themeProvider;
+    private bool _isDarkMode;
+    private bool _drawerOpen = true;
+    private IReadOnlyList<ServerInstance> _instances = [];
+
+    private readonly MudTheme _theme = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Registry.Changed += OnInstancesChanged;
+        await LoadInstancesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _themeProvider != null)
+        {
+            _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadInstancesAsync()
+        => _instances = await Registry.GetAllAsync();
+
+    private void OnInstancesChanged()
+        => InvokeAsync(async () =>
+        {
+            await LoadInstancesAsync();
+            StateHasChanged();
+        });
+
+    public void Dispose() => Registry.Changed -= OnInstancesChanged;
+}

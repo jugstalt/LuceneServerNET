@@ -33,6 +33,7 @@ The file is created on the first start (see [Installation](../installation/index
 |---|---|
 | `RootPath` | Directory containing the index folders. Required. |
 | `ArchivePath` | Optional. If set, mapping, metadata and every indexed document are additionally written here as JSON files, so an index can be rebuilt. |
+| `BackgroundCommitSeconds` | Optional, default `20`. Interval (seconds) in which the server refreshes and commits all open indices in the background. Changes become visible to searches at the latest after this time, even without an explicit `refresh`. |
 | `AutoRestoreOnStartup` | On startup, rebuild archived indices that no longer exist in `RootPath` (e.g. after a container restart with non-persistent storage). |
 | `AutoRestoreOnStartupCount` | If `> 0`: restore only the last *n* archived documents per index. |
 | `AutoRestoreOnStartupSinceSeconds` | If `Count` is `0` and this is `> 0`: restore only documents archived within this period (default `86400` = 1 day). If both are `0`, all documents are restored. |

@@ -38,6 +38,19 @@ public class IndicesController : LuceneControllerBase
 
     #region Index
 
+    /// <summary>Returns the names of all indices.</summary>
+    [HttpGet]
+    public Task<IApiResult> ListIndices()
+        => SecureMethodHandler(() => new LuceneGenericListResult<string>()
+        {
+            Result = _lucene.IndexNames()
+        });
+
+    /// <summary>Returns statistics of the index (document count, size on disk, last modification).</summary>
+    [HttpGet("{id}/stats")]
+    public Task<IApiResult> Stats(string id)
+        => SecureMethodHandler(id, (id) => new IndexStatsResult() { Stats = _lucene.IndexStats(id) });
+
     /// <summary>Creates an index.</summary>
     [HttpPut("{id}")]
     [Authorize(Policy = ApiRoles.Write)]

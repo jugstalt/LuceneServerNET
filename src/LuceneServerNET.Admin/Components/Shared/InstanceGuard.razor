@@ -1,0 +1,27 @@
+@* Shows loading / not found / offline states for instance pages, else the content. *@
+
+@if (Loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (Instance is null)
+{
+    <MudAlert Severity="Severity.Warning">Instance not found.</MudAlert>
+}
+else if (!Status.Online)
+{
+    <MudAlert Severity="Severity.Error">
+        <b>@Instance.Name</b> (@Instance.Url) is not reachable: @Status.Error
+    </MudAlert>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public ServerInstance? Instance { get; set; }
+    [Parameter] public InstanceStatus Status { get; set; } = new();
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

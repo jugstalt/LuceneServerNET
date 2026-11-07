@@ -1,0 +1,239 @@
+@page "/i/{InstanceName}/index/{IndexName}"
+@inherits InstancePageBase
+@using System.Text.Json
+
+<PageTitle>@IndexName · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem(IndexName, null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    @if (_notFound)
+    {
+        <MudAlert Severity="Severity.Warning">Index @IndexName does not exist on @InstanceName.</MudAlert>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudText Typo="Typo.h4">@IndexName</MudText>
+            @if (_stats is not null)
+            {
+                <MudChip T="string" Size="Size.Small">@Format.Number(_stats.DocumentCount) documents</MudChip>
+                <MudChip T="string" Size="Size.Small">@Format.Bytes(_stats.SizeInBytes)</MudChip>
+            }
+            <MudSpacer />
+            @if (Status.CanWrite)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upload" Href="@($"{InstanceUrl}/import?index={Uri.EscapeDataString(IndexName)}")">Import</MudButton>
+            }
+        </MudStack>
+
+        <MudTabs Elevation="0" Outlined="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4" KeepPanelsAlive="true">
+            <MudTabPanel Text="Search" Icon="@Icons.Material.Filled.Search">
+                <IndexSearch Client="Client!" IndexName="@IndexName" Mapping="_mapping" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Overview" Icon="@Icons.Material.Filled.Info">
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Statistics</MudText>
+                        <MudSimpleTable Dense="true" Outlined="true">
+                            <tbody>
+                                <tr><td>Documents</td><td>@(_stats is null ? "–" : Format.Number(_stats.DocumentCount))</td></tr>
+                                <tr><td>Deleted (not merged)</td><td>@(_stats is null ? "–" : Format.Number(_stats.DeletedDocumentCount))</td></tr>
+                                <tr><td>Size on disk</td><td>@(_stats is null ? "–" : Format.Bytes(_stats.SizeInBytes))</td></tr>
+                                <tr><td>Last modified</td><td>@Format.Date(_stats?.LastModifiedUtc)</td></tr>
+                                <tr><td>Primary fields</td><td>@string.Join(", ", _mapping?.PrimaryFields ?? [])</td></tr>
+                                <tr><td>Phonetics</td><td>@(_mapping?.PrimaryFieldsPhonetics.ToString() ?? "–")</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudItem>
+                    <MudItem xs="12" md="8">
+                        <MudText Typo="Typo.h6" Class="mb-2">Mapping</MudText>
+                        @if (_mapping is null)
+                        {
+                            <MudAlert Severity="Severity.Info">No mapping defined.</MudAlert>
+                        }
+                        else
+                        {
+                            <MudSimpleTable Dense="true" Outlined="true">
+                                <thead><tr><th>Field</th><th>Type</th><th>Indexed</th><th>Stored</th><th>Primary</th></tr></thead>
+                                <tbody>
+                                    @foreach (var field in _mapping.Fields)
+                                    {
+                                        <tr>
+                                            <td class="mono">@field.Name</td>
+                                            <td>@field.FieldType</td>
+                                            <td>@(field.Index ? "✓" : "")</td>
+                                            <td>@(field.Store ? "✓" : "")</td>
+                                            <td>@(_mapping.PrimaryFields?.Contains(field.Name) == true ? "✓" : "")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                            <MudExpansionPanels Class="mt-3" Elevation="0">
+                                <MudExpansionPanel Text="Mapping JSON">
+                                    <pre class="mono pre-wrap">@JsonSerializer.Serialize(_mapping, new JsonSerializerOptions { WriteIndented = true })</pre>
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Metadata" Icon="@Icons.Material.Filled.Notes">
+                <MudTable Items="_metadata" Dense="true" Hover="true" Outlined="true" Elevation="0">
+                    <HeaderContent><MudTh>Name</MudTh><MudTh>Value</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd Class="mono">@context.Key</MudTd>
+                        <MudTd><span class="mono pre-wrap">@Shorten(context.Value)</span></MudTd>
+                        <MudTd Style="text-align:right">
+                            @if (Status.CanWrite)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => { _metaName = context.Key; _metaValue = context.Value; }" aria-label="Edit" />
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText>No metadata.</MudText></NoRecordsContent>
+                </MudTable>
+
+                @if (Status.CanWrite)
+                {
+                    <MudPaper Class="pa-4 mt-4" Outlined="true">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Add / update metadata</MudText>
+                        <MudTextField @bind-Value="_metaName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTextField @bind-Value="_metaValue" Label="Value" Variant="Variant.Outlined" Lines="6" Class="mt-2 mono" />
+                        <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveMetaAsync" Disabled="String.IsNullOrWhiteSpace(_metaName)">Save</MudButton>
+                    </MudPaper>
+                }
+            </MudTabPanel>
+
+            @if (Status.CanWrite)
+            {
+                <MudTabPanel Text="Maintenance" Icon="@Icons.Material.Filled.Build">
+                    <MudStack Spacing="4">
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <MudText Typo="Typo.h6">Refresh</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2">Commits pending changes and makes them visible to searches (the server does this every ~20 seconds anyway).</MudText>
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshIndexAsync">Refresh index</MudButton>
+                        </MudPaper>
+
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <MudText Typo="Typo.h6">Delete documents</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2">Deletes all documents where the query matches in the field (Lucene syntax, e.g. <code>abc*</code>).</MudText>
+                            <MudStack Row="true" Wrap="Wrap.Wrap">
+                                <MudSelect @bind-Value="_deleteField" Label="Field" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px">
+                                    <MudSelectItem Value="@("_guid")">_guid</MudSelectItem>
+                                    @foreach (var field in _mapping?.Fields ?? [])
+                                    {
+                                        <MudSelectItem Value="field.Name">@field.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudTextField @bind-Value="_deleteTerm" Label="Term / query" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteDocumentsAsync" Disabled="String.IsNullOrWhiteSpace(_deleteTerm)">Delete</MudButton>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <MudText Typo="Typo.h6">Clear index</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2">Removes all documents. Mapping and metadata are kept.</MudText>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearAsync">Clear index</MudButton>
+                        </MudPaper>
+
+                        @if (Status.IsAdmin)
+                        {
+                            <MudPaper Class="pa-4" Outlined="true" Style="border-color:var(--mud-palette-error)">
+                                <MudText Typo="Typo.h6" Color="Color.Error">Delete index</MudText>
+                                <MudText Typo="Typo.body2" Class="mb-2">Deletes the index including mapping, metadata and archive. Type the index name to confirm.</MudText>
+                                <MudStack Row="true">
+                                    <MudTextField @bind-Value="_deleteConfirm" Placeholder="@IndexName" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="DeleteIndexAsync" Disabled="@(_deleteConfirm != IndexName)">Delete index</MudButton>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                </MudTabPanel>
+            }
+        </MudTabs>
+    }
+</InstanceGuard>
+
+@code {
+    [Parameter] public string IndexName { get; set; } = "";
+
+    private bool _notFound;
+    private IndexStats? _stats;
+    private IndexMapping? _mapping;
+    private IDictionary<string, string> _metadata = new Dictionary<string, string>();
+
+    private string _metaName = "", _metaValue = "";
+    private string _deleteField = "_guid", _deleteTerm = "", _deleteConfirm = "";
+
+    protected override async Task LoadAsync()
+    {
+        if (!await Client!.IndexExistsAsync(IndexName))
+        {
+            _notFound = true;
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            _stats = await Client.GetIndexStatsAsync(IndexName);
+            _mapping = await Client.GetMappingAsync(IndexName);
+            _metadata = await Client.GetMetadataAsync(IndexName);
+        });
+    }
+
+    private static string Shorten(string value) => value.Length > 300 ? value[..300] + " …" : value;
+
+    private async Task ReloadStatsAsync() => await RunAsync(async () => _stats = await Client!.GetIndexStatsAsync(IndexName));
+
+    private async Task SaveMetaAsync()
+    {
+        if (await RunAsync(() => Client!.PutMetadataAsync(IndexName, _metaName.Trim(), _metaValue), $"Metadata {_metaName} saved"))
+        {
+            _metadata = await Client!.GetMetadataAsync(IndexName);
+            _metaName = _metaValue = "";
+        }
+    }
+
+    private async Task RefreshIndexAsync()
+    {
+        await RunAsync(() => Client!.RefreshIndexAsync(IndexName), "Index refreshed");
+        await ReloadStatsAsync();
+    }
+
+    private async Task DeleteDocumentsAsync()
+    {
+        if (!await ConfirmAsync("Delete documents", $"Delete all documents where {_deleteField} matches '{_deleteTerm}'?", "Delete")) return;
+
+        await RunAsync(async () =>
+        {
+            await Client!.RemoveDocumentsAsync(IndexName, _deleteTerm, _deleteField);
+            await Client.RefreshIndexAsync(IndexName);
+        }, "Documents deleted");
+        await ReloadStatsAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        if (!await ConfirmAsync("Clear index", $"Remove all documents from {IndexName}?", "Clear")) return;
+
+        await RunAsync(async () =>
+        {
+            await Client!.RemoveDocumentsAsync(IndexName, "*:*", "_guid");
+            await Client.RefreshIndexAsync(IndexName);
+        }, "Index cleared");
+        await ReloadStatsAsync();
+    }
+
+    private async Task DeleteIndexAsync()
+    {
+        if (_deleteConfirm != IndexName) return;
+
+        if (await RunAsync(() => Client!.RemoveIndexAsync(IndexName), $"Index {IndexName} deleted"))
+        {
+            Navigation.NavigateTo(InstanceUrl);
+        }
+    }
+}

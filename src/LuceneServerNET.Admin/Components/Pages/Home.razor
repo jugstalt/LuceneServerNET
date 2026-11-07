@@ -1,0 +1,95 @@
+@page "/"
+@inject InstanceRegistry Registry
+
+<PageTitle>Dashboard · LuceneServer.NET Admin</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Dashboard</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" Disabled="_loading">Refresh</MudButton>
+</MudStack>
+
+@if (_instances.Count == 0 && !_loading)
+{
+    <MudAlert Severity="Severity.Info">
+        No instances configured. <MudLink Href="instances">Add an instance</MudLink> or configure them in <code>Admin:Instances</code>.
+    </MudAlert>
+}
+
+<MudGrid>
+    @foreach (var (instance, status) in _instances)
+    {
+        <MudItem xs="12" sm="6" lg="4">
+            <MudCard Outlined="true">
+                <MudCardHeader>
+                    <CardHeaderAvatar>
+                        @if (status is null)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@(status.Online ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)" Color="@(status.Online ? Color.Success : Color.Error)" />
+                        }
+                    </CardHeaderAvatar>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">@instance.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="mono">@instance.Url</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (status is { Online: true })
+                    {
+                        <RoleChips Roles="status.Roles" />
+                        @if (status.Info is { } info)
+                        {
+                            <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+                                <tbody>
+                                    <tr><td>Version</td><td>@info.Version</td></tr>
+                                    <tr><td>Indices</td><td>@info.IndexCount</td></tr>
+                                    <tr><td>Uptime</td><td>@Format.Duration(info.UptimeSeconds)</td></tr>
+                                    <tr><td>Memory</td><td>@Format.Bytes(info.WorkingSetBytes)</td></tr>
+                                    <tr><td>Platform</td><td>@info.Platform · @info.Framework</td></tr>
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">Server details need the admin role.</MudText>
+                        }
+                    }
+                    else if (status is not null)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error">@status.Error</MudText>
+                    }
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Href="@($"i/{Uri.EscapeDataString(instance.Name)}")" Variant="Variant.Text" Color="Color.Primary" Disabled="@(status is not { Online: true })">Indices</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private List<(ServerInstance Instance, InstanceStatus? Status)> _instances = [];
+    private bool _loading;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _instances = (await Registry.GetAllAsync()).Select(i => (i, (InstanceStatus?)null)).ToList();
+        StateHasChanged();
+
+        var probes = _instances.Select(async (entry, index) =>
+        {
+            var status = await InstanceRegistry.ProbeAsync(Registry.CreateClient(entry.Instance));
+            _instances[index] = (entry.Instance, status);
+            await InvokeAsync(StateHasChanged);
+        });
+        await Task.WhenAll(probes);
+        _loading = false;
+    }
+}

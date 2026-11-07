@@ -345,3 +345,6 @@ healthchecksdb
 
 # NUKE
 .nuke/temp/
+
+# admin UI data (SQLite + data protection keys)
+src/LuceneServerNET.Admin/_data/

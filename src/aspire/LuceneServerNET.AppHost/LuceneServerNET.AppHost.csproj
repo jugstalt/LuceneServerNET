@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\LuceneServerNET\LuceneServerNET.csproj" />
+    <ProjectReference Include="..\..\LuceneServerNET.Admin\LuceneServerNET.Admin.csproj" />
   </ItemGroup>
 
 </Project>

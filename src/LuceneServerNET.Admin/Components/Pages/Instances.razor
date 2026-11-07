@@ -1,0 +1,165 @@
+@page "/instances"
+@inject InstanceRegistry Registry
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Instances · LuceneServer.NET Admin</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Instances</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="New">Add instance</MudButton>
+</MudStack>
+
+@if (_edit is not null)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-2">@(_edit.Id is null ? "Add instance" : $"Edit {_edit.Name}")</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_edit.Name" Label="Name" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="8"><MudTextField @bind-Value="_edit.Url" Label="Url" Placeholder="https://lucene.example.com" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_edit.ClientId" Label="Client id (optional)" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_edit.ClientSecret" Label="Client secret" InputType="InputType.Password" Variant="Variant.Outlined"
+                              HelperText="@(_edit.Id is null ? "Stored encrypted" : "Leave empty to keep the stored secret")" />
+            </MudItem>
+        </MudGrid>
+        @if (_testResult is not null)
+        {
+            <MudAlert Class="mt-3" Severity="@(_testResult.Online ? Severity.Success : Severity.Error)">
+                @if (_testResult.Online)
+                {
+                    <span>Connected. Roles: @string.Join(", ", _testResult.Roles) @(_testResult.Info is { } i ? $"· Version {i.Version}" : "")</span>
+                }
+                else
+                {
+                    <span>@_testResult.Error</span>
+                }
+            </MudAlert>
+        }
+        <MudStack Row="true" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="TestAsync">Test connection</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="() => _edit = null">Cancel</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudTable Items="_instances" Hover="true" Dense="true" Loading="_loading">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Url</MudTh>
+        <MudTh>Client</MudTh>
+        <MudTh>Source</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd><MudLink Href="@($"i/{Uri.EscapeDataString(context.Name)}")">@context.Name</MudLink></MudTd>
+        <MudTd Class="mono">@context.Url</MudTd>
+        <MudTd>@(context.ClientId ?? "–")</MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(context.Source == InstanceSource.Configuration ? "configuration" : "database")</MudChip>
+        </MudTd>
+        <MudTd Style="text-align:right">
+            @if (context.IsEditable)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => Edit(context)" aria-label="Edit" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)" aria-label="Delete" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>No instances yet.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+<MudText Typo="Typo.caption" Class="mt-2 d-block">
+    Instances from the configuration (<code>Admin:Instances</code>) are read only here.
+</MudText>
+
+@code {
+    private class EditModel
+    {
+        public long? Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string? ClientId { get; set; }
+        public string? ClientSecret { get; set; }
+    }
+
+    private IReadOnlyList<ServerInstance> _instances = [];
+    private EditModel? _edit;
+    private InstanceStatus? _testResult;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _instances = await Registry.GetAllAsync();
+        _loading = false;
+    }
+
+    private void New()
+    {
+        _edit = new EditModel();
+        _testResult = null;
+    }
+
+    private void Edit(ServerInstance instance)
+    {
+        _edit = new EditModel { Id = instance.DatabaseId, Name = instance.Name, Url = instance.Url, ClientId = instance.ClientId };
+        _testResult = null;
+    }
+
+    private async Task TestAsync()
+    {
+        if (_edit is null) return;
+
+        var secret = _edit.ClientSecret;
+        if (String.IsNullOrEmpty(secret) && _edit.Id is not null)
+        {
+            secret = _instances.FirstOrDefault(i => i.DatabaseId == _edit.Id)?.ClientSecret;
+        }
+
+        try
+        {
+            _testResult = await InstanceRegistry.ProbeAsync(Registry.CreateClient(_edit.Url, _edit.ClientId, secret));
+        }
+        catch (Exception ex)
+        {
+            _testResult = new InstanceStatus { Error = ex.Message };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_edit is null) return;
+        try
+        {
+            await Registry.SaveAsync(_edit.Id, _edit.Name, _edit.Url, _edit.ClientId, _edit.ClientSecret);
+            Snackbar.Add($"Instance {_edit.Name} saved", Severity.Success);
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(ServerInstance instance)
+    {
+        if (instance.DatabaseId is null) return;
+
+        var confirmed = await DialogService.ShowMessageBoxAsync("Remove instance",
+            $"Remove {instance.Name} from the admin UI? The server and its indices are not changed.",
+            yesText: "Remove", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        await Registry.DeleteAsync(instance.DatabaseId.Value);
+        Snackbar.Add($"Instance {instance.Name} removed", Severity.Success);
+        await LoadAsync();
+    }
+}

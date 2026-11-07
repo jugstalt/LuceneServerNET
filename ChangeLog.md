@@ -30,8 +30,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   new optional parameters `from` (offset, `from + size` ≤ 10000) and `searchAfter` (cursor);
   responses contain `totalHits`, `from`, `size` and `nextSearchAfter`.
 - `LuceneServerNET.Client`: `SearchPageAsync` / `SearchPhoneticPageAsync` (existing methods unchanged).
+- **Admin UI** (`LuceneServerNET.Admin`, Blazor Server + MudBlazor), a separate web app that
+  administrates several server instances through the v2 API:
+  dashboard (health, version, uptime, roles), index list with document count and size,
+  search playground (autocomplete, search with paging/sort/spatial filter, phonetic search,
+  group by, curl command), create index with mapping editor, import from CSV/JSON
+  (mapping proposed from a sample, configurable batch size, error report, cancel),
+  metadata editor and maintenance (refresh, delete documents by query, clear, delete index).
+  Login: local users (hashed passwords, `--hash-password`) or OpenID Connect.
+  Instances from the configuration and added in the UI (secrets encrypted with DataProtection, SQLite/Dapper).
+  Docker image: `Dockerfile.admin`; started by the Aspire AppHost.
+- API v2 endpoints for administration: `GET /api/v2/indices` (index names),
+  `GET /api/v2/indices/{id}/stats` (documents, size on disk, last modification),
+  `GET /api/v2/admin/info` (version, uptime, platform; role `admin`) and
+  `GET /api/v2/admin/whoami` (roles of the calling client).
+- `LuceneServerNET.Client`: new `LuceneServerV2Client` for the v2 API (not bound to one index;
+  `LuceneServerClient` is unchanged).
 
 ### Changed
+
+- Engine: errors of the background refresh/commit and of releasing indices are logged via `ILogger`
+  (before: `Console.Error`), so they show up in structured logs / OpenTelemetry.
+- New config `LuceneServer:BackgroundCommitSeconds` (default `20`): interval of the background
+  refresh + commit of all open indices.
 
 - **`LuceneServerNET.Client`: refresh on dispose made configurable and safer** (not breaking):
   - New property `RefreshChangedIndicesOnDispose` (default `true` = previous behavior).
@@ -97,6 +118,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Numbers independent of the server culture**: stored `double`/`single`/`int32` values were returned
+  formatted with the server culture (`"47,0707"` on a german server) and numeric strings in documents were
+  parsed with it (`"47.0707"` was indexed as `470707`). Values are now parsed and returned culture invariant
+  (`"47.0707"`; still as string, like before). Stored-only numeric fields (`index: false`) also accept JSON values now.
+  Indices with numeric strings indexed on a non-english server should be re-indexed.
 - `group`: group values are decoded with `BytesRef.Utf8ToString()` (respects offset/length) instead of
   decoding the whole underlying byte buffer. No visible effect with the current Lucene.NET version
   (it returns exact copies), but no longer relies on that implementation detail.
