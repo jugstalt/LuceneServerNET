@@ -1,0 +1,192 @@
+@page "/i/{InstanceName}/restore"
+@inherits InstancePageBase
+@implements IDisposable
+@inject CopyService Copier
+@inject IConfiguration Configuration
+
+<PageTitle>Restore · @InstanceName</PageTitle>
+
+<MudBreadcrumbs Items="@([new BreadcrumbItem("Dashboard", ""), new BreadcrumbItem(InstanceName, InstanceUrl), new BreadcrumbItem("Restore", null, disabled: true)])" Class="px-0 pt-0" />
+
+<InstanceGuard Loading="Loading" Instance="Instance" Status="Status">
+    <MudText Typo="Typo.h4" Class="mb-2">Restore an index backup</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">Upload a ZIP created with <i>Backup</i> on an index page (manifest.json, mapping.json, metadata.json, documents.ndjson).</MudText>
+
+    @if (!Status.CanWrite)
+    {
+        <MudAlert Severity="Severity.Warning">The API client of this instance has no write role.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelectedAsync" Accept=".zip" Disabled="_running" MaximumFileCount="1">
+                <CustomContent Context="upload">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="upload.OpenFilePickerAsync" Disabled="_running">Choose backup (ZIP)</MudButton>
+                </CustomContent>
+            </MudFileUpload>
+            @if (_uploading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-2" />
+            }
+
+            @if (_backup is { } backup)
+            {
+                <MudSimpleTable Dense="true" Outlined="true" Class="mt-3" Style="max-width:640px">
+                    <tbody>
+                        <tr><td>Index</td><td class="mono">@backup.Manifest.Index</td></tr>
+                        <tr><td>From instance</td><td>@(backup.Manifest.Instance ?? "–") @(backup.Manifest.ServerVersion is null ? "" : $"(server {backup.Manifest.ServerVersion})")</td></tr>
+                        <tr><td>Created</td><td>@Format.Date(backup.Manifest.CreatedUtc)</td></tr>
+                        <tr><td>Documents</td><td>@Format.Number(backup.Manifest.DocumentCount)</td></tr>
+                        <tr><td>Fields</td><td>@string.Join(", ", backup.Mapping.Fields.Select(f => $"{f.Name} ({f.FieldType})"))</td></tr>
+                        <tr><td>Metadata</td><td>@string.Join(", ", backup.Metadata.Keys)</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+                @if (backup.Manifest.NotStoredFields.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-2">Not stored fields have no values in the backup: @string.Join(", ", backup.Manifest.NotStoredFields)</MudAlert>
+                }
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4" Class="mt-3">
+                    <MudTextField @bind-Value="_targetIndex" Label="Target index" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Disabled="_running"
+                                  Error="@(!CreateIndex.IsValidIndexName(_targetIndex ?? ""))" Style="min-width:240px" />
+                    <MudNumericField @bind-Value="_options.BatchSize" Label="Batch size" Min="1" Max="10000" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" Disabled="_running" />
+                    <MudCheckBox @bind-Value="_options.CopyMetadata" Label="Restore metadata" Disabled="_running" />
+                    <MudCheckBox @bind-Value="_options.ReplaceExisting" Label="Replace the target if it exists" Color="Color.Error" Disabled="_running" />
+                    <MudSpacer />
+                    @if (_running)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => _cancellation?.Cancel()">Cancel</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Restore" OnClick="RestoreAsync" Disabled="@(!CreateIndex.IsValidIndexName(_targetIndex ?? ""))">Restore</MudButton>
+                    }
+                </MudStack>
+            }
+
+            @if (_progress is not null && _backup is not null)
+            {
+                <MudProgressLinear Class="mt-4" Color="Color.Primary" Value="@(_backup.Manifest.DocumentCount == 0 ? 100 : Math.Min(100, _progress.Imported * 100.0 / _backup.Manifest.DocumentCount))" />
+                <MudText Typo="Typo.body2" Class="mt-2">Written @Format.Number(_progress.Imported) of @Format.Number(_backup.Manifest.DocumentCount)</MudText>
+            }
+
+            @if (_report is not null)
+            {
+                <MudAlert Class="mt-3" Severity="@(_report.FatalError is null && !_report.Cancelled ? Severity.Success : _report.Cancelled ? Severity.Warning : Severity.Error)">
+                    @Format.Number(_report.Imported) documents restored in @_report.Duration.TotalSeconds.ToString("0.0") s.
+                    @if (_report.Cancelled) { <span> Cancelled.</span> }
+                    @if (_report.FatalError is not null) { <span> Error: @_report.FatalError</span> }
+                </MudAlert>
+                @if (_report.Imported > 0)
+                {
+                    <MudButton Class="mt-2" Variant="Variant.Text" Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(_restoredIndex ?? "")}")">Open index</MudButton>
+                }
+            }
+        </MudPaper>
+    }
+</InstanceGuard>
+
+@code {
+    private long MaxFileSize => Configuration.GetValue<long>("Admin:Import:MaxFileSizeMB", 500) * 1024 * 1024;
+
+    private string? _tempFile;
+    private FileStream? _file;
+    private CopyService.Backup? _backup;
+    private string? _targetIndex, _restoredIndex;
+    private CopyOptions _options = new();
+    private bool _uploading, _running;
+    private CancellationTokenSource? _cancellation;
+    private ImportProgress? _progress;
+    private ImportReport? _report;
+
+    private async Task OnFileSelectedAsync(IBrowserFile? upload)
+    {
+        if (upload is null) return;
+
+        Close();
+        _report = null;
+        _progress = null;
+        _uploading = true;
+        try
+        {
+            if (upload.Size > MaxFileSize) throw new InvalidOperationException($"File is larger than {Format.Bytes(MaxFileSize)}");
+
+            _tempFile = Path.Combine(Path.GetTempPath(), $"lucene-admin-restore-{Guid.NewGuid():N}.zip");
+            await using (var source = upload.OpenReadStream(MaxFileSize))
+            await using (var target = File.Create(_tempFile))
+            {
+                await source.CopyToAsync(target);
+            }
+
+            _file = new FileStream(_tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous);
+            _backup = CopyService.OpenBackup(_file);
+            _targetIndex = _backup.Manifest.Index;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            Close();
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task RestoreAsync()
+    {
+        if (_backup is null) return;
+        var targetIndex = _targetIndex!.Trim().ToLowerInvariant();
+
+        if (_options.ReplaceExisting && !await ConfirmAsync("Replace target", $"If {targetIndex} exists, its mapping and all documents are replaced.", "Restore"))
+        {
+            return;
+        }
+
+        _running = true;
+        _report = null;
+        _progress = new ImportProgress(0, 0, 0, 0);
+        _cancellation = new CancellationTokenSource();
+        var progress = new Progress<ImportProgress>(p =>
+        {
+            _progress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            _report = await Copier.WriteIndexAsync(Client!, targetIndex, _backup.Mapping, _options.CopyMetadata ? _backup.Metadata : null,
+                                                   _backup.ReadDocumentsAsync(_cancellation.Token), _options, progress, _cancellation.Token);
+            _restoredIndex = targetIndex;
+
+            await Audit.LogAsync(AuditActions.Restore, InstanceName, targetIndex,
+                $"backup of {_backup.Manifest.Index} ({_backup.Manifest.Instance}, {_backup.Manifest.CreatedUtc:yyyy-MM-dd HH:mm} UTC) · {_report.Imported} documents" +
+                (_report.FatalError is null ? "" : $" · {_report.FatalError}"),
+                success: _report.FatalError is null && !_report.Cancelled);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private void Close()
+    {
+        _backup?.Dispose();
+        _backup = null;
+        _file?.Dispose();
+        _file = null;
+        try
+        {
+            if (_tempFile is not null && File.Exists(_tempFile)) File.Delete(_tempFile);
+        }
+        catch { }
+        _tempFile = null;
+    }
+
+    public void Dispose()
+    {
+        _cancellation?.Cancel();
+        Close();
+    }
+}

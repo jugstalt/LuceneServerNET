@@ -57,6 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Scheduled import jobs (cron, time zone) from a database query: rebuild a new index generation and switch an
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;
   run history, run now, cancel.
+  Index backup as ZIP download (manifest, mapping, metadata, documents as NDJSON) and restore from such a ZIP.
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).
 - API v2 endpoints for administration: `GET /api/v2/indices` (index names),

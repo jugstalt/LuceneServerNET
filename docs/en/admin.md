@@ -19,6 +19,7 @@
 | Import jobs | Recurring imports from a database query (cron schedule): rebuild and switch an alias, clear and refill, or append; run history |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
 | Aliases | Create, switch and remove index aliases (see [API v2](api-v2.md#aliases)); aliases are shown in the index list |
+| Backup / restore | Download an index as ZIP (*Backup* on the index page) and restore it on any instance (*Restore* in the index list) |
 | Copy | Copy an index (mapping, metadata, documents) to a new name on the same instance or to another instance |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |
 
@@ -173,3 +174,18 @@ can be edited and is saved with the job (the columns of the query must not chang
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
 - Runs only happen while the admin application runs; missed runs are not caught up, runs that were active during a
   shutdown are marked *interrupted*. Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
+
+## Backup and restore
+
+*Backup* on the index page downloads a ZIP:
+
+| File | Content |
+|---|---|
+| `manifest.json` | format, index, instance, server version, time, document count, fields that are not stored |
+| `mapping.json` | the mapping |
+| `metadata.json` | the custom metadata |
+| `documents.ndjson` | all documents (stored fields, one JSON object per line) |
+
+*Restore* in the index list uploads such a ZIP (max. `Admin:Import:MaxFileSizeMB`) and creates the index under the original or
+another name, on any instance; an existing index is only replaced with *Replace the target if it exists*. Like copying, a backup
+contains only stored fields. For a complete, continuous backup use the server's archive (`LuceneServer:ArchivePath`).

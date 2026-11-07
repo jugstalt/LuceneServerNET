@@ -122,6 +122,48 @@ public class CopyServiceTests
     }
 
     [Fact]
+    public async Task Backup_Roundtrip()
+    {
+        var (source, target, server) = Create();
+        using var zip = new MemoryStream();
+
+        var manifest = await new CopyService().WriteBackupAsync(source, "src", "prod", zip);
+
+        Assert.Equal(("src", "prod", 25L), (manifest.Index, manifest.Instance, manifest.DocumentCount));
+        Assert.Equal(["x"], manifest.NotStoredFields);
+
+        zip.Position = 0;
+        using var backup = CopyService.OpenBackup(zip);
+        Assert.Equal(25, backup.Manifest.DocumentCount);
+        Assert.Equal(["title", "x"], backup.Mapping.Fields.Select(f => f.Name));
+        Assert.Equal(["title"], backup.Mapping.PrimaryFields);
+        Assert.Equal("db", backup.Metadata["source"]);
+
+        var report = await new CopyService().WriteIndexAsync(target, "restored", backup.Mapping, backup.Metadata,
+                                                             backup.ReadDocumentsAsync(), new CopyOptions { BatchSize = 20 });
+        Assert.Null(report.FatalError);
+        Assert.Equal(25, report.Imported);
+        Assert.Equal([20, 5], server.Batches);
+        Assert.Contains("PUT /api/v2/indices/restored", server.Requests);
+        Assert.Equal("3", server.WrittenMetadata["version"]);
+    }
+
+    [Fact]
+    public void OpenBackup_InvalidFiles()
+    {
+        Assert.Throws<InvalidDataException>(() => CopyService.OpenBackup(new MemoryStream(Encoding.UTF8.GetBytes("no zip"))));
+
+        using var zip = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(zip, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            archive.CreateEntry("other.txt");
+        }
+        zip.Position = 0;
+        var ex = Assert.Throws<InvalidDataException>(() => CopyService.OpenBackup(zip));
+        Assert.Contains("manifest.json", ex.Message);
+    }
+
+    [Fact]
     public void NotStoredFields()
     {
         var mapping = new IndexMapping { Fields = new List<FieldMapping> { new("a"), new("b") { Store = false }, new DocumentGuidField() } };

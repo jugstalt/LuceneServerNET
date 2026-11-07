@@ -19,6 +19,7 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Import-Jobs | Wiederkehrende Importe aus einer Datenbank-Abfrage (Cron-Zeitplan): neu aufbauen und Alias umschalten, leeren und neu befüllen oder anhängen; Lauf-Verlauf |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
 | Aliases | Index-Aliases anlegen, umschalten und entfernen (siehe [API v2](api-v2.md#aliases)); Aliases stehen in der Indexliste |
+| Backup / Restore | Index als ZIP herunterladen (*Backup* auf der Index-Seite) und auf einer beliebigen Instanz wiederherstellen (*Restore* in der Indexliste) |
 | Kopieren | Index (Mapping, Metadaten, Dokumente) unter neuem Namen auf derselben oder auf eine andere Instanz kopieren |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |
 
@@ -173,3 +174,18 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
 - **Jetzt ausführen**, **Abbrechen** und ein **Lauf-Verlauf** (Status, Dauer, Zahlen, Index, Meldung) pro Job. Jeder Lauf steht im Audit-Log.
 - Läufe finden nur statt, solange die Admin-App läuft; verpasste Läufe werden nicht nachgeholt, Läufe, die bei einem Herunterfahren
   aktiv waren, werden als *interrupted* markiert. Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
+
+## Backup und Restore
+
+*Backup* auf der Index-Seite lädt ein ZIP herunter:
+
+| Datei | Inhalt |
+|---|---|
+| `manifest.json` | Format, Index, Instanz, Server-Version, Zeitpunkt, Anzahl Dokumente, nicht gespeicherte Felder |
+| `mapping.json` | das Mapping |
+| `metadata.json` | die eigenen Metadaten |
+| `documents.ndjson` | alle Dokumente (gespeicherte Felder, ein JSON-Objekt pro Zeile) |
+
+*Restore* in der Indexliste lädt so ein ZIP hoch (max. `Admin:Import:MaxFileSizeMB`) und legt den Index unter dem ursprünglichen oder
+einem anderen Namen an, auf einer beliebigen Instanz; ein bestehender Index wird nur mit *Replace the target if it exists* ersetzt. Wie beim
+Kopieren enthält ein Backup nur gespeicherte Felder. Für eine vollständige, laufende Sicherung dient das Archiv des Servers (`LuceneServer:ArchivePath`).

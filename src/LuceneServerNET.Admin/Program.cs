@@ -80,6 +80,7 @@ app.UseAntiforgery();
 app.MapDefaultEndpoints();
 app.MapStaticAssets().AllowAnonymous();
 app.MapAccountEndpoints();
+app.MapBackupEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
