@@ -57,6 +57,69 @@ The UI only offers actions the API client of an instance is allowed to do: it as
       luceneserver-net-admin
     ```
 
+### Run as Windows service
+
+The release ZIP (`luceneserver-net-win64-{version}.zip`) contains the admin UI in `{version}/admin` and two scripts in
+the version folder:
+
+| Script | Purpose |
+|---|---|
+| `lucene-admin.bat` | starts the admin UI in a console (`http://localhost:5180`) |
+| `lucene-admin-service.bat` | installs it as a Windows service |
+
+Import jobs only run while the application runs. A Windows service starts with the server and is restarted after a
+crash, so it is the recommended way on Windows. Run the script in a command prompt **as administrator**:
+
+```
+lucene-admin-service.bat install [name] [port]
+lucene-admin-service.bat uninstall [name]
+```
+
+`install` creates the service and starts it:
+
+- Service name `lucene-admin`, or `lucene-admin-<name>` with a name. It starts automatically (delayed) and is restarted after a crash.
+- It listens on `http://localhost:<port>` (default `5180`). Put a reverse proxy (IIS with ARR, nginx, ...) with HTTPS in front of it
+  for access from other machines.
+- It runs as the virtual account `NT SERVICE\lucene-admin[-<name>]`, which may write only to `admin-data` and read `_config`.
+- Next to the version folders (they survive updates): `admin-data` (SQLite database `admin.db`, data protection keys) and
+  `_config\admin.json`. On the first install the script creates `admin.json` with an empty user list: add a user
+  (`admin\LuceneServerNET.Admin.exe --hash-password <password>`) and instances, then restart the service.
+  `admin.json` overrides `appsettings.json`; environment variables override `admin.json`.
+
+```
+D:\lucene-admin\
+  3.0.0\                          version folder from the ZIP
+    admin\                        application
+    lucene-admin-service.bat
+  admin-data\                     admin.db, keys
+  _config\admin.json              configuration
+```
+
+**Several instances** on one server: one root folder per instance, each with its own name and port.
+`install` refuses a name whose service belongs to another root folder.
+
+**Update:** unpack the new version into the same root folder and run its `lucene-admin-service.bat install` with the same
+name and port. The script stops the service, points it to the new version and starts it again (database migrations run
+on start). To go back, run `install` of the old version (only if the new version did not migrate the database).
+
+**Own account:** for SQL Server with Windows authentication, the virtual account needs a login on the SQL Server
+(`NT SERVICE\lucene-admin`), or enter a domain account in the service properties (tab **Log On**) and give it the same rights.
+
+Warnings and errors go to the Windows event log (application log, source `LuceneServer.NET Admin`).
+
+### IIS
+
+The admin UI also runs in IIS (ASP.NET Core Hosting Bundle, in-process). IIS starts the application with the first request
+and recycles it (idle timeout, by default every 29 hours), so **scheduled import jobs do not run reliably** in IIS. Either:
+
+- run the UI in IIS with `Admin:Jobs:Enabled = false` and additionally the Windows service on the **same** `DataPath`
+  (it runs the jobs; same data protection keys, so both can decrypt the stored secrets), or
+- configure the application pool: *Start Mode* `AlwaysRunning`, *Idle Time-out* `0`, no periodic recycling, and
+  *Preload Enabled* `true` on the site (feature *Application Initialization*). Missed runs are caught up after a recycle
+  (*Catch up missed runs*).
+
+The application pool identity needs write access to `DataPath`. Blazor Server needs WebSockets (IIS feature *WebSocket Protocol*).
+
 ## Configuration
 
 ```jsonc
@@ -89,6 +152,8 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 
 - **Password hashes**: `LuceneServerNET.Admin --hash-password <password>` (same format as the server's `--hash-secret`).
   A plain `Password` works too, but logs a warning.
+- **Configuration file outside the application folder**: the environment variable `LUCENE_ADMIN_CONFIG=<path>dmin.json`
+  loads an additional file that overrides `appsettings.json` (used by the Windows service scripts).
 - **Instances** from the configuration are read only in the UI. Instances added in the UI are stored in
   `admin.db`; their client secrets are encrypted with ASP.NET Core Data Protection (keys in `DataPath/keys`).
   Keep `DataPath` on a persistent volume, otherwise stored secrets can not be decrypted after a restart.
@@ -194,7 +259,7 @@ can be edited and is saved with the job (the columns of the query must not chang
 - Runs only happen while the admin application runs. With *Catch up missed runs* (default on) a job runs once at
   startup if a scheduled run was missed while the application was stopped (only once, however many were missed).
   Runs that were active during a shutdown are marked *interrupted*. For reliable schedules run the admin application as a
-  service (see *Run as Windows service*). Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
+  service (see [Run as Windows service](#run-as-windows-service)). Run only **one** admin instance with `Admin:Jobs:Enabled = true` per database.
 
 ## Backup and restore
 

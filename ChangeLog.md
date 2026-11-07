@@ -58,6 +58,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   alias (no downtime, keeps N older generations, a failed run leaves the alias unchanged), clear and refill or append;
   run history, run now, cancel; manual jobs without schedule; missed runs are caught up once at startup (per job);
   optional webhook after a run (always or on failure, JSON statistics with a Slack/Mattermost compatible `text`, encrypted header, 3 attempts).
+  Admin UI as Windows service: `lucene-admin-service.bat install|uninstall [name] [port]` (virtual service account,
+  restart on failure, data and configuration `_config/admin.json` next to the version folders, event log); the win64
+  release ZIP contains the admin UI (`{version}/admin`) and the scripts. IIS notes for import jobs in the docs.
   Index backup as ZIP download (manifest, mapping, metadata, documents as NDJSON) and restore from such a ZIP.
   Audit log of all changing actions (index, mapping/metadata, import, instances, connections, login),
   with filter page and retention (`Admin:Audit:RetentionDays`, default 180).

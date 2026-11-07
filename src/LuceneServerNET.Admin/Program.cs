@@ -6,6 +6,7 @@ using LuceneServerNET.Admin.Services.Import;
 using LuceneServerNET.Admin.Services.Instances;
 using LuceneServerNET.Admin.Services.Repository;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using MudBlazor.Services;
 
 // LuceneServerNET.Admin --hash-password <password>  => PasswordHash for Admin:Authentication:Users
@@ -15,8 +16,31 @@ if (args.Length == 2 && args[0] == "--hash-password")
     return;
 }
 
-var builder = WebApplication.CreateBuilder(args);
+// as Windows service the working directory is system32: use the application folder as content root
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null
+});
 var configuration = builder.Configuration;
+
+// optional configuration file outside the application folder (survives updates, see lucene-admin-service.bat):
+// LUCENE_ADMIN_CONFIG=<path>\admin.json; it overrides appsettings*.json, environment variables and arguments override it
+if (Environment.GetEnvironmentVariable("LUCENE_ADMIN_CONFIG") is { Length: > 0 } adminConfig)
+{
+    var lastJson = configuration.Sources.Select((source, index) => (source, index))
+                                        .LastOrDefault(s => s.source is Microsoft.Extensions.Configuration.Json.JsonConfigurationSource).index;
+    var source = new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = Path.GetFullPath(adminConfig), Optional = true };
+    source.ResolveFileProvider();   // absolute path => file provider of its folder
+    configuration.Sources.Insert(lastJson + 1, source);
+}
+
+builder.Services.AddWindowsService(options => options.ServiceName = "LuceneServer.NET Admin");
+if (OperatingSystem.IsWindows())
+{
+    // event log source, created by lucene-admin-service.bat
+    builder.Services.Configure<Microsoft.Extensions.Logging.EventLog.EventLogSettings>(settings => settings.SourceName = "LuceneServer.NET Admin");
+}
 
 #region Data path (SQLite database + data protection keys)
 

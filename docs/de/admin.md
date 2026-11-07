@@ -57,6 +57,69 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
       luceneserver-net-admin
     ```
 
+### Als Windows-Dienst betreiben
+
+Das Release-ZIP (`luceneserver-net-win64-{version}.zip`) enthält die Admin-Oberfläche in `{version}/admin` und zwei Skripte im
+Versionsordner:
+
+| Skript | Zweck |
+|---|---|
+| `lucene-admin.bat` | startet die Admin-Oberfläche in einer Konsole (`http://localhost:5180`) |
+| `lucene-admin-service.bat` | installiert sie als Windows-Dienst |
+
+Import-Jobs laufen nur, solange die Anwendung läuft. Ein Windows-Dienst startet mit dem Server und wird nach einem Absturz neu
+gestartet; unter Windows ist das daher der empfohlene Weg. Das Skript in einer Eingabeaufforderung **als Administrator** ausführen:
+
+```
+lucene-admin-service.bat install [name] [port]
+lucene-admin-service.bat uninstall [name]
+```
+
+`install` legt den Dienst an und startet ihn:
+
+- Dienstname `lucene-admin`, mit Namen `lucene-admin-<name>`. Er startet automatisch (verzögert) und wird nach einem Absturz neu gestartet.
+- Er hört auf `http://localhost:<port>` (Standard `5180`). Für den Zugriff von anderen Rechnern einen Reverse Proxy (IIS mit ARR, nginx, ...)
+  mit HTTPS davorsetzen.
+- Er läuft unter dem virtuellen Konto `NT SERVICE\lucene-admin[-<name>]`, das nur in `admin-data` schreiben und `_config` lesen darf.
+- Neben den Versionsordnern (überleben Updates): `admin-data` (SQLite-Datenbank `admin.db`, Data-Protection-Schlüssel) und
+  `_config\admin.json`. Bei der ersten Installation legt das Skript `admin.json` mit leerer Benutzerliste an: einen Benutzer
+  (`admin\LuceneServerNET.Admin.exe --hash-password <passwort>`) und Instanzen eintragen, dann den Dienst neu starten.
+  `admin.json` überschreibt `appsettings.json`; Umgebungsvariablen überschreiben `admin.json`.
+
+```
+D:\lucene-admin\
+  3.0.0\                          Versionsordner aus dem ZIP
+    admin\                        Anwendung
+    lucene-admin-service.bat
+  admin-data\                     admin.db, keys
+  _config\admin.json              Konfiguration
+```
+
+**Mehrere Instanzen** auf einem Server: ein Stammordner pro Instanz, jeweils mit eigenem Namen und Port.
+`install` verweigert einen Namen, dessen Dienst zu einem anderen Stammordner gehört.
+
+**Update:** die neue Version in denselben Stammordner entpacken und ihr `lucene-admin-service.bat install` mit gleichem Namen und Port
+ausführen. Das Skript stoppt den Dienst, stellt ihn auf die neue Version um und startet ihn wieder (Datenbank-Migrationen laufen beim Start).
+Zurück geht es mit `install` der alten Version (nur, wenn die neue Version die Datenbank nicht migriert hat).
+
+**Eigenes Konto:** für SQL Server mit Windows-Authentifizierung braucht das virtuelle Konto einen Login am SQL Server
+(`NT SERVICE\lucene-admin`), oder in den Diensteigenschaften (Reiter **Anmelden**) ein Domänenkonto eintragen und ihm dieselben Rechte geben.
+
+Warnungen und Fehler gehen ins Windows-Ereignisprotokoll (Anwendungsprotokoll, Quelle `LuceneServer.NET Admin`).
+
+### IIS
+
+Die Admin-Oberfläche läuft auch im IIS (ASP.NET Core Hosting Bundle, In-Process). IIS startet die Anwendung erst mit der ersten Anfrage
+und recycelt sie (Leerlauf-Timeout, standardmäßig alle 29 Stunden); **geplante Import-Jobs laufen im IIS daher nicht verlässlich**. Entweder:
+
+- die Oberfläche im IIS mit `Admin:Jobs:Enabled = false` betreiben und zusätzlich den Windows-Dienst auf **demselben** `DataPath`
+  (er führt die Jobs aus; gleiche Data-Protection-Schlüssel, beide können die gespeicherten Secrets entschlüsseln), oder
+- den Anwendungspool einstellen: *Startmodus* `AlwaysRunning`, *Leerlauf-Timeout* `0`, kein periodisches Recycling, und
+  *Vorabladen aktiviert* `true` an der Site (Feature *Anwendungsinitialisierung*). Verpasste Läufe werden nach einem Recycle nachgeholt
+  (*Catch up missed runs*).
+
+Die Identität des Anwendungspools braucht Schreibrechte auf `DataPath`. Blazor Server braucht WebSockets (IIS-Feature *WebSocket-Protokoll*).
+
 ## Konfiguration
 
 ```jsonc
@@ -89,6 +152,8 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 
 - **Passwort-Hashes**: `LuceneServerNET.Admin --hash-password <passwort>` (gleiches Format wie `--hash-secret` des Servers).
   Ein Klartext-`Password` funktioniert ebenfalls, erzeugt aber eine Warnung im Log.
+- **Konfigurationsdatei außerhalb des Anwendungsordners**: die Umgebungsvariable `LUCENE_ADMIN_CONFIG=<pfad>dmin.json`
+  lädt eine zusätzliche Datei, die `appsettings.json` überschreibt (verwenden die Windows-Dienst-Skripte).
 - **Instanzen** aus der Konfiguration sind in der Oberfläche schreibgeschützt. In der Oberfläche angelegte Instanzen
   liegen in `admin.db`; ihre Client-Secrets werden mit ASP.NET Core Data Protection verschlüsselt (Schlüssel in `DataPath/keys`).
   `DataPath` muss auf einem persistenten Volume liegen, sonst lassen sich gespeicherte Secrets nach einem Neustart nicht mehr entschlüsseln.
@@ -194,7 +259,7 @@ erkannt, kann angepasst werden und wird mit dem Job gespeichert (die Spalten der
 - Läufe finden nur statt, solange die Admin-App läuft. Mit *Catch up missed runs* (Standard an) läuft ein Job beim Start einmal,
   wenn ein geplanter Lauf verpasst wurde, während die App nicht lief (nur einmal, egal wie viele verpasst wurden).
   Läufe, die bei einem Herunterfahren aktiv waren, werden als *interrupted* markiert. Für verlässliche Zeitpläne die Admin-App als
-  Dienst betreiben (siehe *Als Windows-Dienst betreiben*). Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
+  Dienst betreiben (siehe [Als Windows-Dienst betreiben](#als-windows-dienst-betreiben)). Pro Datenbank nur **eine** Admin-Instanz mit `Admin:Jobs:Enabled = true` betreiben.
 
 ## Backup und Restore
 

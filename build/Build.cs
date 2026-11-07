@@ -24,7 +24,8 @@ using Serilog;
 //   download\luceneserver-net-{win64|linux64}-{version}.zip   framework dependent (.NET 10 runtime required)
 //
 // ZIP structure: {version}/luceneserver/... (the published server without _config/luceneserver.json:
-// the server creates it on the first start, see Setup.cs)
+// the server creates it on the first start, see Setup.cs), {version}/admin/... (the admin UI) and the
+// scripts from build/assets/{platform} in {version}/ (win64: lucene-admin.bat, lucene-admin-service.bat)
 class Build : NukeBuild
 {
     public static int Main() => Execute<Build>(x => x.Deploy);
@@ -56,12 +57,16 @@ class Build : NukeBuild
     const string DocsFolder = "luceneserver-net";
 
     static readonly RelativePath ServerProject = (RelativePath)"src/LuceneServerNET/LuceneServerNET.csproj";
+    static readonly RelativePath AdminProject = (RelativePath)"src/LuceneServerNET.Admin/LuceneServerNET.Admin.csproj";
+    const string AdminName = "admin";
     static readonly RelativePath VersionProject = (RelativePath)"src/LuceneServerNET.Core/LuceneServerNET.Core.csproj";
 
     AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
     AbsolutePath DownloadDirectory => DeployRoot / "download";
 
     AbsolutePath Artifacts(string platform) => ArtifactsDirectory / AppName / platform;
+    AbsolutePath AdminArtifacts(string platform) => ArtifactsDirectory / AdminName / platform;
+    AbsolutePath AssetsDirectory => RootDirectory / "build" / "assets";
 
     static string RuntimeIdentifier(string platform) => platform switch
     {
@@ -120,14 +125,21 @@ class Build : NukeBuild
                 (artifacts / "_config" / "luceneserver.json").DeleteFile();
                 (artifacts / "appsettings.Development.json").DeleteFile();
 
-                // third party pdb files
-                foreach (var file in artifacts.GlobFiles("**/*.pdb"))
-                {
-                    if (!file.Name.StartsWith("LuceneServerNET", StringComparison.OrdinalIgnoreCase))
-                    {
-                        file.DeleteFile();
-                    }
-                }
+                RemoveThirdPartyPdbs(artifacts);
+
+                var admin = AdminArtifacts(platform);
+                Log.Information("Compile {App} {Platform}", AdminName, platform);
+
+                admin.CreateOrCleanDirectory();
+                DotNetTasks.DotNetPublish(s => s
+                    .SetProject(RootDirectory / AdminProject)
+                    .SetConfiguration(Configuration)
+                    .SetRuntime(RuntimeIdentifier(platform))
+                    .SetSelfContained(false)
+                    .SetOutput(admin));
+
+                (admin / "appsettings.Development.json").DeleteFile();
+                RemoveThirdPartyPdbs(admin);
             }
         });
 
@@ -142,13 +154,25 @@ class Build : NukeBuild
                 var zipFile = DownloadDirectory / $"{ZipName}-{platform}-{Version}.zip";
                 zipFile.DeleteFile();
 
-                var source = Artifacts(platform);
                 using (var zip = ZipFile.Open(zipFile, ZipArchiveMode.Create))
                 {
-                    foreach (var file in source.GlobFiles("**/*"))
+                    foreach (var (source, folder) in new[] { (Artifacts(platform), AppName), (AdminArtifacts(platform), AdminName) })
                     {
-                        var relative = source.GetRelativePathTo(file).ToString().Replace('\\', '/');
-                        zip.CreateEntryFromFile(file, $"{Version}/{AppName}/{relative}", CompressionLevel.Optimal);
+                        foreach (var file in source.GlobFiles("**/*"))
+                        {
+                            var relative = source.GetRelativePathTo(file).ToString().Replace('\\', '/');
+                            zip.CreateEntryFromFile(file, $"{Version}/{folder}/{relative}", CompressionLevel.Optimal);
+                        }
+                    }
+
+                    // start / service scripts next to the app folders
+                    var scripts = AssetsDirectory / platform;
+                    if (scripts.DirectoryExists())
+                    {
+                        foreach (var script in scripts.GlobFiles("*.bat", "*.sh"))
+                        {
+                            zip.CreateEntryFromFile(script, $"{Version}/{script.Name}", CompressionLevel.Optimal);
+                        }
                     }
                 }
 
@@ -250,5 +274,16 @@ class Build : NukeBuild
                 workingDirectory: workingDirectory,
                 logger: (_, text) => Log.Information(text))
             .AssertZeroExitCode();
+    }
+
+    static void RemoveThirdPartyPdbs(AbsolutePath directory)
+    {
+        foreach (var file in directory.GlobFiles("**/*.pdb"))
+        {
+            if (!file.Name.StartsWith("LuceneServerNET", StringComparison.OrdinalIgnoreCase))
+            {
+                file.DeleteFile();
+            }
+        }
     }
 }
