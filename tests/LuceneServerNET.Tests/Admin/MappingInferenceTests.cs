@@ -92,5 +92,10 @@ public class MappingInferenceTests
         Assert.Equal(["a"], mapping.PrimaryFields);
         Assert.Equal(LuceneServerNET.Core.Phonetics.Algorithm.ColognePhonetics, mapping.PrimaryFieldsPhonetics);
         Assert.True(mapping.IsValid());
+        Assert.Null(mapping.PrimaryFieldsEncodeCharacters);
+
+        inferred.EncodeCharacters = " ./. ";
+        var json = System.Text.Json.JsonSerializer.Serialize(MappingInference.ToIndexMapping(inferred));
+        Assert.Equal(['.', '/'], System.Text.Json.JsonSerializer.Deserialize<IndexMapping>(json)!.PrimaryFieldsEncodeCharacters);
     }
 }

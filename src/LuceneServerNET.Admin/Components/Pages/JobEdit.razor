@@ -97,6 +97,9 @@ else
                     <MudSelectItem Value="algorithm">@algorithm</MudSelectItem>
                 }
             </MudSelect>
+            <MudTextField T="string" Value="_mapping.Mapping.EncodeCharacters" ValueChanged="v => { _mapping.Mapping.EncodeCharacters = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); MarkDirty(); }"
+                              Label="Encode characters" Placeholder="e.g. ./" HelperText="characters of the primary fields that are encoded (e.g. to find 'Nr. 10')"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2 mono" Immediate="true" />
             <MappingEditor Mapping="_mapping.Mapping" ShowColumns="true" Columns="_columns" MappingChanged="MarkDirty" />
         </MudPaper>
     }

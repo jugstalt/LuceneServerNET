@@ -47,6 +47,7 @@
                                 <tr><td>Last modified</td><td>@Format.Date(_stats?.LastModifiedUtc)</td></tr>
                                 <tr><td>Primary fields</td><td>@string.Join(", ", _mapping?.PrimaryFields ?? [])</td></tr>
                                 <tr><td>Phonetics</td><td>@(_mapping?.PrimaryFieldsPhonetics.ToString() ?? "–")</td></tr>
+                                <tr><td>Encoded characters</td><td class="mono">@(_mapping?.PrimaryFieldsEncodeCharacters is { Length: > 0 } chars ? new string(chars) : "–")</td></tr>
                             </tbody>
                         </MudSimpleTable>
                     </MudItem>

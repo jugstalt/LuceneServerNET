@@ -28,6 +28,11 @@
                         }
                     </MudSelect>
                 </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Value="_mapping.EncodeCharacters" ValueChanged="v => { _mapping.EncodeCharacters = String.IsNullOrWhiteSpace(v) ? null : v.Trim();  }"
+                              Label="Encode characters" Placeholder="e.g. ./" HelperText="characters of the primary fields that are encoded (e.g. to find 'Nr. 10')"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" Class="mb-2 mono" Immediate="true" />
+                </MudItem>
             </MudGrid>
 
             <MudText Typo="Typo.h6" Class="mt-4 mb-2">Fields</MudText>

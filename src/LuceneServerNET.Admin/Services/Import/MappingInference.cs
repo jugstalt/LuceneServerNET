@@ -50,6 +50,9 @@ public class InferredMapping
 {
     public List<InferredField> Fields { get; set; } = [];
     public List<GeoFieldMapping> GeoFields { get; set; } = [];
+
+    /// <summary>Characters of the primary fields that are encoded by the server (e.g. "./"), null = none.</summary>
+    public string? EncodeCharacters { get; set; }
 }
 
 public class InferredField
@@ -236,6 +239,8 @@ public static class MappingInference
 
         mapping.PrimaryFields = inferred.Fields.Where(f => f.Primary && !f.Skip).Select(f => f.Name).ToList();
         mapping.PrimaryFieldsPhonetics = phonetics;
+        var encode = (inferred.EncodeCharacters ?? "").Where(c => !Char.IsWhiteSpace(c)).Distinct().ToArray();
+        mapping.PrimaryFieldsEncodeCharacters = encode.Length > 0 ? encode : null!;
 
         return mapping;
     }
