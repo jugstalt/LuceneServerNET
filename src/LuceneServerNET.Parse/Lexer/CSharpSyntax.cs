@@ -1,4 +1,4 @@
-﻿using LuceneServerNET.Parse.Lexer.Abstrations;
+﻿using LuceneServerNET.Parse.Lexer.Abstractions;
 
 namespace LuceneServerNET.Parse.Lexer
 {

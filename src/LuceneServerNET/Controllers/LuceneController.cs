@@ -35,201 +35,145 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("search/{id}")]
-    async public Task<IApiResult> Search(string id,
-                                         string q,
-                                         string outFields = null,
-                                         int size = 20,
-                                         string sortField = null,
-                                         bool sortReverse = false,
-                                         string filter = "",
-                                         string format = "")
+    public Task<IApiResult> Search(string id,
+                                   string q,
+                                   string outFields = null,
+                                   int size = 20,
+                                   string sortField = null,
+                                   bool sortReverse = false,
+                                   string filter = "",
+                                   string format = "")
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            ISpatialFilter spatialFilter = null;
-            if (!String.IsNullOrEmpty(filter))
-            {
-                filter = filter.Trim();
-                if (filter.StartsWith("bbox(", StringComparison.OrdinalIgnoreCase))
-                {
-                    spatialFilter = BBoxFilter.Parse(filter.Substring(5, filter.Length - 6));
-                }
-                else if (filter.StartsWith("dist_km(", StringComparison.OrdinalIgnoreCase))
-                {
-                    spatialFilter = DistanceKmFilter.Parse(filter.Substring(8, filter.Length - 9));
-                }
-                else if (filter.StartsWith("linedist_km("))
-                {
-                    spatialFilter = LineStringDistanceKmFilter.Parse(filter.Substring(12, filter.Length - 13));
-                }
-            }
-
             var hits = _lucene.Search(id,
                                       term: q,
                                       outFieldNames: outFields ?? String.Empty,
                                       size: size,
                                       sortFieldName: sortField,
                                       sortReverse: sortReverse,
-                                      spatialFilter: spatialFilter);
+                                      spatialFilter: ParseSpatialFilter(filter));
 
-            if (format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
-            {
-                return Task.FromResult<IApiResult>(new GeoJsonResult(
-                    format.Substring(0, format.IndexOf(":geojson", StringComparison.OrdinalIgnoreCase)),
-                    hits));
-            }
-
-            return Task.FromResult<IApiResult>(new LuceneSearchResult()
-            {
-                Hits = hits
-            });
+            return ToSearchResult(hits, format);
         });
     }
 
     [HttpGet]
     [Route("searchphonetic/{id}")]
-    async public Task<IApiResult> PhoneticSearch(string id,
-                                                 string q,
-                                                 string outFields = null,
-                                                 int size = 20,
-                                                 string sortField = null,
-                                                 bool sortReverse = false,
-                                                 string filter = "",
-                                                 string format = "")
+    public Task<IApiResult> PhoneticSearch(string id,
+                                           string q,
+                                           string outFields = null,
+                                           int size = 20,
+                                           string sortField = null,
+                                           bool sortReverse = false,
+                                           string filter = "",
+                                           string format = "")
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            ISpatialFilter spatialFilter = null;
-            if (!String.IsNullOrEmpty(filter))
-            {
-                filter = filter.Trim();
-                if (filter.StartsWith("bbox(", StringComparison.OrdinalIgnoreCase))
-                {
-                    spatialFilter = BBoxFilter.Parse(filter.Substring(5, filter.Length - 6));
-                }
-                else if (filter.StartsWith("dist_km(", StringComparison.OrdinalIgnoreCase))
-                {
-                    spatialFilter = DistanceKmFilter.Parse(filter.Substring(8, filter.Length - 9));
-                }
-                else if (filter.StartsWith("linedist_km("))
-                {
-                    spatialFilter = LineStringDistanceKmFilter.Parse(filter.Substring(12, filter.Length - 13));
-                }
-            }
-
             var hits = _lucene.SearchPhonetic(id,
                                               term: q,
                                               outFieldNames: outFields ?? String.Empty,
                                               size: size,
                                               sortFieldName: sortField,
                                               sortReverse: sortReverse,
-                                              spatialFilter: spatialFilter);
+                                              spatialFilter: ParseSpatialFilter(filter));
 
-            if (format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
-            {
-                return Task.FromResult<IApiResult>(new GeoJsonResult(
-                    format.Substring(0, format.IndexOf(":geojson", StringComparison.OrdinalIgnoreCase)),
-                    hits));
-            }
-
-            return Task.FromResult<IApiResult>(new LuceneSearchResult()
-            {
-                Hits = hits
-            });
+            return ToSearchResult(hits, format);
         });
     }
 
     [HttpGet]
     [Route("group/{id}")]
-    async public Task<IApiResult> Group(string id, string groupField, string q)
+    public Task<IApiResult> Group(string id, string groupField, string q)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
             var hits = _lucene.GroupBy(id, groupField, q);
 
-            return Task.FromResult<IApiResult>(new LuceneGroupResult()
+            return new LuceneGroupResult()
             {
                 Hits = hits
-            });
+            };
         });
     }
 
     [HttpGet]
     [Route("createindex/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    async public Task<IApiResult> CreateIndex(string id)
+    public Task<IApiResult> CreateIndex(string id)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(_lucene.CreateIndex(id)));
+            return new ApiResult(_lucene.CreateIndex(id));
         });
     }
 
     [HttpGet]
     [Route("removeindex/{id}")]
     [Authorize(Policy = ApiRoles.Admin)]
-    async public Task<IApiResult> RemoveIndex(string id)
+    public Task<IApiResult> RemoveIndex(string id)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(_lucene.RemoveIndex(id)));
+            return new ApiResult(_lucene.RemoveIndex(id));
         });
     }
 
     [HttpGet]
     [Route("indexexists/{id}")]
-    async public Task<IApiResult> IndexExists(string id)
+    public Task<IApiResult> IndexExists(string id)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(_lucene.IndexExists(id)));
+            return new ApiResult(_lucene.IndexExists(id));
         });
     }
 
     [HttpPost]
     [Route("map/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    async public Task<IApiResult> Map(string id, [FromBody] IndexMapping mapping)
+    public Task<IApiResult> Map(string id, [FromBody] IndexMapping mapping)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(
+            return new ApiResult(
                 _lucene.Map(id, mapping)
-            ));
+            );
         });
     }
 
     [HttpGet]
     [Route("mapping/{id}")]
-    async public Task<IApiResult> Mapping(string id)
+    public Task<IApiResult> Mapping(string id)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new MappingResult()
+            return new MappingResult()
             {
                 Mapping = _lucene.Mapping(id)
-            });
+            };
         });
     }
 
     [HttpPost]
     [Route("addmeta/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    async public Task<IApiResult> AddMeta(string id, string name, [FromBody] CustomMetadata metaData)
+    public Task<IApiResult> AddMeta(string id, string name, [FromBody] CustomMetadata metaData)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(
+            return new ApiResult(
                 _lucene.AddCustomMetadata(id, name, metaData.Metadata)
-            ));
+            );
         });
     }
 
     [HttpGet]
     [Route("getmeta/{id}")]
-    async public Task<IApiResult> GetMeta(string id, string name)
+    public Task<IApiResult> GetMeta(string id, string name)
     {
-        return await SecureMethodHandler(id, async (id) =>
+        return SecureMethodHandler(id, async (id) =>
         {
             return new CustomMetadataResult()
             {
@@ -240,11 +184,10 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("getmetas/{id}")]
-    async public Task<IApiResult> GetMetas(string id)
+    public Task<IApiResult> GetMetas(string id)
     {
-        return await SecureMethodHandler(id, async (id) =>
+        return SecureMethodHandler(id, async (id) =>
         {
-            var dict = await _lucene.GetCustomMetadatas(id);
             return new CustomMetadatasResult()
             {
                 Metadata = await _lucene.GetCustomMetadatas(id)
@@ -254,9 +197,9 @@ public class LuceneController : ControllerBase
 
     [HttpGet]
     [Route("getmetanames/{id}")]
-    async public Task<IApiResult> GetMetaNames(string id)
+    public Task<IApiResult> GetMetaNames(string id)
     {
-        return await SecureMethodHandler(id, async (id) =>
+        return SecureMethodHandler(id, async (id) =>
         {
             return new LuceneGenericListResult<string>()
             {
@@ -268,13 +211,13 @@ public class LuceneController : ControllerBase
     [HttpPost]
     [Route("index/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    async public Task<IApiResult> Index(string id, [FromBody] IEnumerable<IDictionary<string, object>> items)
+    public Task<IApiResult> Index(string id, [FromBody] IEnumerable<IDictionary<string, object>> items)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(
+            return new ApiResult(
                 _lucene.Index(id, items)
-                ));
+                );
         });
     }
 
@@ -282,13 +225,13 @@ public class LuceneController : ControllerBase
     [Route("remove/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
 
-    async public Task<IApiResult> Remove(string id, string term, string termField = "_guid")
+    public Task<IApiResult> Remove(string id, string term, string termField = "_guid")
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
-            return Task.FromResult<IApiResult>(new ApiResult(
+            return new ApiResult(
                 _lucene.RemoveDocuments(id, term, termField)
-                ));
+                );
         });
     }
 
@@ -296,28 +239,92 @@ public class LuceneController : ControllerBase
     [HttpGet]
     [Route("refresh/{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    async public Task<IApiResult> Refresh(string id)
+    public Task<IApiResult> Refresh(string id)
     {
-        return await SecureMethodHandler(id, (id) =>
+        return SecureMethodHandler(id, (id) =>
         {
             _lucene.RefreshIndex(id);
-            return Task.FromResult<IApiResult>(new ApiResult());
+            return new ApiResult();
         });
     }
 
     [HttpGet]
     [Route("releaseall")]
     [Authorize(Policy = ApiRoles.Admin)]
-    async public Task<IApiResult> ReleaseAll()
+    public Task<IApiResult> ReleaseAll()
     {
-        return await SecureMethodHandler(() =>
+        return SecureMethodHandler(() =>
         {
             _lucene.ReleaseAll();
-            return Task.FromResult<IApiResult>(new ApiResult());
+            return new ApiResult();
         });
     }
 
     #region Helper
+
+    private ISpatialFilter ParseSpatialFilter(string filter)
+    {
+        if (String.IsNullOrWhiteSpace(filter))
+        {
+            return null;
+        }
+
+        filter = filter.Trim();
+
+        if (TryGetFilterArguments(filter, "bbox", out var args))
+        {
+            return BBoxFilter.Parse(args);
+        }
+        if (TryGetFilterArguments(filter, "dist_km", out args))
+        {
+            return DistanceKmFilter.Parse(args);
+        }
+        if (TryGetFilterArguments(filter, "linedist_km", out args))
+        {
+            return LineStringDistanceKmFilter.Parse(args);
+        }
+
+        _logger.LogWarning("Unknown spatial filter '{filter}' is ignored", filter);
+        return null;
+    }
+
+    private static bool TryGetFilterArguments(string filter, string name, out string arguments)
+    {
+        arguments = null;
+        var prefix = name + "(";
+
+        if (!filter.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        if (!filter.EndsWith(")"))
+        {
+            throw new ArgumentException($"Invalid filter '{filter}': missing closing parenthesis.");
+        }
+
+        arguments = filter.Substring(prefix.Length, filter.Length - prefix.Length - 1);
+        return true;
+    }
+
+    private static IApiResult ToSearchResult(IEnumerable<IDictionary<string, object>> hits, string format)
+    {
+        int geoJsonIndex = (format ?? String.Empty).IndexOf(":geojson", StringComparison.OrdinalIgnoreCase);
+        if (geoJsonIndex >= 0 && format.EndsWith(":geojson", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GeoJsonResult(format.Substring(0, geoJsonIndex), hits);
+        }
+
+        return new LuceneSearchResult()
+        {
+            Hits = hits
+        };
+    }
+
+    private Task<IApiResult> SecureMethodHandler(string id, Func<string, IApiResult> func, Func<Exception, IApiResult> onException = null)
+        => SecureMethodHandler(id, (id) => Task.FromResult(func(id)), onException);
+
+    private Task<IApiResult> SecureMethodHandler(Func<IApiResult> func, Func<Exception, IApiResult> onException = null)
+        => SecureMethodHandler(() => Task.FromResult(func()), onException);
 
     /// <summary>
     /// For index specific endpoints: normalizes and validates the index id (whitelist) before calling <paramref name="func"/>.

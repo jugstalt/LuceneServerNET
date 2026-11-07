@@ -1,4 +1,4 @@
-﻿using LuceneServerNET.Parse.Excepitons;
+﻿using LuceneServerNET.Parse.Exceptions;
 using LuceneServerNET.Parse.Lexer;
 using LuceneServerNET.Parse.Lexer.Extensions;
 using LuceneServerNET.Parse.Methods.Abstractions;

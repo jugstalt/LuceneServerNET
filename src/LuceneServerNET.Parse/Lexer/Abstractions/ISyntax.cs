@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace LuceneServerNET.Parse.Lexer.Abstrations
+namespace LuceneServerNET.Parse.Lexer.Abstractions
 {
     public interface ISyntax
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace LuceneServerNET.Parse.Excepitons
+namespace LuceneServerNET.Parse.Exceptions
 {
     public class InterpreterException : Exception
     {

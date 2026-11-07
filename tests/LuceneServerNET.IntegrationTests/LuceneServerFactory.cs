@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 
@@ -17,22 +17,27 @@ public class LuceneServerFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        builder.ConfigureAppConfiguration((_, config) =>
+
+        var settings = new Dictionary<string, string>
         {
-            var settings = new Dictionary<string, string>
-            {
-                ["LuceneServer:RootPath"] = RootPath,
-                ["LuceneServer:ArchivePath"] = "",
-                ["LuceneServer:AutoRestoreOnStartup"] = "false",
-                ["useSwagger"] = "false",
-                ["Authorization:Type"] = "none",
-            };
-            foreach (var kv in ExtraSettings)
-            {
-                settings[kv.Key] = kv.Value;
-            }
-            config.AddInMemoryCollection(settings);
-        });
+            ["LuceneServer:RootPath"] = RootPath,
+            ["LuceneServer:ArchivePath"] = "",
+            ["LuceneServer:AutoRestoreOnStartup"] = "false",
+            ["useSwagger"] = "false",
+            ["Authorization:Type"] = "none",
+        };
+        foreach (var kv in ExtraSettings)
+        {
+            settings[kv.Key] = kv.Value;
+        }
+
+        // Minimal hosting: Program.cs reads configuration while registering services (before Build()).
+        // UseSetting values are visible at that point; ConfigureAppConfiguration keeps them last (highest priority) at runtime.
+        foreach (var kv in settings)
+        {
+            builder.UseSetting(kv.Key, kv.Value);
+        }
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
     }
 
     protected override void Dispose(bool disposing)
