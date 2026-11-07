@@ -17,7 +17,7 @@ public class CopyServiceTests
         public List<string> Requests { get; } = [];
         public List<int> Batches { get; } = [];
         public Dictionary<string, string> WrittenMetadata { get; } = [];
-        public string? WrittenMapping { get; private set; }
+        public string WrittenMapping { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
