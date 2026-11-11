@@ -15,6 +15,13 @@
     {
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
             <MudText Typo="Typo.h4">@IndexName</MudText>
+            @if (_aliasTarget is not null)
+            {
+                <MudTooltip Text="All searches and requests on this page use the alias: they always reach the current generation">
+                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Link" Color="Color.Primary">alias</MudChip>
+                </MudTooltip>
+                <MudText Typo="Typo.body2">currently → <MudLink Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(_aliasTarget)}")">@_aliasTarget</MudLink></MudText>
+            }
             @if (_stats is not null)
             {
                 <MudChip T="string" Size="Size.Small">@Format.Number(_stats.DocumentCount) documents</MudChip>
@@ -24,7 +31,7 @@
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Href="@($"{InstanceUrl}/index/{Uri.EscapeDataString(IndexName)}/copy")">Copy</MudButton>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
                        Href="@($"download/backup/{Uri.EscapeDataString(InstanceName)}/{Uri.EscapeDataString(IndexName)}")" Target="_blank">Backup</MudButton>
-            @if (Status.CanWrite)
+            @if (Status.CanWrite && _aliasTarget is null)
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upload" Href="@($"{InstanceUrl}/import?index={Uri.EscapeDataString(IndexName)}")">Import</MudButton>
             }
@@ -111,7 +118,8 @@
                 }
             </MudTabPanel>
 
-            @if (Status.CanWrite)
+            @* maintenance (delete, clear, ...) only on the index itself, not through an alias *@
+            @if (Status.CanWrite && _aliasTarget is null)
             {
                 <MudTabPanel Text="Maintenance" Icon="@Icons.Material.Filled.Build">
                     <MudStack Spacing="4">
@@ -165,6 +173,9 @@
     [Parameter] public string IndexName { get; set; } = "";
 
     private bool _notFound;
+
+    /// <summary>The page shows an alias: the index it currently points to.</summary>
+    private string? _aliasTarget;
     private IndexStats? _stats;
     private IndexMapping? _mapping;
     private IDictionary<string, string> _metadata = new Dictionary<string, string>();
@@ -174,6 +185,15 @@
 
     protected override async Task LoadAsync()
     {
+        try
+        {
+            _aliasTarget = (await Client!.GetAliasesAsync()).TryGetValue(IndexName, out var target) ? target : null;
+        }
+        catch
+        {
+            _aliasTarget = null;   // older server without aliases
+        }
+
         if (!await Client!.IndexExistsAsync(IndexName))
         {
             _notFound = true;

@@ -34,7 +34,12 @@
                 <b>@context.Name</b>
                 @foreach (var alias in _aliases.Where(a => a.Value == context.Name).Select(a => a.Key))
                 {
-                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Link" Variant="Variant.Outlined" Class="ml-1">@alias</MudChip>
+                    <span @onclick:stopPropagation="true">
+                        <MudTooltip Text="@($"Open the alias {alias} (always the current generation)")">
+                            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Link" Variant="Variant.Outlined" Color="Color.Primary" Class="ml-1"
+                                     OnClick="@(() => Navigation.NavigateTo($"{InstanceUrl}/index/{Uri.EscapeDataString(alias)}"))">@alias</MudChip>
+                        </MudTooltip>
+                    </span>
                 }
             </MudTd>
             <MudTd Style="text-align:right">@(context.Stats is null ? "…" : Format.Number(context.Stats.DocumentCount))</MudTd>

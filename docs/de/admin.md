@@ -11,14 +11,14 @@ mehrere** LuceneServer.NET-Instanzen administriert werden. Sie spricht die Serve
 | Dashboard | Health, Version, Uptime, Speicher und Anzahl der Indizes jeder Instanz, Rollen des API-Clients |
 | Instanzen | Instanzen anlegen, bearbeiten, entfernen und testen (zusätzlich zu denen aus der Konfiguration) |
 | Indizes | Liste mit Dokumentanzahl, Größe auf der Platte und letzter Änderung; filtern und sortieren |
-| Suche | Autocomplete-Eingabe (Search as you type), Suche mit `size`/`from`/`searchAfter`, Sortierung, räumlicher Filter, phonetische Suche, Gruppierung, Ergebnis als Tabelle oder JSON, Request als `curl`-Befehl |
+| Suche | Autocomplete-Eingabe (Search as you type, jedes Wort ist ein Pflicht-Präfix: `graz haupt` → `+graz* +haupt*`), Suche mit `size`/`from`/`searchAfter`, Sortierung, räumlicher Filter, phonetische Suche, Gruppierung, Ergebnis als Tabelle oder JSON, Request als `curl`-Befehl |
 | Index anlegen | Mapping-Editor: Felder, Typen, indiziert/gespeichert, Primärfelder, Phonetik |
 | Datenbank-Verbindungen | SQL Server-, PostgreSQL- und SQLite-Verbindungen als Importquelle (verschlüsselt gespeichert), Verbindungstest (auch in der Liste); *Show connection string* zeigt den gespeicherten String mit maskiertem Passwort (Audit-Log `connection.show`), ein belassenes `*****` behält das gespeicherte Passwort |
 | Import | Aus einer Datenbank-Abfrage oder CSV, JSON bzw. GeoJSON (inkl. Geodaten) (Array oder NDJSON) hochladen, Vorschau, Mapping **aus den ersten 200 Zeilen vorgeschlagen** (neuer Index) bzw. Spalten dem bestehenden Mapping zugeordnet, einstellbare Batchgröße, Abbruch, Fehlerreport |
 | Metadaten | Eigene Metadaten anzeigen und bearbeiten |
 | Import-Jobs | Wiederkehrende Importe aus einer Datenbank-Abfrage (Cron-Zeitplan): neu aufbauen und Alias umschalten, leeren und neu befüllen oder anhängen; Lauf-Verlauf |
 | Audit-Log | Wer wann was geändert hat (Index, Metadaten, Import, Instanzen, Verbindungen, Logins), mit Filtern; Aufbewahrung `Admin:Audit:RetentionDays` (Standard 180) |
-| Aliases | Index-Aliases anlegen, umschalten und entfernen (siehe [API v2](api-v2.md#aliases)); Aliases stehen in der Indexliste |
+| Aliases | Index-Aliases anlegen, umschalten und entfernen (siehe [API v2](api-v2.md#aliases)); Aliases stehen in der Indexliste; ein Klick auf einen Alias öffnet seine Seite: Suche, `curl`-Befehl, Kopieren und Backup verwenden den Alias-Namen (immer die aktuelle Generation); Wartung und Import nur direkt am Index |
 | Backup / Restore | Index als ZIP herunterladen (*Backup* auf der Index-Seite) und auf einer beliebigen Instanz wiederherstellen (*Restore* in der Indexliste) |
 | Kopieren | Index (Mapping, Metadaten, Dokumente) unter neuem Namen auf derselben oder auf eine andere Instanz kopieren |
 | Wartung | Refresh, Dokumente per Query löschen, Index leeren, Index löschen (Rolle admin, Bestätigung per Name) |

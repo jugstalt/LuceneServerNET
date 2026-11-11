@@ -3,8 +3,8 @@ using System.Text;
 namespace LuceneServerNET.Admin.Services.Import;
 
 /// <summary>
-/// Builds a search-as-you-type query from user input: every word is required, the last word is a prefix.
-/// "graz haupt" => "+graz +haupt*". Lucene special characters are escaped.
+/// Builds a search-as-you-type query from user input: every word is required and a prefix.
+/// "graz haupt" => "+graz* +haupt*" (finds "Graz-Umgebung Hauptplatz"). Lucene special characters are escaped.
 /// </summary>
 public static class AutocompleteQuery
 {
@@ -25,8 +25,7 @@ public static class AutocompleteQuery
         for (int i = 0; i < words.Length; i++)
         {
             if (i > 0) sb.Append(' ');
-            sb.Append('+').Append(words[i].ToLowerInvariant());
-            if (i == words.Length - 1) sb.Append('*');
+            sb.Append('+').Append(words[i].ToLowerInvariant()).Append('*');
         }
         return sb.ToString();
     }

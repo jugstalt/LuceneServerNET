@@ -11,14 +11,14 @@
 | Dashboard | Health, version, uptime, memory and number of indices of every instance, roles of the API client |
 | Instances | Add, edit, remove and test instances (in addition to the ones from the configuration) |
 | Indices | List with document count, size on disk and last modification; filter and sort |
-| Search | Autocomplete input (search as you type), search with `size`/`from`/`searchAfter`, sort, spatial filter, phonetic search, group by, results as table or JSON, request as `curl` command |
+| Search | Autocomplete input (search as you type, every word is a required prefix: `graz haupt` → `+graz* +haupt*`), search with `size`/`from`/`searchAfter`, sort, spatial filter, phonetic search, group by, results as table or JSON, request as `curl` command |
 | Create index | Mapping editor: fields, types, indexed/stored, primary fields, phonetics |
 | Database connections | SQL Server, PostgreSQL and SQLite connections as import source (stored encrypted), connection test (also in the list); *Show connection string* shows the stored string with masked password (audit log `connection.show`), a kept `*****` keeps the stored password |
 | Import | From a database query or upload CSV, JSON or GeoJSON (including geo data) (array or NDJSON), preview, mapping **proposed from the first 200 rows** (new index) or columns assigned to the existing mapping, configurable batch size, cancel, error report |
 | Metadata | Show and edit custom metadata |
 | Import jobs | Recurring imports from a database query (cron schedule): rebuild and switch an alias, clear and refill, or append; run history |
 | Audit log | Who changed what and when (index, metadata, import, instances, connections, logins), with filters; kept for `Admin:Audit:RetentionDays` (default 180) |
-| Aliases | Create, switch and remove index aliases (see [API v2](api-v2.md#aliases)); aliases are shown in the index list |
+| Aliases | Create, switch and remove index aliases (see [API v2](api-v2.md#aliases)); aliases are shown in the index list; clicking an alias opens its page: search, `curl` command, copy and backup use the alias name (always the current generation); maintenance and import only on the index itself |
 | Backup / restore | Download an index as ZIP (*Backup* on the index page) and restore it on any instance (*Restore* in the index list) |
 | Copy | Copy an index (mapping, metadata, documents) to a new name on the same instance or to another instance |
 | Maintenance | Refresh, delete documents by query, clear index, delete index (admin role, confirm by name) |

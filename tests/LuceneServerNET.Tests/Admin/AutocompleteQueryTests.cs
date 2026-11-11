@@ -6,7 +6,8 @@ public class AutocompleteQueryTests
 {
     [Theory]
     [InlineData("haupt", "+haupt*")]
-    [InlineData("  Graz   Haupt ", "+graz +haupt*")]
+    [InlineData("  Graz   Haupt ", "+graz* +haupt*")]
+    [InlineData("8010 leonh 10", "+8010* +leonh* +10*")]
     [InlineData("a:b", "+a\\:b*")]
     [InlineData("c++", "+c\\+\\+*")]
     [InlineData("", "")]
