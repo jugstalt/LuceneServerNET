@@ -301,7 +301,7 @@ public class ImportJobRunner
     }
 
     public async Task<ImportJobRunRecord> RunAsync(long jobId, string triggeredBy, CancellationToken cancellationToken = default,
-                                                   string? note = null, Action<long>? onStarted = null)
+                                                   string? note = null, Action<long>? onStarted = null, bool dryRun = false)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!_running.TryAdd(jobId, cancellation))
@@ -319,7 +319,7 @@ public class ImportJobRunner
 
             job = await _repository.GetImportJobAsync(jobId, CancellationToken.None) ?? throw new InvalidOperationException("Job not found");
             _progress[jobId] = new JobRunProgress { StartedUtc = run.StartedUtc, Expected = await ExpectedRowsAsync(jobId) };
-            await ExecuteAsync(job, run, cancellation.Token);
+            await ExecuteAsync(job, run, dryRun, cancellation.Token);
         }
         catch (OperationCanceledException)
         {
@@ -361,7 +361,7 @@ public class ImportJobRunner
             RunChanged?.Invoke(jobId);
         }
 
-        if (job is not null && JobWebhook.ShouldCall(job, run.Status))
+        if (job is not null && !dryRun && JobWebhook.ShouldCall(job, run.Status))
         {
             try
             {
@@ -378,7 +378,10 @@ public class ImportJobRunner
         return run;
     }
 
-    private async Task ExecuteAsync(ImportJobRecord job, ImportJobRunRecord run, CancellationToken cancellationToken)
+    /// <summary>Dry run: reads and converts all rows, sends nothing (no index, metadata or alias changes).</summary>
+    public const string DryRunIndex = "(dry run)";
+
+    private async Task ExecuteAsync(ImportJobRecord job, ImportJobRunRecord run, bool dryRun, CancellationToken cancellationToken)
     {
         var instance = await _registry.GetAsync(job.Instance, cancellationToken) ?? throw new InvalidOperationException($"Instance {job.Instance} not found");
         var client = _registry.CreateClient(instance);
@@ -391,7 +394,11 @@ public class ImportJobRunner
         string index;
         string? previousIndex = null;
 
-        if (job.Mode == ImportJobModes.ReplaceAlias)
+        if (dryRun)
+        {
+            index = DryRunIndex;
+        }
+        else if (job.Mode == ImportJobModes.ReplaceAlias)
         {
             var aliases = await client.GetAliasesAsync(cancellationToken);
             aliases.TryGetValue(job.Target, out previousIndex);
@@ -418,7 +425,7 @@ public class ImportJobRunner
         await _repository.UpdateImportJobRunAsync(run, CancellationToken.None);
 
         // metadata entry per source (webgis reads it with the meta id from the document id)
-        foreach (var source in settings.Sources.Where(s => !s.Metadata.IsEmpty))
+        foreach (var source in settings.Sources.Where(s => !s.Metadata.IsEmpty && !dryRun))
         {
             await client.PutMetadataAsync(index, source.MetaId, source.Metadata.ToJson(source.MetaId), cancellationToken);
         }
@@ -434,6 +441,7 @@ public class ImportJobRunner
 
         var report = new ImportReport();
         var errors = new List<string>();
+        TimeSpan readTime = default, convertTime = default, sendTime = default;
         for (int i = 0; i < settings.Sources.Count; i++)
         {
             var source = settings.Sources[i];
@@ -451,7 +459,8 @@ public class ImportJobRunner
                 MaxErrors = job.MaxErrors <= 0 ? 0 : Math.Max(1, job.MaxErrors - errors.Count),
                 ClearIndexFirst = clearFirst && i == 0,
                 RefreshAtEnd = false,
-                Variables = source.Variables
+                Variables = source.Variables,
+                DryRun = dryRun
             };
 
             var sourceReport = await _importer.ImportAsync(client, index, _database.ReadAsync(connection, source.Sql, cancellationToken),
@@ -459,12 +468,33 @@ public class ImportJobRunner
                                                            ProgressReporter(job.Id, report.Read, report.Imported, errors.Count), cancellationToken);
             report.Read += sourceReport.Read;
             report.Imported += sourceReport.Imported;
+            readTime += sourceReport.ReadTime;
+            convertTime += sourceReport.ConvertTime;
+            sendTime += sourceReport.SendTime;
             errors.AddRange(sourceReport.Errors.Select(e => settings.Sources.Count > 1 ? $"{source.DisplayName} row {e.Row}: {e.Message}" : $"row {e.Row}: {e.Message}"));
             report.Cancelled = sourceReport.Cancelled;
             report.StoppedBecauseOfErrors = sourceReport.StoppedBecauseOfErrors;
             report.FatalError = sourceReport.FatalError is null ? null : (settings.Sources.Count > 1 ? $"{source.DisplayName}: {sourceReport.FatalError}" : sourceReport.FatalError);
 
             if (report.Cancelled || report.StoppedBecauseOfErrors || report.FatalError is not null) break;
+        }
+
+        // where the time went: source (read), conversion, server (send)
+        var times = ImportReport.FormatTimes(readTime, convertTime, sendTime, dryRun);
+
+        if (dryRun)
+        {
+            run.ReadCount = report.Read;
+            run.Imported = report.Imported;
+            run.Failed = errors.Count;
+            run.Status = report.Cancelled ? ImportJobStatus.Cancelled
+                       : report.FatalError is not null || report.StoppedBecauseOfErrors ? ImportJobStatus.Failed
+                       : errors.Count > 0 ? ImportJobStatus.Warning : ImportJobStatus.Succeeded;
+            var rate = readTime.TotalSeconds > 0 ? FormattableString.Invariant($" · {report.Read / readTime.TotalSeconds:0} rows/s read") : "";
+            run.Message = $"dry run, nothing sent · {times}{rate}" +
+                          (report.FatalError is null ? "" : $" · {report.FatalError}") +
+                          (errors.Count == 0 ? "" : $" · {errors.Count} rows not convertible, first: {errors[0]}");
+            return;
         }
 
         if (report.Imported > 0)
@@ -494,6 +524,7 @@ public class ImportJobRunner
                 await TryRemoveIndexAsync(client, index);
                 run.Message += $" · alias {job.Target} unchanged" + (previousIndex is null ? "" : $" ({previousIndex})");
             }
+            run.Message += $" · {times}";
             return;
         }
 
@@ -511,6 +542,7 @@ public class ImportJobRunner
             run.Message = $"{errors.Count} rows skipped, first: {errors[0]}" +
                           (run.Message is null ? "" : $" · {run.Message}");
         }
+        run.Message = run.Message is null ? times : $"{run.Message} · {times}";
     }
 
     /// <summary>Rows read by the last successful run (estimate for the progress).</summary>

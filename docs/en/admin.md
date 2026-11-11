@@ -245,6 +245,8 @@ must not change afterwards).
   (empty = UTC). The page shows the next runs. Without a cron expression (*manual*) the job only runs with *Run now*.
 - **Progress** of a running job (job list and job page): rows read, rate and elapsed time; from the second run a
   percentage estimated from the rows of the last successful run.
+- **Dry run** (job page): reads and converts all rows like a run, sends nothing (no index, metadata or alias changes).
+  Every run shows where the time went: `read` (database), `convert` (templates, geometry) and `send` (server).
 - **Run now**, **cancel** and a **run history** (status, duration, counts, index, message) per job. Every run is in the audit log.
 - **External trigger**: start the job from outside instead of (or in addition to) a schedule, e.g. at the end of a
   Jenkins job that updates the database. See [Trigger import jobs from outside](#trigger-import-jobs-from-outside).

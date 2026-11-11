@@ -36,6 +36,9 @@
         }
         else
         {
+            <MudTooltip Text="Reads and converts all rows, sends nothing to the server: shows how long the source takes">
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Speed" OnClick="DryRunAsync" Disabled="_dirty">Dry run</MudButton>
+            </MudTooltip>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunNowAsync" Disabled="_dirty">Run now</MudButton>
         }
         <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync">Delete</MudButton>
@@ -414,7 +417,11 @@ else
         }
     }
 
-    private async Task RunNowAsync()
+    private Task RunNowAsync() => StartAsync(dryRun: false);
+
+    private Task DryRunAsync() => StartAsync(dryRun: true);
+
+    private async Task StartAsync(bool dryRun)
     {
         var user = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "";
         var jobId = _job.Id;
@@ -422,7 +429,7 @@ else
         {
             try
             {
-                await Runner.RunAsync(jobId, String.IsNullOrEmpty(user) ? "manual" : user);
+                await Runner.RunAsync(jobId, (String.IsNullOrEmpty(user) ? "manual" : user) + (dryRun ? " (dry run)" : ""), dryRun: dryRun);
             }
             catch (Exception ex)
             {

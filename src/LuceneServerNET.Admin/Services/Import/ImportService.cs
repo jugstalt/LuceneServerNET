@@ -21,6 +21,9 @@ public class ImportOptions
     /// <summary>Import stops when more rows failed (0 = never stop).</summary>
     public int MaxErrors { get; set; } = 1000;
 
+    /// <summary>Read and convert only, send nothing to the server (to measure the source).</summary>
+    public bool DryRun { get; set; }
+
     /// <summary>Template variables ("@metaid", "@category").</summary>
     public IReadOnlyDictionary<string, string>? Variables { get; set; }
 }
@@ -38,6 +41,20 @@ public class ImportReport
     public bool StoppedBecauseOfErrors { get; set; }
     public string? FatalError { get; set; }
     public TimeSpan Duration { get; set; }
+
+    /// <summary>Time spent waiting for rows of the source (query + reading).</summary>
+    public TimeSpan ReadTime { get; set; }
+
+    /// <summary>Time spent converting rows (templates, types, geometry).</summary>
+    public TimeSpan ConvertTime { get; set; }
+
+    /// <summary>Time spent sending batches to the server.</summary>
+    public TimeSpan SendTime { get; set; }
+
+    /// <summary>"read 12.3 s · convert 1.2 s · send 30.4 s"</summary>
+    public static string FormatTimes(TimeSpan read, TimeSpan convert, TimeSpan send, bool dryRun = false)
+        => FormattableString.Invariant($"read {read.TotalSeconds:0.0} s · convert {convert.TotalSeconds:0.0} s") +
+           (dryRun ? "" : FormattableString.Invariant($" · send {send.TotalSeconds:0.0} s"));
 }
 
 /// <summary>
@@ -69,19 +86,48 @@ public class ImportService
 
         void Report() => progress?.Report(new ImportProgress(report.Read, report.Imported, report.Errors.Count, batches));
 
+        var readWatch = new Stopwatch();
+        var convertWatch = new Stopwatch();
+        var sendWatch = new Stopwatch();
+
+        async Task SendAsync()
+        {
+            sendWatch.Start();
+            try
+            {
+                if (options.DryRun) report.Imported += batch.Count;
+                else await SendBatchAsync(client, index, batch, report, cancellationToken);
+            }
+            finally
+            {
+                sendWatch.Stop();
+            }
+        }
+
         try
         {
-            if (options.ClearIndexFirst)
+            if (options.ClearIndexFirst && !options.DryRun)
             {
                 await client.RemoveDocumentsAsync(index, "*:*", cancellationToken: cancellationToken);
             }
 
-            await foreach (var row in rows.WithCancellation(cancellationToken))
+            await using var enumerator = rows.GetAsyncEnumerator(cancellationToken);
+            while (true)
             {
+                readWatch.Start();
+                var hasRow = await enumerator.MoveNextAsync();
+                readWatch.Stop();
+                if (!hasRow) break;
+
+                var row = enumerator.Current;
                 cancellationToken.ThrowIfCancellationRequested();
                 var rowNumber = ++report.Read;
 
-                if (TryConvert(row, mapping, out var document, out var error, options.Variables))
+                convertWatch.Start();
+                var converted = TryConvert(row, mapping, out var document, out var error, options.Variables);
+                convertWatch.Stop();
+
+                if (converted)
                 {
                     batch.Add((rowNumber, document!));
                 }
@@ -92,7 +138,7 @@ public class ImportService
 
                 if (batch.Count >= batchSize)
                 {
-                    await SendBatchAsync(client, index, batch, report, cancellationToken);
+                    await SendAsync();
                     batches++;
                     batch.Clear();
                     Report();
@@ -107,7 +153,7 @@ public class ImportService
 
             if (batch.Count > 0 && !report.StoppedBecauseOfErrors)
             {
-                await SendBatchAsync(client, index, batch, report, cancellationToken);
+                await SendAsync();
                 batches++;
             }
         }
@@ -122,7 +168,7 @@ public class ImportService
         }
         finally
         {
-            if (options.RefreshAtEnd && report.Imported > 0)
+            if (options.RefreshAtEnd && report.Imported > 0 && !options.DryRun)
             {
                 try
                 {
@@ -135,6 +181,9 @@ public class ImportService
             }
 
             report.Duration = stopwatch.Elapsed;
+            report.ReadTime = readWatch.Elapsed;
+            report.ConvertTime = convertWatch.Elapsed;
+            report.SendTime = sendWatch.Elapsed;
             Report();
         }
 

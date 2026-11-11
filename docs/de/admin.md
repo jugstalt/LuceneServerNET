@@ -245,6 +245,8 @@ Abfragen dürfen sich danach nicht ändern).
   (leer = UTC). Die Seite zeigt die nächsten Läufe. Ohne Cron-Ausdruck (*manual*) läuft der Job nur über *Run now*.
 - **Fortschritt** eines laufenden Jobs (Job-Liste und Job-Seite): gelesene Zeilen, Rate und Laufzeit; ab dem zweiten Lauf ein
   Prozentwert, geschätzt aus der Zeilenzahl des letzten erfolgreichen Laufs.
+- **Dry run** (Job-Seite): liest und konvertiert alle Zeilen wie ein Lauf, schickt aber nichts (kein Index, keine Metadaten, kein Alias).
+  Jeder Lauf zeigt, wo die Zeit bleibt: `read` (Datenbank), `convert` (Templates, Geometrie) und `send` (Server).
 - **Jetzt ausführen**, **Abbrechen** und ein **Lauf-Verlauf** (Status, Dauer, Zahlen, Index, Meldung) pro Job. Jeder Lauf steht im Audit-Log.
 - **Externer Auslöser**: den Job von außen starten statt (oder zusätzlich zu) einem Zeitplan, z. B. am Ende eines
   Jenkins-Jobs, der die Datenbank aktualisiert. Siehe [Import-Jobs von außen auslösen](#import-jobs-von-auen-auslosen).
