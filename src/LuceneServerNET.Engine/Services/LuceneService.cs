@@ -74,7 +74,11 @@ namespace LuceneServerNET.Engine.Services
 
         #region Index Operations
 
-        public bool CreateIndex(string indexName)
+        /// <param name="archive">
+        /// false: no archive for this index even if an archive path is configured (indices that are rebuilt from
+        /// a source anyway, e.g. by import jobs; writing the archive is by far the slowest part of indexing).
+        /// </param>
+        public bool CreateIndex(string indexName, bool archive = true)
         {
             if (IndexExists(indexName))
             {
@@ -95,7 +99,10 @@ namespace LuceneServerNET.Engine.Services
             new DirectoryInfo(indexPath).Create();
             new DirectoryInfo(indexMetaPath).Create();
 
-            _archive.CreateArchive(indexName);
+            if (archive)
+            {
+                _archive.CreateArchive(indexName);
+            }
 
             return true;
         }

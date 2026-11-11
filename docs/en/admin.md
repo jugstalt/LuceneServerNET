@@ -237,7 +237,7 @@ must not change afterwards).
 
 | Mode | What happens |
 |---|---|
-| Rebuild and switch alias | A new index `{alias}_{yyyyMMddHHmmss}` is created and filled; on success the alias is switched to it and older generations are removed, except the newest *Keep older generations* (default 1, for a rollback via the alias page). Generations used by any alias are never removed. If the run fails, the new generation is removed and the alias stays unchanged. Clients use the alias name. |
+| Rebuild and switch alias | A new index `{alias}_{yyyyMMddHHmmss}` is created (without archive, it is rebuilt by every run) and filled; on success the alias is switched to it and older generations are removed, except the newest *Keep older generations* (default 1, for a rollback via the alias page). Generations used by any alias are never removed. If the run fails, the new generation is removed and the alias stays unchanged. Clients use the alias name. |
 | Clear and refill | The index is emptied and filled again (searches see an empty or partial index during the run). |
 | Append | Documents are added. |
 

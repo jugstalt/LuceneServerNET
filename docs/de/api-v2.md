@@ -39,6 +39,9 @@ Anders als v1 (immer HTTP 200) liefert v2 Fehler mit passendem Statuscode. Der B
 | GET | `/api/v2/indices/{index}/meta/{name}` | read | `GET /Lucene/getmeta/{index}?name=` |
 | PUT | `/api/v2/indices/{index}/meta/{name}` | write | `POST /Lucene/addmeta/{index}?name=` |
 | DELETE | `/api/v2/indices/{index}/meta/{name}` | write | – |
+
+`PUT /api/v2/indices/{index}?archive=false` legt einen Index ohne Archiv an, auch wenn `LuceneServer:ArchivePath` gesetzt ist
+(für Indizes, die ohnehin aus einer Quelle neu aufgebaut werden; das Archiv schreibt eine Datei pro Dokument und ist der mit Abstand langsamste Teil beim Indizieren).
 | POST | `/api/v2/indices/{index}/documents` | write | `POST /Lucene/index/{index}` |
 | DELETE | `/api/v2/indices/{index}/documents?term=&field=_guid` | write | `DELETE /Lucene/remove/{index}?term=&termField=` |
 | GET | `/api/v2/indices/{index}/search` | read | `GET /Lucene/search/{index}` |

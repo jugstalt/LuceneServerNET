@@ -407,8 +407,9 @@ public class ImportJobRunner
                 throw new InvalidOperationException($"'{job.Target}' is an index, not an alias. Choose another target or use the mode 'clear'.");
             }
 
+            // generations are rebuilt from the source by every run: no archive (writing it is the slowest part)
             index = GenerationName(job.Target, run.StartedUtc);
-            await client.CreateIndexAsync(index, cancellationToken);
+            await client.CreateIndexAsync(index, archive: false, cancellationToken);
             await client.PutMappingAsync(index, indexMapping, cancellationToken);
         }
         else

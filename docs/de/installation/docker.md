@@ -29,7 +29,7 @@ Der Server lauscht im Container auf Port **8080**.
 | Pfad im Container | Einstellung | Inhalt |
 |---|---|---|
 | `/data/indices` | `LuceneServer:RootPath` | die Lucene-Indizes |
-| `/data/archive` | `LuceneServer:ArchivePath` | das Archiv (Wiederherstellung nach Neustart) |
+| `/data/archive` | `LuceneServer:ArchivePath` | optional, standardmäßig nicht gesetzt: das Archiv (`-e LuceneServer__ArchivePath=/data/archive`), siehe [Konfiguration](../configuration/index.md) |
 
 Ein Volume (oder Host-Verzeichnis) auf `/data` einhängen. Ein Host-Verzeichnis muss für den Benutzer
 `app` (UID `1654`) beschreibbar sein.

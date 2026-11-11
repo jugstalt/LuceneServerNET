@@ -32,7 +32,7 @@ The file is created on the first start (see [Installation](../installation/index
 | Key | Description |
 |---|---|
 | `RootPath` | Directory containing the index folders. Required. |
-| `ArchivePath` | Optional. If set, mapping, metadata and every indexed document are additionally written here as JSON files, so an index can be rebuilt. |
+| `ArchivePath` | Optional, not set by default. If set, mapping, metadata and every indexed document are additionally written here as JSON files (one file per document), so an index can be rebuilt. This slows down indexing considerably (measured: about 26 times on Windows); only use it for indices that have no other source. Indices created with `?archive=false` (e.g. by import jobs) are never archived. |
 | `BackgroundCommitSeconds` | Optional, default `20`. Interval (seconds) in which the server refreshes and commits all open indices in the background. Changes become visible to searches at the latest after this time, even without an explicit `refresh`. |
 | `AutoRestoreOnStartup` | On startup, rebuild archived indices that no longer exist in `RootPath` (e.g. after a container restart with non-persistent storage). |
 | `AutoRestoreOnStartupCount` | If `> 0`: restore only the last *n* archived documents per index. |

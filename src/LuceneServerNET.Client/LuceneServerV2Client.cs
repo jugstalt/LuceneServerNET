@@ -88,6 +88,10 @@ namespace LuceneServerNET.Client
         public async Task CreateIndexAsync(string index, CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Put, $"api/v2/indices/{Esc(index)}", cancellationToken: cancellationToken);
 
+        /// <summary>Creates an index; <paramref name="archive"/> = false: without archive, even if the server has an archive path.</summary>
+        public async Task CreateIndexAsync(string index, bool archive, CancellationToken cancellationToken = default)
+            => await SendAsync<ApiResult>(HttpMethod.Put, $"api/v2/indices/{Esc(index)}" + (archive ? "" : "?archive=false"), cancellationToken: cancellationToken);
+
         public async Task RemoveIndexAsync(string index, CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Delete, $"api/v2/indices/{Esc(index)}", cancellationToken: cancellationToken);
 

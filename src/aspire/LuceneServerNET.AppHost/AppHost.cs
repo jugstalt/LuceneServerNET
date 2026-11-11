@@ -8,7 +8,6 @@ var dataRoot = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..
 
 var luceneServer = builder.AddProject<Projects.LuceneServerNET>("luceneserver")
     .WithEnvironment("LuceneServer__RootPath", Path.Combine(dataRoot, "indices"))
-    .WithEnvironment("LuceneServer__ArchivePath", Path.Combine(dataRoot, "archive"))
     .WithHttpHealthCheck("/health");
 
 // Admin UI (Blazor): gets the server address via service discovery.

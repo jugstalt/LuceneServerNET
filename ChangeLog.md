@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 ### Added
+- Docker image and Aspire AppHost no longer set `LuceneServer:ArchivePath` (the archive is optional, set it explicitly if needed).
+- `PUT /api/v2/indices/{index}?archive=false` creates an index without archive (also with `ArchivePath`); client `CreateIndexAsync(index, archive: false)`. Import jobs create their index generations without archive (about 26 times faster on Windows).
 - `DELETE /api/v2/indices/{index}/meta/{name}` removes a custom metadata entry (also from the archive); client `RemoveMetadataAsync`.
 
 - **REST API v2** (`/api/v2/indices/{id}/...`), resource oriented, in parallel to v1 (`/Lucene/...`).

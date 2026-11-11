@@ -4,7 +4,8 @@
 #   docker run -p 8080:8080 -v luceneserver-data:/data luceneserver-net
 #
 # Configuration: environment variables, e.g. LuceneServer__RootPath, Authorization__Type, Authorization__Clients__0__Id
-# Data: /data/indices (LuceneServer:RootPath) and /data/archive (LuceneServer:ArchivePath) - mount a volume on /data.
+# Data: /data/indices (LuceneServer:RootPath) - mount a volume on /data.
+# Optional archive (one JSON file per document, slow): -e LuceneServer__ArchivePath=/data/archive
 # Only ONE container may write the indices of a volume (Lucene write.lock), see docs: installation/docker.md
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -29,11 +30,10 @@ WORKDIR /app
 
 # upper case: the first-start setup (Setup.cs) looks for LUCENESERVER__ROOTPATH (case-sensitive on Linux)
 ENV ASPNETCORE_HTTP_PORTS=8080 \
-    LUCENESERVER__ROOTPATH=/data/indices \
-    LUCENESERVER__ARCHIVEPATH=/data/archive
+    LUCENESERVER__ROOTPATH=/data/indices
 
 # /data is owned by the non-root user "app" of the base image (uid 1654)
-RUN mkdir -p /data/indices /data/archive && chown -R app:app /data
+RUN mkdir -p /data/indices && chown -R app:app /data
 VOLUME ["/data"]
 
 COPY --from=build /app .

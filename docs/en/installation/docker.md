@@ -29,7 +29,7 @@ The server listens on port **8080** inside the container.
 | Path in the container | Setting | Content |
 |---|---|---|
 | `/data/indices` | `LuceneServer:RootPath` | the Lucene indices |
-| `/data/archive` | `LuceneServer:ArchivePath` | the archive (restore after a restart) |
+| `/data/archive` | `LuceneServer:ArchivePath` | optional, not set by default: the archive (`-e LuceneServer__ArchivePath=/data/archive`), see [Configuration](../configuration/index.md) |
 
 Mount a volume (or a host directory) on `/data`. A host directory must be writable for the user
 `app` (uid `1654`).

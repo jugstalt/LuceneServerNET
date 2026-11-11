@@ -53,11 +53,11 @@ public class IndicesController : LuceneControllerBase
     public Task<IApiResult> Stats(string id)
         => SecureMethodHandler(id, (id) => new IndexStatsResult() { Stats = _lucene.IndexStats(id) });
 
-    /// <summary>Creates an index.</summary>
+    /// <summary>Creates an index; archive=false: without archive (also if an archive path is configured).</summary>
     [HttpPut("{id}")]
     [Authorize(Policy = ApiRoles.Write)]
-    public Task<IApiResult> CreateIndex(string id)
-        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.CreateIndex(id)), resolveAlias: false);
+    public Task<IApiResult> CreateIndex(string id, [FromQuery] bool archive = true)
+        => SecureMethodHandler(id, (id) => new ApiResult(_lucene.CreateIndex(id, archive)), resolveAlias: false);
 
     /// <summary>Removes an index.</summary>
     [HttpDelete("{id}")]

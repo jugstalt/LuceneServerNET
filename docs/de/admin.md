@@ -237,7 +237,7 @@ Abfragen dürfen sich danach nicht ändern).
 
 | Modus | Ablauf |
 |---|---|
-| Neu aufbauen und Alias umschalten | Ein neuer Index `{alias}_{yyyyMMddHHmmss}` wird angelegt und befüllt; bei Erfolg wird der Alias umgeschaltet und ältere Generationen werden gelöscht, bis auf die neuesten *Keep older generations* (Standard 1, für ein Rollback über die Alias-Seite). Generationen, auf die irgendein Alias zeigt, werden nie gelöscht. Schlägt der Lauf fehl, wird die neue Generation entfernt und der Alias bleibt unverändert. Clients verwenden den Alias-Namen. |
+| Neu aufbauen und Alias umschalten | Ein neuer Index `{alias}_{yyyyMMddHHmmss}` wird angelegt (ohne Archiv, er wird bei jedem Lauf neu aufgebaut) und befüllt; bei Erfolg wird der Alias umgeschaltet und ältere Generationen werden gelöscht, bis auf die neuesten *Keep older generations* (Standard 1, für ein Rollback über die Alias-Seite). Generationen, auf die irgendein Alias zeigt, werden nie gelöscht. Schlägt der Lauf fehl, wird die neue Generation entfernt und der Alias bleibt unverändert. Clients verwenden den Alias-Namen. |
 | Leeren und neu befüllen | Der Index wird geleert und neu befüllt (Suchen sehen währenddessen einen leeren bzw. halben Index). |
 | Anhängen | Dokumente werden hinzugefügt. |
 
