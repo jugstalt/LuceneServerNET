@@ -1,7 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>LuceneServerNET.Admin</AssemblyName>
@@ -15,20 +15,20 @@
   <ItemGroup>
     <PackageReference Include="Cronos" Version="0.13.0" />
     <PackageReference Include="CsvHelper" Version="33.1.0" />
-    <PackageReference Include="Dapper" Version="2.1.89" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.14" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
-    <PackageReference Include="MudBlazor" Version="9.12.0" />
-    <PackageReference Include="Npgsql" Version="10.0.3" />
-    <PackageReference Include="Proj4Net.Core" Version="2.26.2401" />
+    <PackageReference Include="Dapper" Version="2.1.100" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="11.0.0" />
+    <PackageReference Include="MudBlazor" Version="9.14.0" />
+    <PackageReference Include="Npgsql" Version="11.0.0" />
+    <PackageReference Include="Proj4Net.Core" Version="2.26.4702" />
     <PackageReference Include="SpatialNET.Core" Version="0.9.0-preview.1" />
     <PackageReference Include="SpatialNET.Extensions" Version="0.9.0-preview.1" />
     <PackageReference Include="SpatialNET.Imp" Version="0.9.0-preview.1" />
     <PackageReference Include="SpatialNET.IO" Version="0.9.0-preview.1" />
     <!-- transitive from Microsoft.Data.SqlClient (9.0.x has known vulnerabilities: GHSA-2fmv-rv2c-59x7, GHSA-846f-f764-76mx) -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>
