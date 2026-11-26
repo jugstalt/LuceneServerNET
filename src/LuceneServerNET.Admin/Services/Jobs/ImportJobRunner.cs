@@ -19,10 +19,18 @@ public static class ImportJobModes
     /// <summary>Remove all documents of the index {target}, then import.</summary>
     public const string Clear = "clear";
 
-    /// <summary>Add the documents to the index {target}.</summary>
+    /// <summary>
+    /// Append or update: add the documents to the index {target}; with a key field, documents with the same key are
+    /// replaced. Only this mode accepts triggers with parameters (queued, see JobQueueProcessor).
+    /// </summary>
     public const string Append = "append";
 
     public static readonly string[] All = [ReplaceAlias, Clear, Append];
+}
+
+public static class JobTriggerKinds
+{
+    public const string Params = "params", Delete = "delete";
 }
 
 public static class ImportJobStatus
@@ -40,6 +48,12 @@ public class ImportJobMapping
 
     /// <summary>Encoded characters of the primary fields (e.g. "./").</summary>
     public string? EncodeCharacters { get; set; }
+
+    /// <summary>Append or update: indexed string field that identifies a document (webgis: "id"); null = append only.</summary>
+    public string? KeyField { get; set; }
+
+    /// <summary>A source has query parameters: the job only runs with parameters (trigger).</summary>
+    public bool HasParameters => Sources.Any(s => s.Parameters.Count > 0);
 
     public List<ImportJobSource> Sources { get; set; } = [];
 
@@ -248,7 +262,7 @@ public class ImportJobRunner
     }
 
     /// <summary>Validates the sources of a job; returns an error message or null.</summary>
-    public static string? ValidateSources(ImportJobMapping settings)
+    public static string? ValidateSources(ImportJobMapping settings, ImportJobRecord? job = null)
     {
         if (settings.Sources.Count == 0) return "Add a source";
         if (settings.Sources.Select(s => s.MetaId).Distinct().Count() != settings.Sources.Count) return "Two sources have the same meta id";
@@ -270,13 +284,37 @@ public class ImportJobRunner
             if (source.Preset == WebgisPreset.Name && WebgisPreset.Validate(source) is { } webgisError) return webgisError;
         }
 
+        IndexMapping indexMapping;
         try
         {
-            settings.ToIndexMapping();
+            indexMapping = settings.ToIndexMapping();
         }
         catch (InvalidOperationException ex)
         {
             return ex.Message;
+        }
+
+        if (settings.KeyField is { Length: > 0 } keyField)
+        {
+            var field = indexMapping.Fields.FirstOrDefault(f => f.Name == keyField);
+            if (field is null || field.FieldType != FieldTypes.StringType || !field.Index)
+            {
+                return $"Key field '{keyField}': must be an indexed string field of the mapping";
+            }
+        }
+        if (settings.Sources.FirstOrDefault(s => s.DeleteTemplate is not null && s.DeleteParameters.Count == 0) is { } noDeleteParameter)
+        {
+            return $"{noDeleteParameter.DisplayName}: the delete template needs at least one parameter, e.g. {{@metaid}}.{{@oid}}";
+        }
+        if (settings.Sources.Any(s => s.DeleteTemplate is not null) && String.IsNullOrEmpty(settings.KeyField))
+        {
+            return "A delete template needs a key field";
+        }
+
+        if (job is not null && settings.HasParameters)
+        {
+            if (job.Mode != ImportJobModes.Append) return "Queries with parameters (@name) are only possible in mode 'append or update'";
+            if (job.HasSchedule) return "A job with query parameters runs only by trigger: remove the schedule";
         }
         return null;
     }
@@ -301,7 +339,7 @@ public class ImportJobRunner
     }
 
     public async Task<ImportJobRunRecord> RunAsync(long jobId, string triggeredBy, CancellationToken cancellationToken = default,
-                                                   string? note = null, Action<long>? onStarted = null, bool dryRun = false)
+                                                   string? note = null, Action<long>? onStarted = null, bool dryRun = false, bool queue = false)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!_running.TryAdd(jobId, cancellation))
@@ -319,7 +357,8 @@ public class ImportJobRunner
 
             job = await _repository.GetImportJobAsync(jobId, CancellationToken.None) ?? throw new InvalidOperationException("Job not found");
             _progress[jobId] = new JobRunProgress { StartedUtc = run.StartedUtc, Expected = await ExpectedRowsAsync(jobId) };
-            await ExecuteAsync(job, run, dryRun, cancellation.Token);
+            if (queue) await ExecuteQueueAsync(job, run, cancellation.Token);
+            else await ExecuteAsync(job, run, dryRun, cancellation.Token);
         }
         catch (OperationCanceledException)
         {
@@ -343,10 +382,24 @@ public class ImportJobRunner
                 _logger.LogError(ex, "Saving the run of import job {JobId} failed", jobId);
             }
 
-            await _audit.LogAsync(triggeredBy, AuditActions.JobRun, job?.Instance, job?.Target,
-                $"job {job?.Name ?? jobId.ToString()} · {run.Status} · index {run.IndexName} · read {run.ReadCount}, imported {run.Imported}, failed {run.Failed}" +
-                (run.Message is null ? "" : $" · {run.Message}") + (note is null ? "" : $" · note: {note}"),
-                success: run.Status is ImportJobStatus.Succeeded or ImportJobStatus.Warning);
+            // runs of queued triggers are frequent: only failures go to the audit log
+            var succeeded = run.Status is ImportJobStatus.Succeeded or ImportJobStatus.Warning;
+            if (!queue || !succeeded)
+            {
+                await _audit.LogAsync(triggeredBy, AuditActions.JobRun, job?.Instance, job?.Target,
+                    $"job {job?.Name ?? jobId.ToString()} · {run.Status} · index {run.IndexName} · read {run.ReadCount}, imported {run.Imported}, failed {run.Failed}" +
+                    (run.Message is null ? "" : $" · {run.Message}") + (run.Note is null ? "" : $" · note: {run.Note}"),
+                    success: succeeded);
+            }
+
+            try
+            {
+                await _repository.DeleteOldImportJobRunsAsync(jobId, KeepRuns, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Removing old runs of import job {JobId} failed", jobId);
+            }
 
             _running.TryRemove(jobId, out _);
             _progress.TryRemove(jobId, out _);
@@ -381,6 +434,118 @@ public class ImportJobRunner
     /// <summary>Dry run: reads and converts all rows, sends nothing (no index, metadata or alias changes).</summary>
     public const string DryRunIndex = "(dry run)";
 
+    /// <summary>Runs kept per job (older runs are removed).</summary>
+    public const int KeepRuns = 500;
+
+    /// <summary>
+    /// Processes the queued triggers of an "append or update" job: deletes ({"delete": ...}) and one query per
+    /// parameter set into the target index (alias), documents with the same key are replaced. One refresh at the end.
+    /// Processed calls are removed from the queue, also if the run fails (the run history shows the error).
+    /// </summary>
+    private async Task ExecuteQueueAsync(ImportJobRecord job, ImportJobRunRecord run, CancellationToken cancellationToken)
+    {
+        var items = await _repository.GetJobTriggerQueueAsync(job.Id, CancellationToken.None);
+        if (items.Count == 0)
+        {
+            run.Status = ImportJobStatus.Succeeded;
+            run.Message = "nothing queued";
+            return;
+        }
+        var upToId = items.Max(i => i.Id);
+
+        try
+        {
+            if (job.Mode != ImportJobModes.Append) throw new InvalidOperationException("Triggers with parameters need the mode 'append or update'");
+
+            var instance = await _registry.GetAsync(job.Instance, cancellationToken) ?? throw new InvalidOperationException($"Instance {job.Instance} not found");
+            var client = _registry.CreateClient(instance);
+            var connections = await _database.GetConnectionsAsync(cancellationToken);
+            var settings = ImportJobMapping.ForJob(job);
+            if (ValidateSources(settings) is { } sourceError) throw new InvalidOperationException(sourceError);
+
+            var index = job.Target;
+            if (!await client.IndexExistsAsync(index, cancellationToken))
+            {
+                await client.CreateIndexAsync(index, cancellationToken);
+                await client.PutMappingAsync(index, settings.ToIndexMapping(), cancellationToken);
+            }
+            run.IndexName = index;
+
+            // identical calls once (the newest note wins)
+            var calls = items.GroupBy(i => (i.Kind, Source: i.Source?.ToLowerInvariant(), Key: QueryParameters.Key(QueryParameters.FromJson(JsonDocument.Parse(i.ParamsJson).RootElement))))
+                             .Select(g => g.Last()).ToList();
+            var notes = items.Where(i => i.Note is not null).Select(i => i.Note!).Distinct().ToList();
+            run.Note = notes.Count == 0 ? null : notes.Count == 1 ? notes[0] : $"{notes[^1]} (+{notes.Count - 1})";
+            await _repository.UpdateImportJobRunAsync(run, CancellationToken.None);
+
+            // deletes
+            var deleteKeys = new List<string>();
+            foreach (var call in calls.Where(c => c.Kind == JobTriggerKinds.Delete))
+            {
+                var parameters = QueryParameters.FromJson(JsonDocument.Parse(call.ParamsJson).RootElement);
+                foreach (var source in settings.Sources.Where(s => s.Accepts(parameters.Keys, call.Source, delete: true)))
+                {
+                    var key = FieldTemplate.Render(source.DeleteTemplate!, new Dictionary<string, object?>(), source.VariablesWith(parameters));
+                    if (key.Length > 0) deleteKeys.Add(key);
+                }
+            }
+            if (deleteKeys.Count > 0)
+            {
+                await client.RemoveDocumentsByValuesAsync(index, settings.KeyField!, deleteKeys.Distinct().ToList(), cancellationToken);
+            }
+
+            // updates: one query per parameter set and source
+            var report = new ImportReport();
+            var errors = new List<string>();
+            TimeSpan readTime = default, convertTime = default, sendTime = default;
+            var parameterSets = calls.Where(c => c.Kind == JobTriggerKinds.Params).ToList();
+            foreach (var call in parameterSets)
+            {
+                var parameters = QueryParameters.FromJson(JsonDocument.Parse(call.ParamsJson).RootElement);
+                foreach (var source in settings.Sources.Where(s => s.Accepts(parameters.Keys, call.Source, delete: false)))
+                {
+                    var connection = connections.FirstOrDefault(c => c.Id == source.ConnectionId)
+                                     ?? throw new InvalidOperationException($"{source.DisplayName}: database connection not found");
+                    var options = new ImportOptions
+                    {
+                        BatchSize = job.BatchSize,
+                        MaxErrors = 0,
+                        RefreshAtEnd = false,
+                        KeyField = settings.KeyField,
+                        Variables = source.VariablesWith(parameters)
+                    };
+                    var sourceReport = await _importer.ImportAsync(client, index, _database.ReadAsync(connection, source.Sql, parameters, cancellationToken),
+                                                                   source.Mapping, options, ProgressReporter(job.Id, report.Read, report.Imported, errors.Count), cancellationToken);
+                    report.Read += sourceReport.Read;
+                    report.Imported += sourceReport.Imported;
+                    readTime += sourceReport.ReadTime;
+                    convertTime += sourceReport.ConvertTime;
+                    sendTime += sourceReport.SendTime;
+                    errors.AddRange(sourceReport.Errors.Select(e => $"{source.DisplayName} ({QueryParameters.Key(parameters)}) row {e.Row}: {e.Message}"));
+                    if (sourceReport.Cancelled) throw new OperationCanceledException();
+                    if (sourceReport.FatalError is not null) throw new InvalidOperationException($"{source.DisplayName} ({QueryParameters.Key(parameters)}): {sourceReport.FatalError}");
+                }
+            }
+
+            if (report.Imported > 0 || deleteKeys.Count > 0)
+            {
+                await client.RefreshIndexAsync(index, CancellationToken.None);
+            }
+
+            run.ReadCount = report.Read;
+            run.Imported = report.Imported;
+            run.Failed = errors.Count;
+            run.Status = errors.Count > 0 ? ImportJobStatus.Warning : ImportJobStatus.Succeeded;
+            run.Message = $"queued triggers: {parameterSets.Count} parameter sets, {deleteKeys.Distinct().Count()} deletes ({items.Count} calls)" +
+                          (errors.Count == 0 ? "" : $" · {errors.Count} rows skipped, first: {errors[0]}") +
+                          " · " + ImportReport.FormatTimes(readTime, convertTime, sendTime);
+        }
+        finally
+        {
+            await _repository.DeleteJobTriggerQueueAsync(job.Id, upToId, CancellationToken.None);
+        }
+    }
+
     private async Task ExecuteAsync(ImportJobRecord job, ImportJobRunRecord run, bool dryRun, CancellationToken cancellationToken)
     {
         var instance = await _registry.GetAsync(job.Instance, cancellationToken) ?? throw new InvalidOperationException($"Instance {job.Instance} not found");
@@ -388,6 +553,10 @@ public class ImportJobRunner
         var connections = await _database.GetConnectionsAsync(cancellationToken);
         var settings = ImportJobMapping.ForJob(job);
         if (ValidateSources(settings) is { } sourceError) throw new InvalidOperationException(sourceError);
+        if (settings.HasParameters)
+        {
+            throw new InvalidOperationException("The queries have parameters (@name): the job runs only by trigger with parameters");
+        }
         var indexMapping = settings.ToIndexMapping();
         var clearFirst = false;
 
@@ -461,7 +630,8 @@ public class ImportJobRunner
                 ClearIndexFirst = clearFirst && i == 0,
                 RefreshAtEnd = false,
                 Variables = source.Variables,
-                DryRun = dryRun
+                DryRun = dryRun,
+                KeyField = job.Mode == ImportJobModes.Append ? settings.KeyField : null
             };
 
             var sourceReport = await _importer.ImportAsync(client, index, _database.ReadAsync(connection, source.Sql, cancellationToken),

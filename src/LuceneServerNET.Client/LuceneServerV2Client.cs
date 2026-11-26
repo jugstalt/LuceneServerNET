@@ -185,6 +185,11 @@ namespace LuceneServerNET.Client
         }
 
         /// <summary>Removes all documents matching the term (Lucene query syntax) in field.</summary>
+        /// <summary>Removes all documents whose (indexed string) field equals one of the values exactly.</summary>
+        public async Task RemoveDocumentsByValuesAsync(string index, string field, IEnumerable<string> values, CancellationToken cancellationToken = default)
+            => await SendAsync<ApiResult>(HttpMethod.Post, $"api/v2/indices/{Esc(index)}/documents/_delete",
+                                          new Core.Models.Custom.DeleteByValues() { Field = field, Values = values }, cancellationToken);
+
         public async Task RemoveDocumentsAsync(string index, string term, string field = "_guid", CancellationToken cancellationToken = default)
             => await SendAsync<ApiResult>(HttpMethod.Delete, $"api/v2/indices/{Esc(index)}/documents?term={Esc(term)}&field={Esc(field)}", cancellationToken: cancellationToken);
 

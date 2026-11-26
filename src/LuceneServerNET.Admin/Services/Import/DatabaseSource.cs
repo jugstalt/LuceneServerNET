@@ -145,11 +145,17 @@ public class DatabaseSource
     public IAsyncEnumerable<IDictionary<string, object?>> ReadAsync(DbSourceConnection source, string sql, CancellationToken cancellationToken = default)
         => ReadAsync(source.Provider, source.ConnectionString, sql, CommandTimeoutSeconds, cancellationToken);
 
+    /// <summary>Query with named parameters (@name), see <see cref="QueryParameters"/>.</summary>
+    public IAsyncEnumerable<IDictionary<string, object?>> ReadAsync(DbSourceConnection source, string sql, IReadOnlyDictionary<string, object?>? parameters,
+                                                                     CancellationToken cancellationToken = default)
+        => ReadAsync(source.Provider, source.ConnectionString, sql, CommandTimeoutSeconds, cancellationToken, parameters);
+
     public static async IAsyncEnumerable<IDictionary<string, object?>> ReadAsync(string provider,
                                                                                   string connectionString,
                                                                                   string sql,
                                                                                   int commandTimeoutSeconds = 600,
-                                                                                  [EnumeratorCancellation] CancellationToken cancellationToken = default)
+                                                                                  [EnumeratorCancellation] CancellationToken cancellationToken = default,
+                                                                                  IReadOnlyDictionary<string, object?>? parameters = null)
     {
         ValidateQuery(sql);
 
@@ -164,6 +170,7 @@ public class DatabaseSource
             command.CommandText = sql;
             command.Transaction = transaction;
             command.CommandTimeout = commandTimeoutSeconds;
+            QueryParameters.AddTo(command, sql, parameters);
 
             if (command is Npgsql.NpgsqlCommand npgsqlCommand)
             {

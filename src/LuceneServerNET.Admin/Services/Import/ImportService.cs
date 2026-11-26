@@ -21,6 +21,12 @@ public class ImportOptions
     /// <summary>Import stops when more rows failed (0 = never stop).</summary>
     public int MaxErrors { get; set; } = 1000;
 
+    /// <summary>
+    /// Append or update: before a batch is added, documents with the same value in this (indexed string) field are
+    /// removed, so a changed record replaces its document. null = append only.
+    /// </summary>
+    public string? KeyField { get; set; }
+
     /// <summary>Read and convert only, send nothing to the server (to measure the source).</summary>
     public bool DryRun { get; set; }
 
@@ -41,6 +47,9 @@ public class ImportReport
     public bool StoppedBecauseOfErrors { get; set; }
     public string? FatalError { get; set; }
     public TimeSpan Duration { get; set; }
+
+    /// <summary>Keys removed before adding (append or update).</summary>
+    public long Replaced { get; set; }
 
     /// <summary>Time spent waiting for rows of the source (query + reading).</summary>
     public TimeSpan ReadTime { get; set; }
@@ -95,8 +104,24 @@ public class ImportService
             sendWatch.Start();
             try
             {
-                if (options.DryRun) report.Imported += batch.Count;
-                else await SendBatchAsync(client, index, batch, report, cancellationToken);
+                if (options.DryRun)
+                {
+                    report.Imported += batch.Count;
+                }
+                else
+                {
+                    if (!String.IsNullOrEmpty(options.KeyField))
+                    {
+                        var keys = batch.Select(b => b.Document.TryGetValue(options.KeyField, out var key) ? key?.ToString() : null)
+                                        .OfType<string>().Where(k => k.Length > 0).Distinct().ToList();
+                        if (keys.Count > 0)
+                        {
+                            await client.RemoveDocumentsByValuesAsync(index, options.KeyField, keys, cancellationToken);
+                            report.Replaced += keys.Count;
+                        }
+                    }
+                    await SendBatchAsync(client, index, batch, report, cancellationToken);
+                }
             }
             finally
             {

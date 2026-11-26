@@ -105,7 +105,7 @@ else
                 {
                     <MudTabPanel Text="@source.DisplayName" @key="source">
                         <JobSourceEditor Source="source" Connections="_connections" CanRemove="@(_settings.Sources.Count > 1)"
-                                         OnChanged="MarkDirty" OnRemove="RemoveSourceAsync" />
+                                         OnChanged="MarkDirty" OnRemove="RemoveSourceAsync" AppendOrUpdate="@(_job.Mode == ImportJobModes.Append)" />
                     </MudTabPanel>
                 }
             </MudTabs>
@@ -119,7 +119,7 @@ else
                 <MudSelect T="string" Value="_job.Mode" ValueChanged="v => { _job.Mode = v; MarkDirty(); }" Label="Mode" Variant="Variant.Outlined">
                     <MudSelectItem Value="@ImportJobModes.ReplaceAlias">Rebuild and switch alias (no downtime)</MudSelectItem>
                     <MudSelectItem Value="@ImportJobModes.Clear">Clear and refill index</MudSelectItem>
-                    <MudSelectItem Value="@ImportJobModes.Append">Append to index</MudSelectItem>
+                    <MudSelectItem Value="@ImportJobModes.Append">Append or update (by key)</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="4">
@@ -130,6 +130,17 @@ else
                 @if (_job.Mode == ImportJobModes.ReplaceAlias)
                 {
                     <MudNumericField T="int" Value="_job.KeepGenerations" ValueChanged="v => { _job.KeepGenerations = v; MarkDirty(); }" Label="Keep older generations" Min="0" Max="20" Variant="Variant.Outlined" />
+                }
+                else if (_job.Mode == ImportJobModes.Append)
+                {
+                    <MudSelect T="string" Value="@(_settings.KeyField ?? "")" ValueChanged="v => { _settings.KeyField = String.IsNullOrEmpty(v) ? null : v; MarkDirty(); }"
+                               Label="Key field" Variant="Variant.Outlined" HelperText="documents with the same key are replaced; none = append only">
+                        <MudSelectItem Value="@("")">none (append only)</MudSelectItem>
+                        @foreach (var field in KeyFieldOptions)
+                        {
+                            <MudSelectItem Value="field">@field</MudSelectItem>
+                        }
+                    </MudSelect>
                 }
             </MudItem>
             <MudItem xs="12" sm="4">
@@ -211,6 +222,13 @@ else
             <MudText Typo="Typo.body2" Class="mb-3">
                 Start the job from outside, e.g. at the end of a Jenkins job that updates the database. The token may only start this job.
                 While the job runs, a trigger queues one more run. Disabled jobs can not be triggered.
+                @if (_job.Mode == ImportJobModes.Append)
+                {
+                    <br />
+                    <span>Append or update: with <span class="mono">{"params": {"oid": 4711}}</span> (a list for several records) the sources run with these query parameters,
+                    <span class="mono">{"delete": {"oid": 5}}</span> deletes by the delete template. Such calls are queued and processed together (2 s collect window),
+                    also after a restart.</span>
+                }
             </MudText>
             @if (_newToken is not null)
             {
@@ -360,7 +378,7 @@ else
 
         _error = ImportJobRunner.Validate(_job)
                  ?? JobWebhook.ValidateHeader(_webhookHeader)
-                 ?? ImportJobRunner.ValidateSources(_settings);
+                 ?? ImportJobRunner.ValidateSources(_settings, _job);
         if (_error is not null) return;
 
         _job.MappingJson = _settings.ToJson();
@@ -440,6 +458,22 @@ else
     }
 
     private string? _newToken;
+
+    /// <summary>Indexed string fields of the mapping (key field options).</summary>
+    private IEnumerable<string> KeyFieldOptions
+    {
+        get
+        {
+            try
+            {
+                return _settings.ToIndexMapping().Fields.Where(f => f.FieldType == FieldTypes.StringType && f.Index).Select(f => f.Name).ToList();
+            }
+            catch
+            {
+                return [];
+            }
+        }
+    }
 
     private string TriggerExample
     {

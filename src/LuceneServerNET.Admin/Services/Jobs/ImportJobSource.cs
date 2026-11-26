@@ -25,6 +25,43 @@ public class ImportJobSource
     /// <summary>Template the mapping was created from ("webgis"), null = free mapping.</summary>
     public string? Preset { get; set; }
 
+    /// <summary>
+    /// Append or update: key of the documents to delete for a trigger {"delete": [{"oid": 5}]}, built from the
+    /// parameters, e.g. "{@metaid}.{@oid}". null = this source can not delete.
+    /// </summary>
+    public string? DeleteTemplate { get; set; }
+
+    /// <summary>Parameters of the query (@name), lower case.</summary>
+    public IReadOnlyList<string> Parameters => QueryParameters.Names(Sql);
+
+    /// <summary>Parameters used by the delete template ({@oid} => oid).</summary>
+    public IReadOnlyList<string> DeleteParameters
+        => FieldTemplate.Placeholders(DeleteTemplate).Where(p => p.StartsWith('@') && !p.Equals(FieldTemplate.MetaIdVariable, StringComparison.OrdinalIgnoreCase)
+                                                                 && !p.Equals(FieldTemplate.CategoryVariable, StringComparison.OrdinalIgnoreCase))
+                        .Select(p => p[1..].ToLowerInvariant()).Distinct().ToList();
+
+    /// <summary>Source variables plus the parameters as template variables ({@oid}).</summary>
+    public IReadOnlyDictionary<string, string> VariablesWith(IReadOnlyDictionary<string, object?>? parameters)
+    {
+        var variables = new Dictionary<string, string>(Variables, StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in parameters ?? new Dictionary<string, object?>())
+        {
+            variables["@" + name] = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        }
+        return variables;
+    }
+
+    /// <summary>
+    /// The source handles a trigger with these parameters: its query (or, for deletes, its delete template) uses
+    /// parameters and all of them are given; with a source name only that source.
+    /// </summary>
+    public bool Accepts(IReadOnlyCollection<string> parameterNames, string? sourceName, bool delete)
+    {
+        if (!String.IsNullOrWhiteSpace(sourceName) && !DisplayName.Equals(sourceName.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
+        var required = delete ? (DeleteTemplate is null ? [] : DeleteParameters) : Parameters;
+        return required.Count > 0 && required.All(r => parameterNames.Contains(r, StringComparer.OrdinalIgnoreCase));
+    }
+
     public static string NewMetaId() => Guid.NewGuid().ToString("N");
 
     public static bool IsMetaId(string? value) => value is { Length: 32 } && Regex.IsMatch(value, "^[0-9a-f]{32}$");

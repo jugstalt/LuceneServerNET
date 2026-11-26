@@ -128,6 +128,30 @@ public class ImportJobRunRecord
     public string? WebhookResult { get; set; }
 }
 
+/// <summary>A queued trigger call with parameters (see JobQueueProcessor).</summary>
+public class JobTriggerQueueRecord
+{
+    public long Id { get; set; }
+    public long JobId { get; set; }
+
+    /// <summary>params | delete</summary>
+    public string Kind { get; set; } = "params";
+
+    public string? Source { get; set; }
+    public string ParamsJson { get; set; } = "{}";
+    public string? Note { get; set; }
+    public DateTime ReceivedUtc { get; set; }
+}
+
+/// <summary>Queue state of a job: count, oldest and newest call.</summary>
+public class JobTriggerQueueState
+{
+    public long JobId { get; set; }
+    public long Count { get; set; }
+    public DateTime OldestUtc { get; set; }
+    public DateTime NewestUtc { get; set; }
+}
+
 /// <summary>
 /// All persistence of the admin UI. The implementation owns every SQL statement (Dapper).
 /// </summary>
@@ -174,6 +198,17 @@ public interface IAdminRepositoryService
 
     /// <summary>Last run of every job (job id => run).</summary>
     Task<IReadOnlyDictionary<long, ImportJobRunRecord>> GetLastImportJobRunsAsync(CancellationToken cancellationToken = default);
+
+    Task InsertJobTriggerQueueAsync(IEnumerable<JobTriggerQueueRecord> records, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<JobTriggerQueueRecord>> GetJobTriggerQueueAsync(long jobId, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes the queued calls of the job up to (including) the id.</summary>
+    Task DeleteJobTriggerQueueAsync(long jobId, long upToId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<JobTriggerQueueState>> GetJobTriggerQueueStatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Keeps the newest runs of the job; returns the number of removed runs.</summary>
+    Task<int> DeleteOldImportJobRunsAsync(long jobId, int keep, CancellationToken cancellationToken = default);
 
     /// <summary>Marks runs that are still "running" (admin app was stopped) as interrupted; returns the count.</summary>
     Task<int> MarkRunningImportJobRunsInterruptedAsync(CancellationToken cancellationToken = default);

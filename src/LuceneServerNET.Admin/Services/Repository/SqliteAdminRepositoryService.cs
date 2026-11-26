@@ -276,6 +276,7 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await connection.ExecuteAsync("DELETE FROM import_job_runs WHERE job_id = @id", new { id }, transaction);
+        await connection.ExecuteAsync("DELETE FROM job_trigger_queue WHERE job_id = @id", new { id }, transaction);
         await connection.ExecuteAsync("DELETE FROM import_jobs WHERE id = @id", new { id }, transaction);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -327,6 +328,47 @@ public class SqliteAdminRepositoryService : IAdminRepositoryService
             $@"SELECT {RunColumns} FROM import_job_runs r
                WHERE id = (SELECT id FROM import_job_runs WHERE job_id = r.job_id ORDER BY started_utc DESC, id DESC LIMIT 1)");
         return runs.ToDictionary(r => r.JobId);
+    }
+
+    public async Task InsertJobTriggerQueueAsync(IEnumerable<JobTriggerQueueRecord> records, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"INSERT INTO job_trigger_queue (job_id, kind, source, params_json, note, received_utc)
+              VALUES (@JobId, @Kind, @Source, @ParamsJson, @Note, @ReceivedUtc)", records, transaction);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<JobTriggerQueueRecord>> GetJobTriggerQueueAsync(long jobId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<JobTriggerQueueRecord>(
+            "SELECT id, job_id, kind, source, params_json, note, received_utc FROM job_trigger_queue WHERE job_id = @jobId ORDER BY id",
+            new { jobId })).ToList();
+    }
+
+    public async Task DeleteJobTriggerQueueAsync(long jobId, long upToId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync("DELETE FROM job_trigger_queue WHERE job_id = @jobId AND id <= @upToId", new { jobId, upToId });
+    }
+
+    public async Task<IReadOnlyList<JobTriggerQueueState>> GetJobTriggerQueueStatesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<JobTriggerQueueState>(
+            @"SELECT job_id, COUNT(*) AS count, MIN(received_utc) AS oldest_utc, MAX(received_utc) AS newest_utc
+              FROM job_trigger_queue GROUP BY job_id")).ToList();
+    }
+
+    public async Task<int> DeleteOldImportJobRunsAsync(long jobId, int keep, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.ExecuteAsync(
+            @"DELETE FROM import_job_runs WHERE job_id = @jobId AND id NOT IN
+                (SELECT id FROM import_job_runs WHERE job_id = @jobId ORDER BY started_utc DESC, id DESC LIMIT @keep)",
+            new { jobId, keep });
     }
 
     public async Task<int> MarkRunningImportJobRunsInterruptedAsync(CancellationToken cancellationToken = default)

@@ -24,6 +24,18 @@
     </MudItem>
     <MudItem xs="12">
         <MudTextField T="string" Value="Source.Sql" ValueChanged="v => { Source.Sql = v ?? String.Empty; Changed(); }" Label="SELECT query" Variant="Variant.Outlined" Lines="4" Class="mono" />
+        @if (Source.Parameters.Count > 0)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mt-2">
+                <MudText Typo="Typo.caption">Parameters for the preview:</MudText>
+                @foreach (var name in Source.Parameters)
+                {
+                    <MudTextField T="string" Value="@(_previewParameters.GetValueOrDefault(name))" ValueChanged="v => _previewParameters[name] = v"
+                                  Label="@("@" + name)" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:180px" />
+                }
+                <MudText Typo="Typo.caption">the job runs with these parameters only by trigger: {"params": {"@(Source.Parameters[0])": ...}}</MudText>
+            </MudStack>
+        }
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Preview" OnClick="PreviewAsync" Disabled="_previewing">
                 @(Source.HasMapping ? "Preview (load columns)" : "Preview and detect mapping")
@@ -79,6 +91,24 @@
     }
 }
 
+@if (AppendOrUpdate)
+{
+    <MudDivider Class="my-4" />
+    <MudText Typo="Typo.subtitle1"><b>Delete by trigger</b></MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Key of the documents to delete for a trigger <span class="mono">{"delete": {"oid": 5}}</span>, built from the parameters
+        (<span class="mono">{@@oid}</span>) and <span class="mono">{@@metaid}</span>. It must produce the value of the key field. Empty = this source does not delete.
+    </MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudTextField T="string" Value="Source.DeleteTemplate" ValueChanged="v => { Source.DeleteTemplate = String.IsNullOrWhiteSpace(v) ? null : v.Trim(); Changed(); }"
+                      Label="Delete template" Placeholder="@("{@metaid}.{@oid}")" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mono" Style="max-width:360px" />
+        @if (Source.DeleteTemplate is null && ProposedDeleteTemplate is { } proposal)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => { Source.DeleteTemplate = proposal; Changed(); }">Use @proposal</MudButton>
+        }
+    </MudStack>
+}
+
 <MudDivider Class="my-4" />
 <MudText Typo="Typo.subtitle1"><b>Metadata</b></MudText>
 <MudText Typo="Typo.body2" Class="mb-2">
@@ -127,6 +157,15 @@
 
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    /// <summary>Job mode "append or update": show the delete template.</summary>
+    [Parameter] public bool AppendOrUpdate { get; set; }
+
+    private readonly Dictionary<string, string?> _previewParameters = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>webgis: "{@metaid}.{@param}" from the id template "{@metaid}.{COLUMN}" and the only query parameter.</summary>
+    private string? ProposedDeleteTemplate
+        => Source.Preset == WebgisPreset.Name && Source.Parameters.Count == 1 ? $"{{{FieldTemplate.MetaIdVariable}}}.{{@{Source.Parameters[0]}}}" : null;
+
     private List<IDictionary<string, object?>> _sample = [];
     private List<string> _columns = [];
     private string? _idColumn;
@@ -165,7 +204,8 @@
         try
         {
             var sample = new List<IDictionary<string, object?>>();
-            await foreach (var row in DbSource.ReadAsync(connection, Source.Sql))
+            var parameters = Source.Parameters.ToDictionary(p => p, p => QueryParameters.FromText(_previewParameters.GetValueOrDefault(p)));
+            await foreach (var row in DbSource.ReadAsync(connection, Source.Sql, Source.Parameters.Count == 0 ? null : parameters))
             {
                 sample.Add(row);
                 if (sample.Count >= 200) break;

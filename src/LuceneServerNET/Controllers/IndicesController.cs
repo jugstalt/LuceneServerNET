@@ -208,6 +208,19 @@ public class IndicesController : LuceneControllerBase
     public Task<IApiResult> AddDocuments(string id, [FromBody] IEnumerable<IDictionary<string, object>> items)
         => SecureMethodHandler(id, (id) => new ApiResult(_lucene.Index(id, items)));
 
+    /// <summary>
+    /// Removes all documents whose indexed string field equals one of the values exactly
+    /// (body: {"field": "id", "values": ["a", "b"]}); e.g. to replace documents by their key.
+    /// </summary>
+    [HttpPost("{id}/documents/_delete")]
+    [Authorize(Policy = ApiRoles.Write)]
+    public Task<IApiResult> RemoveDocumentsByValues(string id, [FromBody] Core.Models.Custom.DeleteByValues request)
+        => SecureMethodHandler(id, (id) =>
+        {
+            _lucene.RemoveDocumentsByValues(id, request?.Field, request?.Values);
+            return new ApiResult();
+        });
+
     /// <summary>Removes all documents where field equals term (default field: _guid).</summary>
     [HttpDelete("{id}/documents")]
     [Authorize(Policy = ApiRoles.Write)]

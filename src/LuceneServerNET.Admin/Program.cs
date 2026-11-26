@@ -80,6 +80,7 @@ builder.Services.AddHttpClient(JobWebhook.HttpClientName, client => client.Timeo
 builder.Services.AddSingleton<JobWebhook>();
 builder.Services.AddSingleton<ImportJobRunner>();
 builder.Services.AddHostedService<ImportJobScheduler>();
+builder.Services.AddHostedService<JobQueueProcessor>();
 
 // file uploads (import) are streamed through the SignalR circuit
 builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 1024 * 1024);

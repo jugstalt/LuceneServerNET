@@ -1,7 +1,9 @@
 using LuceneServerNET.Admin.Services.Audit;
 using LuceneServerNET.Admin.Services.Repository;
 using System.Security.Cryptography;
+using LuceneServerNET.Admin.Services.Import;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace LuceneServerNET.Admin.Services.Jobs;
@@ -32,9 +34,62 @@ public static class JobTriggerToken
     private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }
 
-public class JobTriggerRequest
+/// <summary>
+/// Trigger body: {"note": "...", "source": "Adressen", "params": {"oid": 4711} | [{...}, ...], "delete": {"oid": 5} | [...]}.
+/// Without params / delete the job runs completely (as before).
+/// </summary>
+public static class JobTriggerRequest
 {
-    [JsonPropertyName("note")] public string? Note { get; set; }
+    /// <summary>Calls of the body for the queue; throws FormatException with a message for the caller.</summary>
+    public static List<JobTriggerQueueRecord> ToQueue(JsonElement body, ImportJobRecord job, ImportJobMapping settings, string? note, DateTime nowUtc)
+    {
+        var records = new List<JobTriggerQueueRecord>();
+        if (body.ValueKind != JsonValueKind.Object) return records;
+
+        string? source = body.TryGetProperty("source", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
+        if (source is not null && !settings.Sources.Any(x => x.DisplayName.Equals(source, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new FormatException($"Unknown source '{source}'");
+        }
+
+        foreach (var (property, kind) in new[] { ("params", JobTriggerKinds.Params), ("delete", JobTriggerKinds.Delete) })
+        {
+            if (!body.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null) continue;
+
+            var sets = value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().ToList() : [value];
+            foreach (var set in sets)
+            {
+                var parameters = QueryParameters.FromJson(set);
+                var delete = kind == JobTriggerKinds.Delete;
+                if (!settings.Sources.Any(x => x.Accepts(parameters.Keys, source, delete)))
+                {
+                    var known = delete
+                        ? settings.Sources.Where(x => x.DeleteTemplate is not null).Select(x => $"{x.DisplayName}: {String.Join(", ", x.DeleteParameters)}")
+                        : settings.Sources.Where(x => x.Parameters.Count > 0).Select(x => $"{x.DisplayName}: {String.Join(", ", x.Parameters)}");
+                    throw new FormatException($"No source {(delete ? "deletes" : "queries")} with the parameters {String.Join(", ", parameters.Keys)}" +
+                                              $" (sources: {String.Join("; ", known.DefaultIfEmpty("none"))})");
+                }
+                records.Add(new JobTriggerQueueRecord
+                {
+                    JobId = job.Id,
+                    Kind = kind,
+                    Source = source,
+                    ParamsJson = set.GetRawText(),
+                    Note = note,
+                    ReceivedUtc = nowUtc
+                });
+            }
+        }
+
+        if (records.Count > 0 && job.Mode != ImportJobModes.Append)
+        {
+            throw new FormatException("Parameters and deletes are only possible in mode 'append or update'");
+        }
+        if (records.Count > MaxCalls) throw new FormatException($"Max. {MaxCalls} parameter sets per call");
+        return records;
+    }
+
+    public const int MaxCalls = 10_000;
 }
 
 public class JobTriggerResponse
@@ -43,6 +98,9 @@ public class JobTriggerResponse
     [JsonPropertyName("status")] public string Status { get; set; } = "";
     [JsonPropertyName("runId")] public long? RunId { get; set; }
     [JsonPropertyName("statusUrl")] public string? StatusUrl { get; set; }
+
+    /// <summary>Number of queued parameter sets / deletes.</summary>
+    [JsonPropertyName("queued")] public int? Queued { get; set; }
 }
 
 public static class JobTriggerEndpoints
@@ -68,15 +126,20 @@ public static class JobTriggerEndpoints
                 return Results.Json(new { error = "invalid job or token" }, statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            if (note is null && context.Request.HasJsonContentType())
+            JsonElement body = default;
+            if (context.Request.HasJsonContentType())
             {
                 try
                 {
-                    note = (await context.Request.ReadFromJsonAsync<JobTriggerRequest>())?.Note;
+                    body = (await JsonDocument.ParseAsync(context.Request.Body)).RootElement;
                 }
-                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+                catch (JsonException)
                 {
                     return Results.BadRequest(new { error = "invalid JSON body" });
+                }
+                if (note is null && body.ValueKind == JsonValueKind.Object && body.TryGetProperty("note", out var n) && n.ValueKind == JsonValueKind.String)
+                {
+                    note = n.GetString();
                 }
             }
             note = String.IsNullOrWhiteSpace(note) ? null : note.Trim()[..Math.Min(note.Trim().Length, MaxNoteLength)];
@@ -84,6 +147,29 @@ public static class JobTriggerEndpoints
             if (!job.Enabled)
             {
                 return Results.Json(new { error = "the job is disabled" }, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            // parameters / deletes: queued, processed by JobQueueProcessor (many calls => few runs)
+            var settings = ImportJobMapping.ForJob(job);
+            List<JobTriggerQueueRecord> queue;
+            try
+            {
+                queue = JobTriggerRequest.ToQueue(body, job, settings, note, DateTime.UtcNow);
+            }
+            catch (FormatException ex)
+            {
+                await audit.LogAsync("trigger", AuditActions.JobTrigger, job.Instance, job.Target,
+                    $"job {job.Name} · rejected: {ex.Message} · {context.Connection.RemoteIpAddress}", success: false);
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            if (queue.Count > 0)
+            {
+                await repository.InsertJobTriggerQueueAsync(queue);
+                return Results.Json(new JobTriggerResponse { Status = "queued", Queued = queue.Count }, statusCode: StatusCodes.Status202Accepted);
+            }
+            if (settings.HasParameters)
+            {
+                return Results.BadRequest(new { error = $"The queries have parameters ({String.Join(", ", settings.Sources.SelectMany(x => x.Parameters).Distinct().Select(p => "@" + p))}): send them as {{\"params\": {{...}}}}" });
             }
 
             var result = await runner.TriggerAsync(job.Id, $"trigger:{job.Name}", note);

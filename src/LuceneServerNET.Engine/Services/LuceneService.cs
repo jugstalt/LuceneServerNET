@@ -526,6 +526,39 @@ namespace LuceneServerNET.Engine.Services
             return true;
         }
 
+        /// <summary>
+        /// Removes all documents whose field equals one of the values exactly (term query, no analyzer).
+        /// Only for indexed string fields (e.g. a document id). Returns the number of values.
+        /// </summary>
+        public int RemoveDocumentsByValues(string indexName, string fieldName, IEnumerable<string> values)
+        {
+            if (!IndexExists(indexName))
+            {
+                throw new IndexNotFoundException();
+            }
+
+            var mapping = _resources.GetMapping(indexName);
+            var field = mapping?.GetField(fieldName) ?? throw new ArgumentException($"Unknown field '{fieldName}'");
+            if (field.FieldType != FieldTypes.StringType || !field.Index)
+            {
+                throw new ArgumentException($"Field '{fieldName}' must be an indexed string field");
+            }
+
+            // same value as indexed (encoded characters of primary fields)
+            var terms = (values ?? Enumerable.Empty<string>())
+                .Where(v => !String.IsNullOrEmpty(v))
+                .Distinct()
+                .Select(v => new Lucene.Net.Index.Term(field.Name, v.ToStringWithAsciiEncode(field, mapping)))
+                .ToArray();
+
+            if (terms.Length > 0)
+            {
+                _resources.GetIndexWriter(indexName).DeleteDocuments(terms);  // committed by refresh / background timer / shutdown
+            }
+
+            return terms.Length;
+        }
+
         public void RefreshIndex(string indexName)
         {
             if (!IndexExists(indexName))
