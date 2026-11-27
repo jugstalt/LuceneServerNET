@@ -354,3 +354,6 @@ src/LuceneServerNET.Admin/_data/
 
 # docker compose secrets (deploy/docker/.env.example is the template)
 deploy/docker/.env
+
+# local setup checklist of the deploy-setup skill
+docs-dev/deployment-setup.md
