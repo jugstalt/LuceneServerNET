@@ -48,6 +48,7 @@ class Build : NukeBuild
     readonly string DocsRepository;
 
     const string DocsFolder = "luceneserver-net";
+    const string RepositoryUrl = "https://github.com/jugstalt/LuceneServerNET";
 
     AbsolutePath SolutionFile => RootDirectory / "LuceneServerNET.sln";
     AbsolutePath SourceDirectory => RootDirectory / "src";
@@ -281,7 +282,8 @@ class Build : NukeBuild
                 }
 
                 var tagArgs = string.Join(' ', tags.Select(t => $"--tag {t}"));
-                Docker($"build --pull --label org.opencontainers.image.version={Version} {tagArgs:nq} {context}", logger: LogContainerOutput);
+                // image.source links the package on ghcr.io to the repository (shown in the repository's sidebar)
+                Docker($"build --pull --label org.opencontainers.image.source={RepositoryUrl} --label org.opencontainers.image.version={Version} {tagArgs:nq} {context}", logger: LogContainerOutput);
                 Log.Information("Built {Tags}", tags);
             }
         });
