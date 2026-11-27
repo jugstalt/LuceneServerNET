@@ -47,14 +47,14 @@ The UI only offers actions the API client of an instance is allowed to do: it as
 === "Docker"
 
     ```bash
-    docker build -f Dockerfile.admin -t luceneserver-net-admin .
-    docker run --rm luceneserver-net-admin --hash-password "my password"
+    ./build.cmd DockerBuild   # or: docker pull ghcr.io/jugstalt/luceneserver-net-admin
+    docker run --rm ghcr.io/jugstalt/luceneserver-net-admin --hash-password "my password"
     docker run -p 8081:8080 -v luceneserver-admin-data:/data \
       -e Admin__Authentication__Users__0__Name=admin \
       -e Admin__Authentication__Users__0__PasswordHash='pbkdf2-sha256$...' \
       -e Admin__Instances__0__Name=prod \
       -e Admin__Instances__0__Url=http://luceneserver:8080 \
-      luceneserver-net-admin
+      ghcr.io/jugstalt/luceneserver-net-admin
     ```
 
 ### Run as Windows service

@@ -56,7 +56,7 @@ var result = await client.SearchAsync("rul*");
 [REST API](docs/en/api.md) ·
 [.NET client](docs/en/clients/dotnet-client.md) ·
 [Tools](docs/en/tools.md) ·
-[Changelog](ChangeLog.md)
+[Changelog](CHANGELOG.md)
 
 Build the docs locally: `./build-docs.ps1 -NoCopy` (output in `artifacts/docs/site`).
 

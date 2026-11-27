@@ -1,0 +1,50 @@
+<Project>
+
+  <!-- Server, engine and NuGet packages (Core, Client) share one version: MinVer from the git tags v* -->
+  <PropertyGroup>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerMinimumMajorMinor>3.0</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- libraries opt in with <IsPackable>true</IsPackable> and a <Description> in their csproj -->
+    <IsPackable>false</IsPackable>
+    <Authors>Jürgen Gstaltmaier</Authors>
+    <Copyright>Jürgen Gstaltmaier</Copyright>
+    <Company />
+    <Product>LuceneServerNET</Product>
+    <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>lucene;search;fulltext;rest</PackageTags>
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- release notes of the current version, written by the NUKE target ReleaseNotes from CHANGELOG.md -->
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)artifacts/release-notes.md')">
+    <PackageReleaseNotes>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)artifacts/release-notes.md'))</PackageReleaseNotes>
+  </PropertyGroup>
+  <PropertyGroup Condition="!Exists('$(MSBuildThisFileDirectory)artifacts/release-notes.md')">
+    <PackageReleaseNotes>https://github.com/jugstalt/LuceneServerNET/blob/master/CHANGELOG.md</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

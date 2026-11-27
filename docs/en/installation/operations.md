@@ -53,11 +53,15 @@ Further web apps (e.g. an admin UI) are added to the AppHost and reference the s
 
 | Command | Result |
 |---|---|
-| `./build.cmd` | test, ZIP files and Docker image |
-| `./build.cmd Zip [--platform win64\|linux64]` | `c:\deploy\luceneserver-net\download\luceneserver-net-{platform}-{version}.zip` (framework dependent) |
-| `./build.cmd Docker` | image `luceneserver-net:{version}` / `:latest` |
-| `./build.cmd DockerPush` | push to `ghcr.io/jugstalt/luceneserver-net` |
+| `./build.cmd` | build and test |
+| `./build.cmd PrintVersion` | the version (MinVer, from the git tags `v*`) |
+| `./build.cmd Test Pack Zip` | NuGet packages in `artifacts/packages`, ZIP files `artifacts/zip/luceneserver_net_{version}_{win-x64\|linux-x64}.zip` (framework dependent) |
+| `./build.cmd DockerBuild [--container-cli wslc\|podman]` | images `ghcr.io/jugstalt/luceneserver-net` and `ghcr.io/jugstalt/luceneserver-net-admin` (`{version}`, `{major.minor}`, `latest`) |
 | `./build.cmd Docs` | this documentation in `artifacts/docs/site` |
 | `./build.cmd DocsPublish [--docs-repository <path>]` | copies the site to `docs-gviewonline/app/other/luceneserver-net` (nothing is committed) |
 
-The version is the `<Version>` of `src/LuceneServerNET.Core`; `--version` overrides it.
+The version comes from the git tags (`v3.0.0`, `v3.1.0-preview.1`, ...). Pushing a tag runs the GitHub workflow
+`release.yml`: it publishes the NuGet packages (`LuceneServerNET.Core`, `LuceneServerNET.Client`), pushes the images to
+`ghcr.io/jugstalt` and creates the GitHub release with the ZIP files. The release notes are the section of the version
+in `CHANGELOG.md`.
+

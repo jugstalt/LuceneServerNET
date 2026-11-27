@@ -1,206 +1,303 @@
 using System;
-using System.IO.Compression;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
-
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
-
 using Serilog;
+using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
-// Deploy build for LuceneServer.NET (same structure as gview-pipe)
+// Build and release of LuceneServer.NET (same structure as MessageQueueNET)
 //
-//   .\build.cmd                         => Test, Compile, Zip, Docker
-//   .\build.cmd Zip                     => only the ZIP files (no docker)
-//   .\build.cmd Zip --platform win64
-//   .\build.cmd Deploy --skip Test
-//   .\build.cmd Docker                  => image luceneserver-net:{version} and :latest (+ ghcr.io/jugstalt tags)
-//   .\build.cmd DockerPush              => also push to ghcr.io/jugstalt (docker login ghcr.io first)
-//   .\build.cmd Docs                    => MkDocs site in artifacts/docs/site
-//   .\build.cmd DocsPublish             => copy the site to ../docs-gviewonline/app/other/luceneserver-net
+//   .\build.cmd                           => Test
+//   .\build.cmd PrintVersion              => version from the git tags (MinVer)
+//   .\build.cmd Test Pack Zip             => NuGet packages and ZIP downloads in artifacts/
+//   .\build.cmd DockerBuild               => images ghcr.io/jugstalt/luceneserver-net[-admin]
+//   .\build.cmd DockerBuild --container-cli wslc
+//   .\build.cmd Docs                      => MkDocs site in artifacts/docs/site
+//   .\build.cmd DocsPublish               => copy the site to ../docs-gviewonline/app/other/luceneserver-net
 //
-// Output (DeployRoot, default c:\deploy\luceneserver-net):
-//   download\luceneserver-net-{win64|linux64}-{version}.zip   framework dependent (.NET 10 runtime required)
-//
-// ZIP structure: {version}/luceneserver/... (the published server without _config/luceneserver.json:
-// the server creates it on the first start, see Setup.cs), {version}/admin/... (the admin UI) and the
-// scripts from build/assets/{platform} in {version}/ (win64: lucene-admin.bat, lucene-admin-service.bat)
+// Releases: push a tag v<version>; .github/workflows/release.yml pushes packages and images and creates the GitHub release.
 class Build : NukeBuild
 {
-    public static int Main() => Execute<Build>(x => x.Deploy);
+    public static int Main() => Execute<Build>(x => x.Test);
 
     [Parameter("Configuration to build - Default is 'Release'")]
     readonly string Configuration = "Release";
 
-    [Parameter("Version - Default is the <Version> of src/LuceneServerNET.Core")]
-    string Version;
+    [Parameter("Runtime identifiers for the ZIP downloads - Default is win-x64 and linux-x64")]
+    readonly string[] Runtimes = ["win-x64", "linux-x64"];
 
-    [Parameter("Platform to build - win64, linux64 (default: both)")]
-    readonly string[] Platform = { "win64", "linux64" };
+    [Parameter("Container registry including owner - Default is 'ghcr.io/jugstalt'")]
+    readonly string ContainerRegistry = "ghcr.io/jugstalt";
 
-    [Parameter("Deploy root - Default is c:\\deploy\\luceneserver-net")]
-    readonly AbsolutePath DeployRoot = (AbsolutePath)@"c:\deploy\luceneserver-net";
+    // also read from the environment variable NUKE_CONTAINER_CLI (e.g. set it to 'wslc' on your machine once)
+    [Parameter("Container CLI with docker compatible build/push commands (e.g. 'wslc', 'podman') - Default is 'docker'")]
+    readonly string ContainerCli = "docker";
+
+    [Parameter("NuGet feed to push packages to - Default is nuget.org")]
+    readonly string NuGetSource = "https://api.nuget.org/v3/index.json";
+
+    [Parameter("NuGet API key (in CI a short-lived key from NuGet trusted publishing)"), Secret]
+    readonly string NuGetApiKey;
 
     [Parameter("Checkout of docs-gviewonline for DocsPublish - Default is the folder docs-gviewonline next to this repository")]
     readonly string DocsRepository;
 
-    [Parameter("Docker exe file name")]
-    readonly string DockerExe = "docker";
-
-    [Parameter("Docker registry for DockerPush")]
-    readonly string DockerRegistry = "ghcr.io/jugstalt";
-
-    const string AppName = "luceneserver";
-    const string ZipName = "luceneserver-net";
-    const string DockerImage = "luceneserver-net";
     const string DocsFolder = "luceneserver-net";
 
-    static readonly RelativePath ServerProject = (RelativePath)"src/LuceneServerNET/LuceneServerNET.csproj";
-    static readonly RelativePath AdminProject = (RelativePath)"src/LuceneServerNET.Admin/LuceneServerNET.Admin.csproj";
-    const string AdminName = "admin";
-    static readonly RelativePath VersionProject = (RelativePath)"src/LuceneServerNET.Core/LuceneServerNET.Core.csproj";
-
+    AbsolutePath SolutionFile => RootDirectory / "LuceneServerNET.sln";
+    AbsolutePath SourceDirectory => RootDirectory / "src";
+    AbsolutePath DeployDirectory => RootDirectory / "deploy";
     AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
-    AbsolutePath DownloadDirectory => DeployRoot / "download";
+    AbsolutePath PackagesDirectory => ArtifactsDirectory / "packages";
+    AbsolutePath ZipDirectory => ArtifactsDirectory / "zip";
+    AbsolutePath DockerDirectory => ArtifactsDirectory / "docker";
+    AbsolutePath TestResultsDirectory => ArtifactsDirectory / "test-results";
+    AbsolutePath ReleaseNotesFile => ArtifactsDirectory / "release-notes.md";
 
-    AbsolutePath Artifacts(string platform) => ArtifactsDirectory / AppName / platform;
-    AbsolutePath AdminArtifacts(string platform) => ArtifactsDirectory / AdminName / platform;
-    AbsolutePath AssetsDirectory => RootDirectory / "build" / "assets";
+    AbsolutePath ServerProject => SourceDirectory / "LuceneServerNET" / "LuceneServerNET.csproj";
+    AbsolutePath AdminProject => SourceDirectory / "LuceneServerNET.Admin" / "LuceneServerNET.Admin.csproj";
 
-    static string RuntimeIdentifier(string platform) => platform switch
-    {
-        "win64" => "win-x64",
-        "linux64" => "linux-x64",
-        _ => throw new ArgumentException($"Unknown platform '{platform}'")
-    };
+    // any project that gets MinVer through Directory.Build.props
+    AbsolutePath VersionProject => SourceDirectory / "LuceneServerNET.Core" / "LuceneServerNET.Core.csproj";
 
-    protected override void OnBuildInitialized()
-    {
-        if (String.IsNullOrEmpty(Version))
-        {
-            var project = (RootDirectory / VersionProject).ReadAllText();
-            var match = Regex.Match(project, @"<Version>\s*([^<\s]+)\s*</Version>");
-            Assert.True(match.Success, $"Can't read <Version> from {VersionProject}");
-            Version = match.Groups[1].Value;
-        }
+    // Folder = path inside {Version}/ of the ZIP
+    (AbsolutePath Project, string Folder)[] ZipApps =>
+    [
+        (ServerProject, "luceneserver"),
+        (AdminProject, "admin"),
+    ];
 
-        foreach (var platform in Platform)
-        {
-            Assert.True(platform is "win64" or "linux64", $"Unknown platform '{platform}'");
-        }
+    // Name = folder below deploy/docker (Dockerfile + override/), Image = image name without registry
+    const string DockerRuntime = "linux-musl-x64";
 
-        Log.Information("LuceneServer.NET {Version} for {Platform}", Version, String.Join(", ", Platform));
-    }
+    (string Name, AbsolutePath Project, string Image)[] DockerImages =>
+    [
+        ("server", ServerProject, "luceneserver-net"),
+        ("admin", AdminProject, "luceneserver-net-admin"),
+    ];
 
-    Target Test => _ => _
-        .Before(Compile, Docker)
+    Tool _containerTool;
+    Tool Docker => _containerTool ??= ToolResolver.GetPathTool(ContainerCli);
+
+    string _version;
+
+    // single source of truth: MinVer (git tag v*), the same value the projects are built with
+    string Version => _version ??= DotNet(
+            $"msbuild {VersionProject} -t:MinVer -getProperty:MinVerVersion -p:Configuration={Configuration} -nologo",
+            logOutput: false)
+        .StdToText()
+        .Trim();
+
+    bool IsPreRelease => Version.Contains('-');
+
+    Target Clean => _ => _
+        .Before(Restore)
         .Executes(() =>
         {
-            DotNetTasks.DotNetTest(s => s
-                .SetProjectFile(RootDirectory / "LuceneServerNET.sln")
-                .SetConfiguration(Configuration));
+            ArtifactsDirectory.CreateOrCleanDirectory();
+        });
+
+    Target Restore => _ => _
+        .Executes(() =>
+        {
+            DotNetRestore(s => s
+                .SetProjectFile(SolutionFile));
+        });
+
+    Target PrintVersion => _ => _
+        .DependsOn(Restore)
+        .Executes(() =>
+        {
+            Log.Information("Version: {Version}", Version);
         });
 
     Target Compile => _ => _
-        .DependsOn(Test)
+        .DependsOn(Restore)
         .Executes(() =>
         {
-            foreach (var platform in Platform)
+            DotNetBuild(s => s
+                .SetProjectFile(SolutionFile)
+                .SetConfiguration(Configuration)
+                .EnableNoRestore());
+        });
+
+    Target Test => _ => _
+        .DependsOn(Compile)
+        .Produces(TestResultsDirectory / "*.trx")
+        .Executes(() =>
+        {
+            DotNetTest(s => s
+                .SetProjectFile(SolutionFile)
+                .SetConfiguration(Configuration)
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .SetResultsDirectory(TestResultsDirectory)
+                .AddLoggers("trx"));
+        });
+
+    // Section "## [x.y.z]" of CHANGELOG.md for the current version (pre-releases use x.y.z).
+    // Used for the GitHub release and as PackageReleaseNotes (see Directory.Build.props).
+    // No section => no file; the release workflow then falls back to --generate-notes.
+    Target ReleaseNotes => _ => _
+        .DependsOn(Restore)
+        .Executes(() =>
+        {
+            ReleaseNotesFile.DeleteFile();
+
+            var changelogFile = RootDirectory / "CHANGELOG.md";
+            if (!changelogFile.FileExists())
             {
-                var artifacts = Artifacts(platform);
+                Log.Warning("No CHANGELOG.md, no release notes");
+                return;
+            }
 
-                Log.Information("Compile {App} {Platform}", AppName, platform);
+            var releaseVersion = Version.Split('-')[0];
+            var match = Regex.Match(
+                changelogFile.ReadAllText(),
+                $@"^## \[{Regex.Escape(releaseVersion)}\][^\n]*\n(?<notes>.*?)(?=^## |\z)",
+                RegexOptions.Multiline | RegexOptions.Singleline);
 
-                artifacts.CreateOrCleanDirectory();
-                DotNetTasks.DotNetPublish(s => s
-                    .SetProject(RootDirectory / ServerProject)
-                    .SetConfiguration(Configuration)
-                    .SetRuntime(RuntimeIdentifier(platform))
-                    .SetSelfContained(false)
-                    .SetProperty("GeneratePackageOnBuild", "false")
-                    .SetOutput(artifacts));
+            if (!match.Success || string.IsNullOrWhiteSpace(match.Groups["notes"].Value))
+            {
+                Log.Warning("CHANGELOG.md has no section [{Version}], no release notes", releaseVersion);
+                return;
+            }
 
-                // never deploy developer settings: the server creates _config/luceneserver.json on the first start
-                (artifacts / "_config" / "luceneserver.json").DeleteFile();
-                (artifacts / "appsettings.Development.json").DeleteFile();
+            ArtifactsDirectory.CreateDirectory();
+            ReleaseNotesFile.WriteAllText(match.Groups["notes"].Value.Trim() + Environment.NewLine);
+        });
 
-                RemoveThirdPartyPdbs(artifacts);
+    Target Pack => _ => _
+        .DependsOn(Compile, ReleaseNotes)
+        .After(Test)
+        .Produces(PackagesDirectory / "*.nupkg", PackagesDirectory / "*.snupkg")
+        .Executes(() =>
+        {
+            PackagesDirectory.CreateOrCleanDirectory();
 
-                var admin = AdminArtifacts(platform);
-                Log.Information("Compile {App} {Platform}", AdminName, platform);
+            DotNetPack(s => s
+                .SetProject(SolutionFile)
+                .SetConfiguration(Configuration)
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .SetOutputDirectory(PackagesDirectory));
+        });
 
-                admin.CreateOrCleanDirectory();
-                DotNetTasks.DotNetPublish(s => s
-                    .SetProject(RootDirectory / AdminProject)
-                    .SetConfiguration(Configuration)
-                    .SetRuntime(RuntimeIdentifier(platform))
-                    .SetSelfContained(false)
-                    .SetOutput(admin));
-
-                (admin / "appsettings.Development.json").DeleteFile();
-                RemoveThirdPartyPdbs(admin);
+    Target NuGetPush => _ => _
+        .DependsOn(Pack)
+        .After(Test)
+        .Requires(() => NuGetApiKey)
+        .Executes(() =>
+        {
+            foreach (var package in PackagesDirectory.GlobFiles("*.nupkg"))
+            {
+                // the matching .snupkg next to the .nupkg is pushed automatically
+                DotNetNuGetPush(s => s
+                    .SetTargetPath(package)
+                    .SetSource(NuGetSource)
+                    .SetApiKey(NuGetApiKey)
+                    .EnableSkipDuplicate());
             }
         });
 
+    // ZIP structure: {Version}/luceneserver/ (server without _config/luceneserver.json: the server creates it on
+    // the first start, see Setup.cs), {Version}/admin/ (admin UI) and the start scripts from deploy/zip.
     Target Zip => _ => _
-        .DependsOn(Compile)
+        .DependsOn(Restore)
+        .After(Test)
+        .Produces(ZipDirectory / "*.zip")
         .Executes(() =>
         {
-            DownloadDirectory.CreateDirectory();
+            ZipDirectory.CreateOrCleanDirectory();
 
-            foreach (var platform in Platform)
+            foreach (var runtime in Runtimes)
             {
-                var zipFile = DownloadDirectory / $"{ZipName}-{platform}-{Version}.zip";
-                zipFile.DeleteFile();
+                var stagingDirectory = ArtifactsDirectory / "zip-staging" / runtime;
+                var root = stagingDirectory / Version;
+                stagingDirectory.CreateOrCleanDirectory();
 
-                using (var zip = ZipFile.Open(zipFile, ZipArchiveMode.Create))
+                foreach (var (project, folder) in ZipApps)
                 {
-                    foreach (var (source, folder) in new[] { (Artifacts(platform), AppName), (AdminArtifacts(platform), AdminName) })
-                    {
-                        foreach (var file in source.GlobFiles("**/*"))
-                        {
-                            var relative = source.GetRelativePathTo(file).ToString().Replace('\\', '/');
-                            zip.CreateEntryFromFile(file, $"{Version}/{folder}/{relative}", CompressionLevel.Optimal);
-                        }
-                    }
+                    PublishWebApp(project, runtime, root / folder);
+                }
 
-                    // start / service scripts next to the app folders
-                    var scripts = AssetsDirectory / platform;
-                    if (scripts.DirectoryExists())
+                // start scripts: deploy/zip/*.bat for Windows, *.sh for Linux
+                var startScripts = runtime.StartsWith("win") ? "*.bat" : "*.sh";
+                if ((DeployDirectory / "zip").DirectoryExists())
+                {
+                    foreach (var script in (DeployDirectory / "zip").GlobFiles(startScripts))
                     {
-                        foreach (var script in scripts.GlobFiles("*.bat", "*.sh"))
-                        {
-                            zip.CreateEntryFromFile(script, $"{Version}/{script.Name}", CompressionLevel.Optimal);
-                        }
+                        script.CopyToDirectory(root);
                     }
                 }
 
-                Log.Information("Zip {ZipFile}", zipFile);
+                stagingDirectory.ZipTo(ZipDirectory / $"luceneserver_net_{Version}_{runtime}.zip");
+                stagingDirectory.DeleteDirectory();
+            }
+
+            (ArtifactsDirectory / "zip-staging").DeleteDirectory();
+        });
+
+    IEnumerable<string> ImageTags(string image)
+    {
+        var repository = $"{ContainerRegistry.TrimEnd('/')}/{image}";
+
+        yield return $"{repository}:{Version}";
+
+        if (!IsPreRelease)
+        {
+            var majorMinor = string.Join('.', Version.Split('.').Take(2));
+            yield return $"{repository}:{majorMinor}";
+            yield return $"{repository}:latest";
+        }
+    }
+
+    Target DockerBuild => _ => _
+        .DependsOn(Restore)
+        .After(Test)
+        .Executes(() =>
+        {
+            foreach (var (name, project, image) in DockerImages)
+            {
+                var context = DockerDirectory / name;
+                context.CreateOrCleanDirectory();
+
+                CopyDirectory(DeployDirectory / "docker" / name, context);
+                (context / "override").CreateDirectory();
+                PublishWebApp(project, DockerRuntime, context / "app");
+                (RootDirectory / "LICENSE").CopyToDirectory(context / "app", ExistsPolicy.FileOverwrite);
+
+                var tags = ImageTags(image).ToList();
+                // local pre-release builds also get 'latest' so docker run/compose finds them; never pushed
+                var latest = $"{ContainerRegistry.TrimEnd('/')}/{image}:latest";
+                if (IsLocalBuild && !tags.Contains(latest))
+                {
+                    tags.Add(latest);
+                }
+
+                var tagArgs = string.Join(' ', tags.Select(t => $"--tag {t}"));
+                Docker($"build --pull --label org.opencontainers.image.version={Version} {tagArgs:nq} {context}", logger: LogContainerOutput);
+                Log.Information("Built {Tags}", tags);
             }
         });
 
-    // multi-stage Dockerfile in the repository root: builds from source, needs no Compile
-    Target Docker => _ => _
-        .After(Zip)
-        .Executes(() =>
-        {
-            Log.Information("Build docker image {Image}:{Version}", DockerImage, Version);
-
-            RunDocker($"build -t {DockerImage}:{Version} --label org.opencontainers.image.version={Version} -f Dockerfile .", RootDirectory);
-            RunDocker($"tag {DockerImage}:{Version} {DockerImage}:latest");
-            RunDocker($"tag {DockerImage}:{Version} {DockerRegistry}/{DockerImage}:{Version}");
-            RunDocker($"tag {DockerImage}:{Version} {DockerRegistry}/{DockerImage}:latest");
-        });
-
-    // needs "docker login ghcr.io" with a token that has the write:packages scope
     Target DockerPush => _ => _
-        .DependsOn(Docker)
+        .DependsOn(DockerBuild)
         .Executes(() =>
         {
-            RunDocker($"push {DockerRegistry}/{DockerImage}:{Version}");
-            RunDocker($"push {DockerRegistry}/{DockerImage}:latest");
+            foreach (var tag in DockerImages.SelectMany(i => ImageTags(i.Image)))
+            {
+                Docker($"push {tag}", logger: LogContainerOutput);
+            }
         });
+
+    // docker/wslc write build progress to stderr; real failures are reported via the exit code
+    static void LogContainerOutput(OutputType type, string text) => Log.Information(text);
 
     // Static documentation site (MkDocs Material, see mkdocs.yml) in artifacts/docs/site.
     // Needs Python; without it the target is skipped with a warning.
@@ -210,7 +307,7 @@ class Build : NukeBuild
             // never publish the site of an earlier build when this one is skipped or fails
             (ArtifactsDirectory / "docs").DeleteDirectory();
 
-            // MkDocs in its own virtual environment .venv-docs (same as build-docs.ps1), created on the first run
+            // MkDocs in its own virtual environment .venv-docs, created on the first run
             var venv = RootDirectory / ".venv-docs";
             var python = OperatingSystem.IsWindows() ? venv / "Scripts" / "python.exe" : venv / "bin" / "python";
             if (!python.FileExists())
@@ -265,25 +362,41 @@ class Build : NukeBuild
             Log.Information("Docs copied to {Target}. Commit and push it in {Repository} to publish.", target, repository);
         });
 
-    Target Deploy => _ => _
-        .DependsOn(Zip, Docker);
-
-    void RunDocker(string arguments, AbsolutePath workingDirectory = null)
+    void PublishWebApp(AbsolutePath project, string runtime, AbsolutePath output)
     {
-        ProcessTasks.StartProcess(DockerExe, arguments,
-                workingDirectory: workingDirectory,
-                logger: (_, text) => Log.Information(text))
-            .AssertZeroExitCode();
-    }
+        DotNetPublish(s => s
+            .SetProject(project)
+            .SetConfiguration(Configuration)
+            .SetRuntime(runtime)
+            .DisableSelfContained()
+            .SetPublishReadyToRun(true)
+            .SetOutput(output));
 
-    static void RemoveThirdPartyPdbs(AbsolutePath directory)
-    {
-        foreach (var file in directory.GlobFiles("**/*.pdb"))
+        // never ship the developer configuration (subfolders like _config/proto are kept):
+        // the server creates _config/luceneserver.json on the first start
+        if ((output / "_config").DirectoryExists())
+        {
+            (output / "_config").GlobFiles("*").DeleteFiles();
+        }
+        (output / "appsettings.Development.json").DeleteFile();
+
+        // only our own debug symbols
+        foreach (var file in output.GlobFiles("**/*.pdb"))
         {
             if (!file.Name.StartsWith("LuceneServerNET", StringComparison.OrdinalIgnoreCase))
             {
                 file.DeleteFile();
             }
+        }
+    }
+
+    static void CopyDirectory(AbsolutePath source, AbsolutePath target)
+    {
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var destination = target / Path.GetRelativePath(source, file);
+            destination.Parent.CreateDirectory();
+            File.Copy(file, destination, overwrite: true);
         }
     }
 }

@@ -1,0 +1,49 @@
+# LuceneServer.NET (http://localhost:8080) and the admin UI (http://localhost:8081), minimal setup.
+#
+#   1. copy .env.example to .env (next to this file) and fill in the secrets, see the comments there
+#   2. docker compose -f deploy/docker/docker-compose.yml up -d
+#
+# LUCENE_TAG selects the image version (default: latest).
+# Local images: build them first with ".\build.cmd DockerBuild" (local builds are also tagged latest).
+# Images built with "--container-cli wslc" are not visible to docker compose (separate image store).
+
+services:
+  luceneserver:
+    image: ghcr.io/jugstalt/luceneserver-net:${LUCENE_TAG:-latest}
+    container_name: luceneserver-net
+    ports:
+      - "${LUCENE_PORT:-8080}:8080"
+    environment:
+      # Basic authentication with one client for the admin UI (role admin)
+      Authorization__Type: Basic
+      Authorization__Clients__0__Id: ${LUCENE_ADMIN_CLIENT_ID:-admin-ui}
+      Authorization__Clients__0__SecretHash: ${LUCENE_ADMIN_CLIENT_SECRET_HASH:?set LUCENE_ADMIN_CLIENT_SECRET_HASH in .env}
+      Authorization__Clients__0__Roles__0: admin
+    volumes:
+      - luceneserver-data:/data
+    restart: unless-stopped
+
+  admin:
+    image: ghcr.io/jugstalt/luceneserver-net-admin:${LUCENE_TAG:-latest}
+    container_name: luceneserver-net-admin
+    ports:
+      - "${ADMIN_PORT:-8081}:8080"
+    environment:
+      # login of the admin UI
+      Admin__Authentication__Type: Local
+      Admin__Authentication__Users__0__Name: ${ADMIN_USER:-admin}
+      Admin__Authentication__Users__0__PasswordHash: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH in .env}
+      # the server above as (read only) instance
+      Admin__Instances__0__Name: local
+      Admin__Instances__0__Url: http://luceneserver:8080
+      Admin__Instances__0__ClientId: ${LUCENE_ADMIN_CLIENT_ID:-admin-ui}
+      Admin__Instances__0__ClientSecret: ${LUCENE_ADMIN_CLIENT_SECRET:?set LUCENE_ADMIN_CLIENT_SECRET in .env}
+    volumes:
+      - luceneserver-admin-data:/data
+    depends_on:
+      - luceneserver
+    restart: unless-stopped
+
+volumes:
+  luceneserver-data:
+  luceneserver-admin-data:

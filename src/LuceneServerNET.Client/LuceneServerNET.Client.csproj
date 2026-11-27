@@ -5,15 +5,11 @@
 		<LangVersion>12</LangVersion>
 		<Nullable>disable</Nullable>
 	</PropertyGroup>
-	
+
 	<PropertyGroup>
-        <PackageProjectUrl>https://github.com/jugstalt/LuceneServerNET</PackageProjectUrl>
-        <PackageLicenseFile>LICENSE</PackageLicenseFile>
-        <RepositoryUrl>https://github.com/jugstalt/LuceneServerNET</RepositoryUrl>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Authors>Jürgen Gstaltmaier</Authors>
-        <Copyright>2026, Jürgen Gstaltmaier</Copyright>
-    </PropertyGroup>
+		<IsPackable>true</IsPackable>
+		<Description>.NET client for the LuceneServer.NET REST API (create indices, index documents, search).</Description>
+	</PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="11.0.0" />
@@ -23,13 +19,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LuceneServerNET.Core\LuceneServerNET.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
   </ItemGroup>
 
 </Project>

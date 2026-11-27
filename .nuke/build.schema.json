@@ -24,12 +24,17 @@
     "ExecutableTarget": {
       "type": "string",
       "enum": [
+        "Clean",
         "Compile",
-        "Deploy",
-        "Docker",
+        "DockerBuild",
         "DockerPush",
         "Docs",
         "DocsPublish",
+        "NuGetPush",
+        "Pack",
+        "PrintVersion",
+        "ReleaseNotes",
+        "Restore",
         "Test",
         "Zip"
       ]
@@ -109,32 +114,33 @@
           "type": "string",
           "description": "Configuration to build - Default is 'Release'"
         },
-        "DeployRoot": {
+        "ContainerCli": {
           "type": "string",
-          "description": "Deploy root - Default is c:\\deploy\\luceneserver-net"
+          "description": "Container CLI with docker compatible build/push commands (e.g. 'wslc', 'podman') - Default is 'docker'"
         },
-        "DockerExe": {
+        "ContainerRegistry": {
           "type": "string",
-          "description": "Docker exe file name"
-        },
-        "DockerRegistry": {
-          "type": "string",
-          "description": "Docker registry for DockerPush"
+          "description": "Container registry including owner - Default is 'ghcr.io/jugstalt'"
         },
         "DocsRepository": {
           "type": "string",
           "description": "Checkout of docs-gviewonline for DocsPublish - Default is the folder docs-gviewonline next to this repository"
         },
-        "Platform": {
+        "NuGetApiKey": {
+          "type": "string",
+          "description": "NuGet API key (in CI a short-lived key from NuGet trusted publishing)",
+          "default": "Secrets must be entered via 'nuke :secrets [profile]'"
+        },
+        "NuGetSource": {
+          "type": "string",
+          "description": "NuGet feed to push packages to - Default is nuget.org"
+        },
+        "Runtimes": {
           "type": "array",
-          "description": "Platform to build - win64, linux64 (default: both)",
+          "description": "Runtime identifiers for the ZIP downloads - Default is win-x64 and linux-x64",
           "items": {
             "type": "string"
           }
-        },
-        "Version": {
-          "type": "string",
-          "description": "Version - Default is the <Version> of src/LuceneServerNET.Core"
         }
       }
     },

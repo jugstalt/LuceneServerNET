@@ -1,0 +1,5 @@
+<Project>
+
+  <!-- This file prevents unintended imports of the repository's Directory.Build.props -->
+
+</Project>

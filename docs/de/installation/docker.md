@@ -1,25 +1,25 @@
 # Docker
 
-Das Repository enthält ein mehrstufiges `Dockerfile`: Es baut den Server aus dem Quellcode mit dem
-.NET-10-SDK und startet ihn im ASP.NET-Core-10-Runtime-Image als Benutzer `app` (nicht root).
+Das Image `ghcr.io/jugstalt/luceneserver-net` basiert auf dem Alpine-Runtime-Image von ASP.NET Core 11 und startet den Server als
+Benutzer `app` (nicht root). Der NUKE-Build veröffentlicht den Server und kopiert ihn ins Image
+(`deploy/docker/server/Dockerfile`); Releases pushen es in die GitHub Container Registry.
 
-## Image bauen
+## Image holen oder bauen
 
 ```bash
-docker build -t luceneserver-net .
+docker pull ghcr.io/jugstalt/luceneserver-net
 ```
 
-Oder über den NUKE-Build, der das Image mit der Version taggt (und `latest`, dazu die Tags
-`ghcr.io/jugstalt/luceneserver-net`):
+Oder lokal bauen (Tags `{version}` und `latest`; mit `--container-cli wslc` oder `podman` statt Docker):
 
 ```bash
-./build.cmd Docker
+./build.cmd DockerBuild
 ```
 
 ## Starten
 
 ```bash
-docker run -d --name luceneserver -p 8080:8080 -v luceneserver-data:/data luceneserver-net
+docker run -d --name luceneserver -p 8080:8080 -v luceneserver-data:/data ghcr.io/jugstalt/luceneserver-net
 ```
 
 Der Server lauscht im Container auf Port **8080**.
@@ -51,10 +51,10 @@ docker run -d -p 8080:8080 -v luceneserver-data:/data \
   -e Authorization__Clients__0__Id=admin \
   -e Authorization__Clients__0__SecretHash='<hash>' \
   -e Authorization__Clients__0__Roles__0=admin \
-  luceneserver-net
+  ghcr.io/jugstalt/luceneserver-net
 ```
 
-Den Hash erzeugt `docker run --rm luceneserver-net --hash-secret <secret>`.
+Den Hash erzeugt `docker run --rm ghcr.io/jugstalt/luceneserver-net --hash-secret <secret>`.
 
 Vom Image gesetzte Standardwerte:
 
@@ -64,6 +64,30 @@ Vom Image gesetzte Standardwerte:
 | `LUCENESERVER__ROOTPATH` | `/data/indices` |
 | `LUCENESERVER__ARCHIVEPATH` | `/data/archive` |
 
+## Docker Compose (Server + Admin-UI)
+
+`deploy/docker/docker-compose.yml` startet den Server (Port `8080`) mit Basic-Authentifizierung und die
+[Admin-UI](../admin.md) (Port `8081`), die als Instanz `local` mit dem Server verbunden ist.
+
+1. `deploy/docker/.env.example` nach `deploy/docker/.env` kopieren (von git ignoriert) und die Secrets eintragen:
+
+    ```bash
+    docker run --rm ghcr.io/jugstalt/luceneserver-net --hash-secret 'client-secret'      # LUCENE_ADMIN_CLIENT_SECRET_HASH
+    docker run --rm ghcr.io/jugstalt/luceneserver-net-admin --hash-password 'passwort'   # ADMIN_PASSWORD_HASH
+    ```
+
+    `LUCENE_ADMIN_CLIENT_SECRET` ist dasselbe Client-Secret im Klartext. Die Hashes in einfachen
+    Anführungszeichen lassen: Sie enthalten `$`.
+
+2. Starten:
+
+    ```bash
+    docker compose -f deploy/docker/docker-compose.yml up -d
+    ```
+
+`LUCENE_TAG` wählt die Image-Version (Standard `latest`). Lokal mit `--container-cli wslc` gebaute Images
+sieht Docker Compose nicht.
+
 ## Health-Check
 
 Das Image hat einen Docker-`HEALTHCHECK` auf [`/health`](operations.md#health-endpoints); `docker ps` zeigt
@@ -71,8 +95,9 @@ den Container als `healthy`, sobald die Indexverzeichnisse beschreibbar sind.
 
 ## GitHub Container Registry
 
-`./build.cmd DockerPush` pusht `ghcr.io/jugstalt/luceneserver-net:{version}` und `:latest`.
-Vorher mit einem Token mit dem Scope `write:packages` anmelden:
+Releases (Git-Tag `v*`) pushen `ghcr.io/jugstalt/luceneserver-net:{version}`, `:{major.minor}` und `:latest` aus dem GitHub-Workflow
+`release.yml`; Pre-Releases bekommen nur `:{version}`. Zum Pushen vom eigenen Rechner mit einem Token mit dem Scope
+`write:packages` anmelden und `./build.cmd DockerPush` ausführen:
 
 ```bash
 docker login ghcr.io -u <user>

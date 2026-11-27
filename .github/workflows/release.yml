@@ -1,0 +1,64 @@
+name: Release
+
+# Pushing a tag v<version> (e.g. v3.0.0, v3.1.0-preview.1) builds and publishes that version.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write  # create the GitHub release
+  packages: write  # push images to ghcr.io
+  id-token: write  # NuGet trusted publishing (OIDC)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # the NuGet trusted publishing policy is bound to this environment
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # MinVer needs the tags
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Build, test and package
+        run: ./build.sh Test ReleaseNotes Pack Zip DockerBuild
+
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push NuGet packages and container images
+        run: ./build.sh NuGetPush DockerPush --skip Restore Compile Test ReleaseNotes Pack DockerBuild --nuget-api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          args=()
+          if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
+          if [[ -f artifacts/release-notes.md ]]; then
+            args+=(--notes-file artifacts/release-notes.md)
+          else
+            args+=(--generate-notes)
+          fi
+          gh release create "$TAG" artifacts/zip/*.zip artifacts/packages/*.nupkg \
+            --title "$TAG" "${args[@]}"

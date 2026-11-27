@@ -47,14 +47,14 @@ Die Oberfläche bietet nur an, was der API-Client der Instanz darf: Sie fragt de
 === "Docker"
 
     ```bash
-    docker build -f Dockerfile.admin -t luceneserver-net-admin .
-    docker run --rm luceneserver-net-admin --hash-password "mein passwort"
+    ./build.cmd DockerBuild   # oder: docker pull ghcr.io/jugstalt/luceneserver-net-admin
+    docker run --rm ghcr.io/jugstalt/luceneserver-net-admin --hash-password "mein passwort"
     docker run -p 8081:8080 -v luceneserver-admin-data:/data \
       -e Admin__Authentication__Users__0__Name=admin \
       -e Admin__Authentication__Users__0__PasswordHash='pbkdf2-sha256$...' \
       -e Admin__Instances__0__Name=prod \
       -e Admin__Instances__0__Url=http://luceneserver:8080 \
-      luceneserver-net-admin
+      ghcr.io/jugstalt/luceneserver-net-admin
     ```
 
 ### Als Windows-Dienst betreiben

@@ -1,10 +1,10 @@
-# ChangeLog
+# Changelog
 
 All notable changes to LuceneServerNET are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] – v3 (3.0.0)
+## [3.0.0] - unreleased
 
 ### Migration from 2.x
 
@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 | Phonetic search | Fixed Cologne phonetics and Soundex codes (see *Fixed*) | **Recommended: re-index indices with `primaryFieldsPhonetics`**, otherwise affected words do not match in `searchphonetic` until re-indexed. Normal search is not affected |
 | .NET client dispose | Console output replaced by optional `Logger`; `IAsyncDisposable` | Not breaking. Optionally use `await using`; set `Logger` to keep the refresh log lines |
 | `datetime` fields | Values without time zone are taken as **UTC** (before: server local time); results contain `Z` | Only relevant if the server does not run in UTC and clients send dates without time zone: send `Z`/an offset or re-index. Docker (UTC) is not affected |
-| Versions | Server, Engine, Core and Client share one version (`src/Directory.Build.props`) | – |
+| Versions | Server, Engine, Core and Client share one version (git tag `v*`, MinVer) | – |
 
 
 ### Added
