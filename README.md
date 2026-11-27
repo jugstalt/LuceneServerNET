@@ -1,7 +1,7 @@
-# LuceneServer.NET
+﻿# LuceneServer.NET
 
 [![NuGet](https://img.shields.io/nuget/v/LuceneServerNET.Client?label=LuceneServerNET.Client&logo=nuget)](https://www.nuget.org/packages/LuceneServerNET.Client/)
-[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-11-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/github/license/jugstalt/LuceneServerNET)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-docs.gviewonline.com-blue)](https://docs.gviewonline.com/other/luceneserver-net/index.html)
 
