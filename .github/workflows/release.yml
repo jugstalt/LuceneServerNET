@@ -53,6 +53,18 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           shopt -s nullglob
+          files=(artifacts/zip/*.zip artifacts/packages/*.nupkg)
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # the release exists already (e.g. created by hand in the GitHub UI, which also creates the tag
+            # and so starts this workflow): add the files, keep notes written by hand
+            gh release upload "$TAG" "${files[@]}" --clobber
+            if [[ -f artifacts/release-notes.md && -z "$(gh release view "$TAG" --json body --jq .body)" ]]; then
+              gh release edit "$TAG" --notes-file artifacts/release-notes.md
+            fi
+            exit 0
+          fi
+
           args=()
           if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
           if [[ -f artifacts/release-notes.md ]]; then
@@ -60,5 +72,4 @@ jobs:
           else
             args+=(--generate-notes)
           fi
-          gh release create "$TAG" artifacts/zip/*.zip artifacts/packages/*.nupkg \
-            --title "$TAG" "${args[@]}"
+          gh release create "$TAG" "${files[@]}" --title "$TAG" "${args[@]}"
